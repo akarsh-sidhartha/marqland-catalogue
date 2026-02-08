@@ -84,8 +84,6 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
 
   const getBaseUrl = () => {
     const { hostname } = window.location;
-    // If we are on localhost, use localhost. 
-    // Otherwise, use the IP address currently in the browser's address bar.
     const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
       ? 'localhost' 
       : hostname;
@@ -97,7 +95,8 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
-  const [meta, setMeta] = useState({ brands: [], categories: [], subCategoryMap: {} });
+  // Fixed state structure: using 'subCategories' as per backend update
+  const [meta, setMeta] = useState({ brands: [], categories: [], subCategories: {} });
   const [availableSubCats, setAvailableSubCats] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -106,7 +105,6 @@ const ProductList = () => {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [previewProduct, setPreviewProduct] = useState(null);
 
-  // State for the "Add to Existing" feature
   const [showCatalogueModal, setShowCatalogueModal] = useState(false);
   const [savedCatalogues, setSavedCatalogues] = useState([]);
   const [isUpdatingCatalogue, setIsUpdatingCatalogue] = useState(false);
@@ -126,7 +124,12 @@ const ProductList = () => {
         axios.get(API_URL_PRODUCTS+`/meta`)
       ]);
       setProducts(pRes.data || []);
-      setMeta(mRes.data || { brands: [], categories: [], subCategoryMap: {} });
+      // The backend uses 'subCategories', ensure we handle both keys for robustness
+      const metaData = mRes.data || { brands: [], categories: [], subCategories: {} };
+      if (metaData.subCategoryMap && !metaData.subCategories) {
+          metaData.subCategories = metaData.subCategoryMap;
+      }
+      setMeta(metaData);
     } catch (err) {
       console.error("Error fetching data:", err);
     }
@@ -169,11 +172,9 @@ const ProductList = () => {
     const allSelected = categoryProducts.every(p => selectedProducts.some(sp => sp._id === p._id));
     
     if (allSelected) {
-      // Remove all products of this category from selection
       const categoryIds = categoryProducts.map(p => p._id);
       setSelectedProducts(selectedProducts.filter(sp => !categoryIds.includes(sp._id)));
     } else {
-      // Add missing products to selection
       const newSelections = [...selectedProducts];
       categoryProducts.forEach(p => {
         if (!newSelections.some(sp => sp._id === p._id)) {
@@ -235,14 +236,13 @@ const ProductList = () => {
     }
   };
 
+  // Fixed handleCategoryChange for Modal
   const handleCategoryChange = (v) => {
     const selectedCat = v ? v.value : '';
     setFormData({ ...formData, category: selectedCat, subCategory: '' });
-    if (meta.subCategoryMap && meta.subCategoryMap[selectedCat]) {
-      setAvailableSubCats(meta.subCategoryMap[selectedCat].map(s => ({ label: s, value: s })));
-    } else {
-      setAvailableSubCats([]);
-    }
+    // Check both potential keys for subcategories
+    const subCats = (meta.subCategories && meta.subCategories[selectedCat]) || (meta.subCategoryMap && meta.subCategoryMap[selectedCat]) || [];
+    setAvailableSubCats(subCats.map(s => ({ label: s, value: s })));
   };
 
   const calculateSellingPrice = (buy, mark) => {
@@ -253,22 +253,24 @@ const ProductList = () => {
 
   const handleSave = async () => {
     try {
-      const hostname = window.location.hostname || 'localhost';
-      if (isEditing) {
-        const updateData = {
-          markupPercent: formData.markupPercent,
-          description: formData.description,
-          name: formData.name,
-          purchasePrice: formData.purchasePrice
-        }; 
+      const data = new FormData();
+      data.append('brand', formData.brand);
+      data.append('category', formData.category);
+      data.append('subCategory', formData.subCategory);
+      data.append('name', formData.name);
+      data.append('description', formData.description);
+      data.append('purchasePrice', formData.purchasePrice);
+      data.append('markupPercent', formData.markupPercent);
+      if (imageFile) data.append('image', imageFile);
 
-        await axios.put(API_URL_PRODUCTS+`/${currentId}`, updateData);
+      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+      if (isEditing) {
+        await axios.put(`${API_URL_PRODUCTS}/${currentId}`, data, config);
       } else {
-        const data = new FormData();
-        Object.keys(formData).forEach(key => data.append(key, formData[key]));
-        if (imageFile) data.append('productImage', imageFile);
-        await axios.post(API_URL_PRODUCTS, data);
+        await axios.post(API_URL_PRODUCTS, data, config);
       }
+
       setShowModal(false);
       resetForm();
       fetchData();
@@ -301,9 +303,10 @@ const ProductList = () => {
       purchasePrice: p.purchasePrice || '',
       markupPercent: p.markupPercent || 30
     });
-    if (meta.subCategoryMap && p.category && meta.subCategoryMap[p.category]) {
-        setAvailableSubCats(meta.subCategoryMap[p.category].map(s => ({ label: s, value: s })));
-    }
+    
+    const subCats = (meta.subCategories && p.category && meta.subCategories[p.category]) || 
+                    (meta.subCategoryMap && p.category && meta.subCategoryMap[p.category]) || [];
+    setAvailableSubCats(subCats.map(s => ({ label: s, value: s })));
     setShowModal(true);
   };
 
@@ -332,8 +335,6 @@ const ProductList = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 pb-28 min-h-screen bg-gray-50/50">
-      {/* HEADER */}
-            {/* LOCKED/STICKY HEADER */}
       <div className="sticky top-0 z-40 bg-gray-50/50 pb-2">
       <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-3 border-r pr-3 border-gray-100 flex-shrink-0">
@@ -343,7 +344,6 @@ const ProductList = () => {
           </button>
         </div>
 
-        {/* Reduced Size Search Bar */}
         <div className="relative flex-shrink-0 w-32 md:w-40 lg:w-48">
           <input 
             type="text" 
@@ -374,7 +374,6 @@ const ProductList = () => {
             {meta.categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
-          {/* Sub Category Filter - Enabled only if Category is selected */}
           <select 
             disabled={!filters.category}
             className={`border border-gray-100 p-2 rounded-lg text-[10px] font-bold outline-none min-w-[100px] transition-opacity ${!filters.category ? 'bg-gray-50 opacity-50 cursor-not-allowed' : 'bg-white'}`} 
@@ -382,7 +381,10 @@ const ProductList = () => {
             onChange={e => setFilters({...filters, subCategory: e.target.value})}
           >
             <option value="">All Sub Cats</option>
-            {filters.category && meta.subCategoryMap[filters.category]?.map(s => <option key={s} value={s}>{s}</option>)}
+            {/* Added safety check to prevent crash on undefined category key */}
+            {filters.category && (meta.subCategories?.[filters.category] || meta.subCategoryMap?.[filters.category])?.map(s => (
+                <option key={s} value={s}>{s}</option>
+            ))}
           </select>
           
           <button 
@@ -403,7 +405,6 @@ const ProductList = () => {
       </div>
       </div>
 
-      {/* FLOATING SELECTION BAR */}
       {selectedProducts.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 border border-gray-700 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="flex flex-col border-r border-gray-700 pr-6">
@@ -424,7 +425,6 @@ const ProductList = () => {
         </div>
       )}
 
-      {/* GRID VIEW */}
       {Object.keys(groupedProducts).length === 0 ? (
         <div className="text-center py-20 text-gray-400 font-bold uppercase tracking-widest">No Products Found</div>
       ) : (
@@ -443,14 +443,13 @@ const ProductList = () => {
                   </h2>
                 </div>
 
-                {/* Select All on category bar level */}
                 <button 
-                   onClick={() => selectAllInCategory(categoryProducts)}
-                   className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${
-                     isAllInCategorySelected 
-                     ? 'bg-indigo-600 border-indigo-600 text-white' 
-                     : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-500'
-                   }`}
+                    onClick={() => selectAllInCategory(categoryProducts)}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${
+                      isAllInCategorySelected 
+                      ? 'bg-indigo-600 border-indigo-600 text-white' 
+                      : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-500'
+                    }`}
                 >
                   {isAllInCategorySelected ? <CheckSquare size={12} /> : <Square size={12} />}
                   {isAllInCategorySelected ? 'All Selected' : 'Select All'}
@@ -509,58 +508,7 @@ const ProductList = () => {
         })
       )}
 
-      {/* DETAIL PREVIEW POPOVER */}
-      {previewProduct && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4" onClick={() => setPreviewProduct(null)}>
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up" onClick={e => e.stopPropagation()}>
-            <div className="relative h-64 bg-gray-100">
-               {previewProduct.imageUrl && <img src={`http://${window.location.hostname || 'localhost'}:5000${previewProduct.imageUrl}`} alt={previewProduct.name} className="w-full h-full object-cover" />}
-               <button onClick={() => setPreviewProduct(null)} className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-full text-gray-800 shadow-sm hover:bg-white transition-colors">
-                 <X size={20} />
-               </button>
-            </div>
-            <div className="p-8">
-              <div className="mb-4">
-                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">{previewProduct.brand}</span>
-                <h2 className="text-2xl font-black text-gray-900 leading-tight uppercase tracking-tighter">{previewProduct.name}</h2>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-gray-50 p-4 rounded-2xl">
-                  <span className="text-[8px] font-black text-gray-400 uppercase block mb-1 tracking-widest">Category</span>
-                  <span className="text-xs font-bold text-gray-800">{previewProduct.category}</span>
-                  <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-xs font-bold text-gray-800">{previewProduct.subCategory}</span>
-                </div>
-                <div className="bg-indigo-50 p-4 rounded-2xl">
-                  <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1 tracking-widest">Sale Price</span>
-                  <span className="text-xl font-black text-indigo-600">₹{calculateSellingPrice(previewProduct.purchasePrice, previewProduct.markupPercent)}</span>
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <span className="text-[8px] font-black text-gray-400 uppercase block mb-2 tracking-widest underline underline-offset-4 decoration-indigo-200">Description</span>
-                <p className="text-sm text-gray-500 leading-relaxed font-medium italic">
-                  {previewProduct.description || "No description provided for this item."}
-                </p>
-              </div>
-
-              <button 
-                onClick={() => { toggleProductSelection(previewProduct); setPreviewProduct(null); }}
-                className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${
-                  selectedProducts.some(sp => sp._id === previewProduct._id) 
-                  ? 'bg-red-50 text-red-500 hover:bg-red-100' 
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg'
-                }`}
-              >
-                {selectedProducts.some(sp => sp._id === previewProduct._id) ? 'Remove from Selection' : 'Select Product'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ADD TO EXISTING MODAL */}
+      {/* Catalogue Modals and Popups */}
       {showCatalogueModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up">
@@ -593,7 +541,6 @@ const ProductList = () => {
         </div>
       )}
 
-      {/* PRODUCT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -622,12 +569,11 @@ const ProductList = () => {
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Cost Price (₹)</label>
                   <input type="number" className="w-full border rounded-lg p-2 text-sm" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} />
                 </div>
-                {!isEditing && (
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Image</label>
                     <input type="file" onChange={(e) => setImageFile(e.target.files[0])} className="text-[10px] mt-1" />
+                    {isEditing && <p className="text-[8px] text-indigo-500 mt-1 italic">Leave empty to keep current</p>}
                   </div>
-                )}
               </div>
               <div className="bg-indigo-50 p-6 rounded-xl">
                 <div className="grid grid-cols-2 items-center gap-4">
@@ -652,13 +598,45 @@ const ProductList = () => {
         </div>
       )}
 
+      {previewProduct && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4" onClick={() => setPreviewProduct(null)}>
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up" onClick={e => e.stopPropagation()}>
+            <div className="relative h-64 bg-gray-100">
+               {previewProduct.imageUrl && <img src={`http://${window.location.hostname || 'localhost'}:5000${previewProduct.imageUrl}`} alt={previewProduct.name} className="w-full h-full object-cover" />}
+               <button onClick={() => setPreviewProduct(null)} className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-full text-gray-800 shadow-sm hover:bg-white transition-colors">
+                 <X size={20} />
+               </button>
+            </div>
+            <div className="p-8">
+              <div className="mb-4">
+                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">{previewProduct.brand}</span>
+                <h2 className="text-2xl font-black text-gray-900 leading-tight uppercase tracking-tighter">{previewProduct.name}</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-6">{previewProduct.description || 'No description available.'}</p>
+              <div className="flex justify-between items-center border-t pt-6">
+                <div>
+                    <span className="text-gray-400 block font-bold uppercase text-[10px]">Price</span>
+                    <span className="text-3xl font-black text-green-600">₹{calculateSellingPrice(previewProduct.purchasePrice, previewProduct.markupPercent)}</span>
+                </div>
+                <button onClick={() => { toggleProductSelection(previewProduct); setPreviewProduct(null); }} className={`px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${selectedProducts.some(p => p._id === previewProduct._id) ? 'bg-red-50 text-red-500' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'}`}>
+                    {selectedProducts.some(p => p._id === previewProduct._id) ? 'Remove Selection' : 'Select Item'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes modal-up {
           0% { transform: translateY(20px); opacity: 0; }
           100% { transform: translateY(0); opacity: 1; }
         }
-        .animate-modal-up { animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-modal-up {
+          animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );

@@ -144,6 +144,15 @@ const App = () => {
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
+                    {/* Refresh Button */}
+          <button 
+            onClick={fetchCatalogues}
+            disabled={loading}
+            className="p-3 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            title="Refresh Catalogues"
+          >
+            <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+          </button>
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
@@ -178,25 +187,11 @@ const App = () => {
               className="group bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all cursor-pointer overflow-hidden flex flex-col"
             >
               <div className="p-7 flex-1">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500">
-                    <FileText size={24} />
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={(e) => deleteCatalogue(cat._id, e)}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
-
                 <h3 className="text-xl font-bold leading-snug group-hover:text-indigo-600 transition-colors">
                   {cat.title || cat.name || "Untitled Proposal"}
                 </h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 mb-4">
-                  {cat.subtitle || 'General Proposal'}
+                  {cat.description || 'General Proposal'}
                 </p>
                 
                 <div className="flex items-center gap-4 mt-6">
@@ -231,6 +226,14 @@ const App = () => {
                 </div>
                 <div className="flex items-center gap-1 text-indigo-600 text-[10px] font-black uppercase tracking-widest">
                   Edit <ChevronRight size={12} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => deleteCatalogue(cat._id, e)}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                 </div>
               </div>
             </div>

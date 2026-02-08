@@ -1,16 +1,15 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const path = require('path'); // Add this
-
-const productRoutes = require('./routes/productRoutes');
-const vendorRoutes = require('./routes/vendorRoutes');
-const clientRoutes = require('./routes/clientRoutes');
-const catalogueRoutes = require('./routes/catalogueRoutes');
-const propertyRoutes = require('./routes/propertyRoutes');
-const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
-
+const path = require('path');
+require('dotenv').config(); 
 const app = express();
+/**
+ * 2. PARSER CONFIGURATION
+ * Increased limit is mandatory for base64 images
+ */
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 /**
  * 1. CORS CONFIGURATION
@@ -18,11 +17,25 @@ const app = express();
  */
 app.use(cors({
   origin: '*', // Allows all local network IPs
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
+
+
+const productRoutes = require('./routes/productRoutes');
+const vendorRoutes = require('./routes/vendorRoutes');
+const clientRoutes = require('./routes/clientRoutes');
+const catalogueRoutes = require('./routes/catalogueRoutes');
+const propertyRoutes = require('./routes/propertyRoutes');
+const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
+const invoiceRoutes = require('./routes/invoiceRoute');
+const orderInquiry = require('./routes/orderInquiry');
+
+
+
+
 
 
 /**
@@ -43,6 +56,8 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/properties', propertyRoutes); 
 app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
+app.use('/api/invoices',invoiceRoutes);
+app.use('/api/orders',orderInquiry);
 
 /**
  * 5. SERVER STARTUP

@@ -21,54 +21,72 @@ const CatalogueBuilder = () => {
     return `http://${hostname}:5000/api/offsitecatalogues`;
   };
   
-  // Initialize data from localStorage on component mount
-  useEffect(() => {
-    const savedSelection = localStorage.getItem('catalogue_selection');
-    const savedCatalogueItems = localStorage.getItem('current_catalogue_items');
-    
-    // PRIORITY 1: Check for a fresh selection from the main Products page (New Build)
-    if (savedSelection) {
-      // Clear branding fields for a new catalogue
-      setClientName('');
-      setSubtitle('');
-      localStorage.removeItem('current_catalogue_id');
-      localStorage.removeItem('current_catalogue_name');
-      localStorage.removeItem('current_catalogue_subtitle');
-      localStorage.removeItem('current_catalogue_items');
-
-      // Load the freshly selected items
-      const rawData = JSON.parse(savedSelection);
-      const selectedProducts = rawData.map(p => ({
-        id: p.id || p._id || Date.now() + Math.random(),
-        name: p.name,
-        desc: p.desc || p.description || '', 
-        price: p.price ? p.price.toString().replace('₹', '').trim() : '0',
-        image: p.image || (p.imageUrl ? (p.imageUrl.startsWith('http') ? p.imageUrl : `http://localhost:5000${p.imageUrl}`) : null)
-      }));
-      setItems(selectedProducts);
-      
-      // Clean up the trigger so a refresh doesn't treat it as "new" again
-      localStorage.removeItem('catalogue_selection');
-      
-    } else if (savedCatalogueItems) {
-      // PRIORITY 2: Resume an existing session (Saved State or Refresh)
-      const savedName = localStorage.getItem('current_catalogue_name');
-      if (savedName) setClientName(savedName);
-
-      const savedSubtitle = localStorage.getItem('current_catalogue_subtitle');
-      if (savedSubtitle) setSubtitle(savedSubtitle);
-
-      const rawData = JSON.parse(savedCatalogueItems);
-      const resumedProducts = rawData.map(p => ({
-        id: p.id || p._id || Date.now() + Math.random(),
-        name: p.name,
-        desc: p.desc || p.description || '', 
-        price: p.price ? p.price.toString().replace('₹', '').trim() : '0',
-        image: p.image || (p.imageUrl ? (p.imageUrl.startsWith('http') ? p.imageUrl : `http://localhost:5000${p.imageUrl}`) : null)
-      }));
-      setItems(resumedProducts);
+    /**
+   * Helper function to format image URLs correctly
+   * If it's Base64 or already a full URL, return it as is.
+   * Otherwise, prepend the server URL.
+   */
+  const formatImageUrl = (imgStr) => {
+    if (!imgStr) return null;
+    if (imgStr.startsWith('data:') || imgStr.startsWith('http')) {
+      return imgStr;
     }
-  }, []);
+    // If it's a local path like /uploads/... ensure it has leading slash or fix it
+    const path = imgStr.startsWith('/') ? imgStr : `/${imgStr}`;
+    return `${getApiUrl()}${path}`;
+  };
+
+  // Initialize data from localStorage on component mount
+
+useEffect(() => {
+    const savedSelection  = localStorage.getItem('catalogue_selection');
+     const savedCatalogueItems = localStorage.getItem('current_catalogue_items');
+    if (savedSelection) {
+        try {
+          // Clear branding fields for a new catalogue
+          setClientName('');
+          setSubtitle('');
+          localStorage.removeItem('current_catalogue_id');
+          localStorage.removeItem('current_catalogue_name');
+          localStorage.removeItem('current_catalogue_subtitle');
+          localStorage.removeItem('current_catalogue_items');
+
+          // Load the freshly selected items
+          const rawData = JSON.parse(savedSelection);
+          const selectedProducts = rawData.map(p => ({
+            id: p.id || p._id || Date.now() + Math.random(),
+            name: p.name,
+            desc: p.desc || p.description || '', 
+            price: p.price ? p.price.toString().replace('₹', '').trim() : '0',
+            image: p.image || (p.imageUrl ? (p.imageUrl.startsWith('http') ? p.imageUrl : `http://localhost:5000${p.imageUrl}`) : null)
+          }));
+          setItems(selectedProducts);
+          
+          // Clean up the trigger so a refresh doesn't treat it as "new" again
+          localStorage.removeItem('catalogue_selection');
+        } catch (e) {
+            console.error("Error parsing saved items", e);
+        }
+    } else if (savedCatalogueItems){
+        // PRIORITY 2: Resume an existing session (Saved State or Refresh)
+        const savedName = localStorage.getItem('current_catalogue_name');
+        if (savedName) setClientName(savedName);
+
+        const savedSubtitle = localStorage.getItem('current_catalogue_subtitle');
+        if (savedSubtitle) setSubtitle(savedSubtitle);
+
+        const rawData = JSON.parse(savedCatalogueItems);
+        const resumedProducts = rawData.map(p => ({
+          id: p.id || p._id || Date.now() + Math.random(),
+          name: p.name,
+          desc: p.desc || p.description || '', 
+          price: p.price ? p.price.toString().replace('₹', '').trim() : '0',
+          image: formatImageUrl(p.imageUrl || p.image)
+          //image: p.image || (p.imageUrl ? (p.imageUrl.startsWith('http') ? p.imageUrl : `http://localhost:5000/${p.imageUrl}`) : null)
+        }));
+        setItems(resumedProducts);
+      }
+}, []);
 
   const handlePriceChange = (id, newPrice) => {
     const updatedItems = items.map(item => 
@@ -104,31 +122,33 @@ const CatalogueBuilder = () => {
   const saveCatalogueToDb = async () => {
     const currentId = localStorage.getItem('current_catalogue_id');
     const existingName = clientName || localStorage.getItem('current_catalogue_name') || "New Catalogue";
-    const name = prompt("Enter Catalogue Name:", existingName);
     
+    // Use prompt only if name doesn't exist, or allow renaming
+    const name = prompt("Enter Catalogue Name:", existingName);
     if (!name) return;
 
     // Helper to sync local storage reliably
-    const syncLocalStorage = (id, finalName) => {
+    const syncLocalStorage = (id, finalName, savedItems) => {
       if (id && id !== 'undefined') localStorage.setItem('current_catalogue_id', id);
       localStorage.setItem('current_catalogue_name', finalName);
       localStorage.setItem('current_catalogue_subtitle', subtitle);
-      localStorage.setItem('current_catalogue_items', JSON.stringify(items));
+      // Save items exactly as they are in state to maintain 'image' property locally
+      localStorage.setItem('current_catalogue_items', JSON.stringify(savedItems));
     };
 
     try {
-      // IMPORTANT: Map frontend fields to match the Backend Schema
+      // Map frontend 'image' to backend 'imageUrl'
       const mappedItems = items.map(item => ({
-        _id: item.id?.toString().includes('.') ? undefined : item.id,
+        _id: item.id?.toString().includes('.') ? Math.trunc(item.id).toString() : item.id,
         name: item.name,
-        description: item.desc, 
+        description: item.desc || item.description, 
         price: item.price,
-        imageUrl: item.image    
+        imageUrl: item.image || item.imageUrl // Ensure we catch both possibilities
       }));
 
       const payload = {
         name,
-        subtitle, // Ensure subtitle is sent to DB
+        subtitle, 
         items: mappedItems,
         id: currentId 
       };
@@ -143,7 +163,9 @@ const CatalogueBuilder = () => {
       const finalName = res.data?.name || name;
       const finalSubtitle = res.data?.subtitle || subtitle;
       
-      syncLocalStorage(savedId, finalName);
+      // Update local storage with the current state items
+      syncLocalStorage(savedId, finalName, items);
+      
       setClientName(finalName);
       setSubtitle(finalSubtitle);
       

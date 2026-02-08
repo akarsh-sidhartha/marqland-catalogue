@@ -1,155 +1,227 @@
-import React from 'react';
-import { Mail, Globe, MapPin, Hash, Download, Instagram } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Trash2, Plus, Printer, RefreshCcw } from 'lucide-react';
 
 const App = () => {
+  const [pages, setPages] = useState([{ id: 1 }]);
+  const [currentDate, setCurrentDate] = useState('');
+
+  // Set initial date on mount
+  useEffect(() => {
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    const today = new Date();
+    setCurrentDate(`Date: ${today.toLocaleDateString('en-US', options)}`);
+  }, []);
+
+  const addNewPage = () => {
+    const nextId = pages.length > 0 ? Math.max(...pages.map(p => p.id)) + 1 : 1;
+    setPages([...pages, { id: nextId }]);
+  };
+
+  const removePage = (id) => {
+    setPages(pages.filter(p => p.id !== id));
+  };
+
+  const resetAll = () => {
+    if (window.confirm('This will clear all content and reset the pages. Continue?')) {
+      window.location.reload();
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
 
-  // SVG Logo Component 
-  const MarqlandLogo = () => (
-    <svg width="48" height="48" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#D4AF37" />
-          <stop offset="50%" stopColor="#F4DF4E" />
-          <stop offset="100%" stopColor="#B8860B" />
-        </linearGradient>
-      </defs>
-      <rect x="15" y="15" width="70" height="70" rx="4" stroke="url(#logoGradient)" strokeWidth="4" />
-      <path d="M30 70V30L50 50L70 30V70" stroke="url(#logoGradient)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col items-center py-12 print:p-0 print:bg-white selection:bg-red-50">
-      
-      {/* UI Controls */}
-      <div className="fixed top-8 right-8 z-50 print:hidden flex flex-col gap-4">
-        <button 
-          onClick={handlePrint}
-          className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded shadow-xl hover:bg-slate-800 transition-all font-bold tracking-widest text-xs border border-white/10"
-        >
-          <Download size={16} /> DOWNLOAD / PRINT PDF
-        </button>
-      </div>
-
-      {/* A4 Document Container */}
-      <div 
-        id="document-root"
-        className="bg-white shadow-2xl print:shadow-none flex flex-col"
-        style={{
-          width: '210mm',
-          height: '297mm',
-          minWidth: '210mm',
-          minHeight: '297mm',
-          position: 'relative',
-          padding: '2mm', // Border width
-          background: 'linear-gradient(135deg, #e11d48 0%, #fb7185 50%, #f43f5e 100%)' // Red to Pink Gradient
-        }}
-      >
-        <div className="bg-white h-full w-full flex flex-col pt-16 px-16 pb-12 overflow-hidden">
-          
-          {/* HEADER SECTION */}
-          <div className="flex justify-between items-start mb-16">
-            <div className="flex items-center gap-5">
-              <MarqlandLogo />
-              <div className="header">
-                <h1 className="text-4xl font-black tracking-tighter text-slate-900 leading-none">MARQLAND</h1>
-              </div>
-            </div>
-          </div>
-
-          {/* DATE & REF */}
-          <div className="flex justify-between text-[11px] font-bold text-slate-400 uppercase tracking-tight mb-16 border-b border-slate-50 pb-4">
-            <span>Ref: ML/CORP/{new Date().getFullYear()}/001</span>
-            <span>Date: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-          </div>
-
-          {/* MAIN BODY (Pasteable Area) */}
-          <div 
-            className="flex-1 text-slate-800 leading-[1.8] text-[15px] outline-none focus:ring-0 min-h-[400px]"
-            contentEditable
-            suppressContentEditableWarning
-            spellCheck="false"
-            style={{ 
-              fontFamily: "'Inter', sans-serif",
-              textAlign: 'justify',
-              whiteSpace: 'pre-wrap'
-            }}
-          >
-            <p className="font-bold text-black mb-8">Dear Sir / Madam,</p>
-            <p>
-              This area is fully editable. You can click here to type your letter or paste text directly from another document. The formatting will adapt to the executive style of this letterhead.
-            </p>
-          </div>
-
-          {/* SIGNATURE AREA */}
-          <div className="mt-12 mb-16">
-            <div className="w-48 h-[1px] bg-slate-200 mb-3"></div>
-            <p className="text-xs font-black text-slate-900 uppercase">Authorized Signatory</p>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest">Marqland Operations</p>
-          </div>
-
-          {/* FOOTER AREA */}
-          <div className="relative pt-10 border-t border-slate-100 flex justify-between items-end">
-            <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-[9px] uppercase tracking-wider font-bold text-slate-400">
-              <div className="flex items-center gap-2">
-                <Globe size={10} className="text-rose-500" />
-                <span className="text-slate-600">www.marqland.com</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Mail size={10} className="text-rose-500" />
-                <span className="text-slate-600">info@marqland.com</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Hash size={10} className="text-rose-500" />
-                <span className="text-slate-600">GST: 29AHTPR534921ZP</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin size={10} className="text-rose-500" />
-                <span className="text-slate-600">Bangalore 560077</span>
-              </div>
-            </div>
-
-            {/* INSTAGRAM QR CODE SECTION */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="p-1.5 bg-slate-50 rounded">
-                <svg width="50" height="50" viewBox="0 0 29 29" fill="#e11d48">
-                  <path d="M0 0h7v7H0zM2 2v3h3V2H2zm10 0h7v7h-7zM14 4v3h3V4h-3zm8-4h7v7h-7zM24 2v3h3V2h-2zm-24 10h7v7H0zm2 2v3h3V2h-3zm10 0h7v7h-7zM14 14v3h3V14h-3zm8-2h7v7h-7zM24 14v3h3V14h-3zm-22 10h7v7H0zm2 2v3h3V24H2zm10 0h7v7h-7zM14 26v3h3V26h-3zm8-2h7v7h-7zM24 26v3h3V26h-3z" />
-                  <rect x="9" y="9" width="3" height="3" />
-                  <rect x="17" y="17" width="3" height="3" />
-                  <rect x="9" y="17" width="3" height="3" />
-                </svg>
-              </div>
-              <div className="flex items-center gap-1 text-[8px] font-black text-rose-400 uppercase tracking-tighter">
-                <Instagram size={8} /> @marqland
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 font-sans">
+      {/* CSS Styles for A4 and Print Isolation */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;600&display=swap');
         
-        body { font-family: 'Inter', sans-serif; }
+        .a4-page {
+          width: 210mm;
+          height: 297mm;
+          background: white;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          position: relative;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          border: 3px solid;
+          border-image-source: linear-gradient(45deg, #d26724 0, #c9003b 100%);
+          border-image-slice: 1;
+        }
+
+        .company-title {
+          font-family: 'Playfair Display', serif;
+          font-size: 42pt;
+          letter-spacing: 0.1em;
+          color: #c9003b;
+          text-transform: uppercase;
+        }
+
+        .content-body {
+          flex-grow: 1;
+          padding: 0 60px;
+          outline: none;
+          font-size: 11pt;
+          line-height: 1.6;
+          color: #374151;
+        }
 
         @media print {
-          body { background: none; padding: 0; }
-          .print\\:hidden { display: none !important; }
-          #document-root {
-            margin: 0 !important;
-            box-shadow: none !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+          /* Hide EVERYTHING by default */
+          body * {
+            visibility: hidden;
           }
+
+          /* Show only the letterhead container and its children */
+          .print-section, .print-section * {
+            visibility: visible;
+          }
+
+          /* Position the print section at the very top-left of the page */
+          .print-section {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 210mm;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Hide common sidebar/nav class names just in case */
+          nav, aside, .sidebar, .no-print, header:not(.letterhead-header) {
+            display: none !important;
+            height: 0 !important;
+            width: 0 !important;
+          }
+
           @page {
             size: A4;
             margin: 0;
           }
+
+          .a4-page {
+            margin: 0 !important;
+            box-shadow: none !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            page-break-after: always !important;
+            border-image-slice: 1 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            visibility: visible !important;
+          }
         }
-      `}</style>
+      `}} />
+
+      {/* Floating Controls */}
+      <div className="no-print fixed top-6 z-50 flex gap-4 bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white">
+        <button 
+          onClick={handlePrint}
+          className="flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-gray-800 transition-all active:scale-95"
+        >
+          <Printer size={18} /> Download PDF
+        </button>
+        <button 
+          onClick={addNewPage}
+          className="flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-gray-800 transition-all active:scale-95"
+        >
+          <Plus size={18} /> Add New Page
+        </button>
+        <button 
+          onClick={resetAll}
+          className="flex items-center gap-2 bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 transition-all active:scale-95"
+        >
+          <RefreshCcw size={18} /> Reset
+        </button>
+      </div>
+
+      {/* Pages Container - Wrapped in print-section for isolation */}
+      <div className="print-section flex flex-col gap-8 mt-12 print:mt-0 print:gap-0">
+        {pages.map((page, index) => (
+          <div key={page.id} className="relative group">
+            <div className="a4-page">
+              {/* Delete Button (Hover) */}
+              {pages.length > 1 && (
+                <button 
+                  onClick={() => removePage(page.id)}
+                  className="no-print absolute top-6 right-6 opacity-0 group-hover:opacity-100 bg-red-100 text-red-600 p-2 rounded-full transition-opacity hover:bg-red-200"
+                  title="Delete this page"
+                >
+                  <Trash2 size={20} />
+                </button>
+              )}
+
+              {/* Header */}
+              <header className="letterhead-header pt-8 pb-2 text-center">
+                <h1 className="company-title">MARQLAND</h1>
+              </header>
+
+              {/* Sub-Header info (Page 1 Only) */}
+              {index === 0 && (
+                <div className="flex justify-between px-[60px] py-4 text-[11pt] text-gray-700">
+                  <div contentEditable suppressContentEditableWarning className="outline-none">
+                    <strong>To,</strong><br />
+                    [Recipient Name]<br />
+                    [Address Line]
+                  </div>
+                  <div contentEditable suppressContentEditableWarning className="outline-none text-right">
+                    {currentDate}
+                  </div>
+                </div>
+              )}
+
+              {/* Editable Content Area */}
+              <div 
+                className="content-body py-4 outline-none overflow-y-auto" 
+                contentEditable 
+                suppressContentEditableWarning
+              >
+                {index === 0 ? (
+                  <>
+                    <p><strong>Subject: [Enter Subject Here]</strong></p>
+                    <p><br /></p>
+                    <p>Start typing your letter content here...</p>
+                  </>
+                ) : (
+                  <p>Continue your content here (Page {index + 1})...</p>
+                )}
+              </div>
+
+              {/* Signature Section */}
+              {index === pages.length - 1 && (
+                <div className="px-[60px] pb-6 flex flex-col items-end mt-auto">
+                  <div className="w-[180px] border-t border-gray-400 mb-1"></div>
+                  <div className="font-bold text-gray-900 uppercase">RADHA KRISHNA TS</div>
+                  <div className="text-gray-600 text-sm italic">Proprietor</div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <footer className="footer-bg mx-[60px] border-t border-gray-100 pt-4 pb-8 text-center text-gray-500">
+                <div className="flex justify-center items-center gap-4 mb-1 font-semibold text-red-600 text-[9pt]">
+                  <a href="https://www.marqland.com" target="_blank" rel="noreferrer" className="hover:underline">www.marqland.com</a>
+                  <span className="text-gray-300">|</span>
+                  <a href="https://instagram.com/marqland" target="_blank" rel="noreferrer" className="hover:underline">@marqland</a>
+                  <span className="text-gray-300">|</span>
+                  <a href="mailto:info@marqland.com" className="hover:underline">info@marqland.com</a>
+                </div>
+                <div className="flex justify-center gap-4 text-[8pt]">
+                  <span><strong>GST:</strong> 29AHTPR5349D1ZP</span>
+                  <span className="text-gray-300">|</span>
+                  <span>219, 3rd cross bds Nagar K.Naryanpura Bangalore 560077</span>
+                </div>
+                
+                <div className="text-[8pt] mt-2 italic text-gray-400">
+                  Page {index + 1} of {pages.length}
+                </div>
+              </footer>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

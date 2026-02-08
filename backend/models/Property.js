@@ -60,6 +60,11 @@ const propertySchema = new mongoose.Schema({
   doublePrice: { type: Number, default: 0 },
   triplePrice: { type: Number, default: 0 },
   
+  purchasePriceDouble: { type: Number, default: 0 },
+  purchasePriceTriple: { type: Number, default: 0 },
+  marginDouble: { type: Number, default: 15 },
+  marginTriple: { type: Number, default: 15 },
+  
   // New fields to handle the missing data
   djCost: { type: Number, default: 0 },
   licenseFeeDJ: { type: Number, default: 0 },

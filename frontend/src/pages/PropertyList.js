@@ -228,12 +228,11 @@ const PropertyManager = () => {
        const selectedData = properties.filter(p => selectedProperties.has(p._id)).map(p => {
       // Base data common to both types
       const commonData = {
-        propertyName: p.propertyName,
-        state: p.state,
-        place: p.place,
+        name: p.propertyName,
+        sku: p.place + " "+ p.state,
         website: p.website,
         image: p.imageUrl,
-        details: p.details,
+        desc: p.details,
         type: p.type // Useful for the builder to know the category
       };
 
@@ -241,8 +240,9 @@ const PropertyManager = () => {
         return {
           ...commonData,
           // Calculate selling prices on the fly to ensure accuracy
-          doublePrice: calculateSelling(p.purchasePriceDouble, p.marginDouble),
-          triplePrice: calculateSelling(p.purchasePriceTriple, p.marginTriple),
+          price:calculateSelling(p.purchasePriceDouble, p.marginDouble),
+          doubleOccupancy: calculateSelling(p.purchasePriceDouble, p.marginDouble),
+          tripleOccupancy: calculateSelling(p.purchasePriceTriple, p.marginTriple),
           djCost: Number(p.djCost) || 0,
           licenseFeeDJ: Number(p.licenseFeeDJ) || 0,
           cocktailSnacks: Number(p.cocktailSnacks) || 0,
@@ -261,10 +261,12 @@ const PropertyManager = () => {
       // akarsh changes end 
       const updatedPayload = {
          id: targetCat._id,
-         name: targetCat.name,
-         subtitle: targetCat.subtitle,
+         title: targetCat.title,
+         description: targetCat.description,
          items: [...(targetCat.items || []), ...selectedData]
       };
+      // updatedPayload.name = targetCat.title;
+      // updatedPayload.subtitle = targetCat.description;
       // below 2 lines are working APIS. 
       //const hostname = window.location.hostname || 'localhost';
       //await axios.post(`http://${hostname}:5000/api/offsitecatalogues`, updatedPayload);
@@ -748,7 +750,7 @@ const PropertyManager = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">
-                            {formData.type === 'Night Stay' ? 'Double Purchase (₹)' : 'Day Package (₹)'}
+                            {formData.type === 'Night Stay' ? 'Double Occupancy (₹)' : 'Day Package (₹)'}
                           </label>
                           <input type="number" className="w-full p-3 bg-white rounded-xl border border-indigo-100 outline-none font-bold text-sm" value={formData.purchasePriceDouble} onChange={e => setFormData({...formData, purchasePriceDouble: e.target.value})} />
                         </div>
@@ -762,7 +764,7 @@ const PropertyManager = () => {
                       {formData.type === 'Night Stay' && (
                         <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
                           <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Triple Purchase (₹)</label>
+                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Triple Occupancy (₹)</label>
                             <input type="number" className="w-full p-3 bg-white rounded-xl border border-indigo-100 outline-none font-bold text-sm" value={formData.purchasePriceTriple} onChange={e => setFormData({...formData, purchasePriceTriple: e.target.value})} />
                           </div>
                           <div>

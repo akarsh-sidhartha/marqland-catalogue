@@ -8,16 +8,21 @@ const Catalogue = require('../models/offsiteCatalogue');
  * @access  Public
  */
 router.post('/', async (req, res) => {
-  console.log("inside POST /api/offsitecatalogues");
   try {
-    const newCatalogue = new Catalogue(req.body);
-    const savedCatalogue = await newCatalogue.save();
-    console.log("inside POST /api/offsitecatalogues TRY = ",savedCatalogue);
-    res.status(201).json({
-      success: true,
-      message: "Offsite Catalogue created successfully",
-      data: savedCatalogue
-    });
+    const { title, description, items, id } = req.body;
+    if (id && id !== 'undefined') {
+      const updated = await Catalogue.findByIdAndUpdate(id, { title, description, items }, { new: true });
+      return res.json(updated);
+    }else {
+         console.log("inside POST /api/offsitecatalogues ELSE");
+      const newCatalogue = new Catalogue(req.body);
+      const savedCatalogue = await newCatalogue.save();
+      res.status(201).json({
+        success: true,
+        message: "Offsite Catalogue created successfully",
+        data: savedCatalogue
+      });
+    }
   } catch (error) {
     console.error("POST Offsite Error:", error);
     res.status(400).json({
@@ -34,11 +39,8 @@ router.post('/', async (req, res) => {
  * @access  Public
  */
 router.get('/', async (req, res) => {
-  console.log("inside GET /api/offsitecatalogues");
   try {
-     console.log("inside GET /api/offsitecatalogues TRY");
     const catalogues = await Catalogue.find().sort({ createdAt: -1 });
-    console.log("inside offsite catalogueroute.js get API = ",catalogues);
     res.status(200).json({
       success: true,
       count: catalogues.length,
