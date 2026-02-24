@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 import { 
   Plus, 
   ArrowRight, 
@@ -21,6 +22,7 @@ import {
   Search // Added for the search icon
 } from 'lucide-react';
 
+/*
   const getBaseUrl = () => {
     const { hostname } = window.location;
     const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
@@ -28,7 +30,7 @@ import {
       : hostname;
     return `http://${host}:5000/api`;
   };
-
+*/
 const API_BASE_URL = `${getBaseUrl()}/orders`;
 
 export default function App() {

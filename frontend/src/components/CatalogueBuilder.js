@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Printer, ChevronLeft, Upload, GripVertical, Save } from 'lucide-react';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 import axios from 'axios';
 
 const CatalogueBuilder = () => {
@@ -10,6 +11,7 @@ const CatalogueBuilder = () => {
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
     // Determine the API Base URL based on the current environment
+  /*
   const getApiUrl = () => {
     const hostname = window.location.hostname;
     // If running in a cloud/preview environment, we might need a relative path or specific proxy
@@ -20,7 +22,8 @@ const CatalogueBuilder = () => {
     // Fallback for custom local network IPs or production
     return `http://${hostname}:5000/api/offsitecatalogues`;
   };
-  
+  */
+   const API_URL_PROPERTIES = `${getBaseUrl()}/offsitecatalogues`;
     /**
    * Helper function to format image URLs correctly
    * If it's Base64 or already a full URL, return it as is.

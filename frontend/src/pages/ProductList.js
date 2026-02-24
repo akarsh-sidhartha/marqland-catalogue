@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 import { Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil, RotateCcw, Info, CheckSquare, Square } from 'lucide-react';
 
 /**
@@ -82,6 +83,7 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
   );
 };
 
+/*
   const getBaseUrl = () => {
     const { hostname } = window.location;
     const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
@@ -89,7 +91,7 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
       : hostname;
     return `http://${host}:5000/api`;
   };
-
+*/
   const API_URL_PRODUCTS = `${getBaseUrl()}/products`;
   const API_URL_PRODUCTS_CATALOGUE = `${getBaseUrl()}/catalogues`;
 

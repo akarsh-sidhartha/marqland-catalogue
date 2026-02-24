@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trash2, Printer, ChevronLeft, Save, Globe, MapPin, Sun, Loader2, FileText, XCircle, CheckCircle } from 'lucide-react';
 import axios from 'axios';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 
 const OffsiteBuilder = () => {
   const [clientName, setClientName] = useState('');
@@ -168,7 +169,8 @@ const OffsiteBuilder = () => {
       };
       
       const hostname = window.location.hostname || 'localhost';
-      const baseUrl = `http://${hostname}:5000/api/offsitecatalogues`;
+      //const baseUrl = `http://${hostname}:5000/api/offsitecatalogues`;
+      const baseUrl = `${getBaseUrl()}/offsitecatalogues`;
       
       let response;
 

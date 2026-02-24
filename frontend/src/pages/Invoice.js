@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 import { 
   Camera, 
   CheckCircle, 
@@ -37,6 +38,7 @@ const loadScript = (src) => {
   });
 };
 
+/*
 const getBaseUrl = () => {
   const { hostname } = window.location;
   const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
@@ -44,7 +46,7 @@ const getBaseUrl = () => {
     : hostname;
   return `http://${host}:5000/api`;
 };
-
+*/
 const API_BASE_URL = `${getBaseUrl()}`;
 
 

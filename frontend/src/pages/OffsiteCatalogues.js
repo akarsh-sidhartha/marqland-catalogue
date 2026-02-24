@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { getBaseUrl } from '../baseurl'; // Import the central function
+
 import { 
   FileText, Search, Trash2, Calendar, 
   Loader2, ChevronRight, AlertCircle, RefreshCw
@@ -16,6 +18,7 @@ const App = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  /*
   const getBaseUrl = () => {
     const { hostname } = window.location;
     // If we are on localhost, use localhost. 
@@ -25,7 +28,7 @@ const App = () => {
       : hostname;
     return `http://${host}:5000/api`;
   };
-
+*/
   const API_URL_OFFISTE_CATALOUGE = `${getBaseUrl()}/offsitecatalogues`;
 
   // Determine the API Base URL based on the current environment

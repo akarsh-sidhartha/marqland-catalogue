@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 import { 
   Camera, 
   Upload, 
@@ -14,6 +15,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 
+/*
 const getBaseUrl = () => {
   const { hostname } = window.location;
   const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
@@ -21,7 +23,7 @@ const getBaseUrl = () => {
     : hostname;
   return `http://${host}:5000/api`;
 };
-
+*/
 const API_BASE_URL = `${getBaseUrl()}`;
 
 const compressImage = (base64Str) => {

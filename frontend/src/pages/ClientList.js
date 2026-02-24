@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Download, Plus, Search, ChevronDown, ChevronRight, Edit2, Trash2, Mail, Phone, Building2 } from 'lucide-react';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 
 const ClientList = () => {
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedRows, setExpandedRows] = useState([]); 
+  const [expandedRows, setExpandedRows] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
-  
+
   // Sorting State
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
 
@@ -19,6 +21,7 @@ const ClientList = () => {
 
   useEffect(() => { fetchClients(); }, []);
 
+  /*
   const getBaseUrl = () => {
     const { hostname } = window.location;
     // If we are on localhost, use localhost. 
@@ -28,7 +31,7 @@ const ClientList = () => {
       : hostname;
     return `http://${host}:5000/api`;
   };
-
+*/
   const API_URL_CLIENTS = `${getBaseUrl()}/clients`;
 
   /* const getApiUrlForClients = () => {
@@ -57,7 +60,7 @@ const ClientList = () => {
     // 1. Filter
     let result = clients.filter(c => {
       const searchStr = searchTerm.toLowerCase();
-      const contactMatch = c.contacts?.some(contact => 
+      const contactMatch = c.contacts?.some(contact =>
         contact.name?.toLowerCase().includes(searchStr)
       );
       return c.companyName?.toLowerCase().includes(searchStr) || contactMatch;
@@ -81,7 +84,7 @@ const ClientList = () => {
   };
 
   const toggleRow = (id) => {
-    setExpandedRows(prev => 
+    setExpandedRows(prev =>
       prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
     );
   };
@@ -98,18 +101,18 @@ const ClientList = () => {
 
   const handleRemoveContactRow = (index) => {
     const updatedContacts = formData.contacts.filter((_, i) => i !== index);
-    setFormData({ 
-      ...formData, 
-      contacts: updatedContacts.length > 0 ? updatedContacts : [{ name: '', phone: '', email: '' }] 
+    setFormData({
+      ...formData,
+      contacts: updatedContacts.length > 0 ? updatedContacts : [{ name: '', phone: '', email: '' }]
     });
   };
 
   const handleDelete = async (id, name, e) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     if (window.confirm(`Are you sure you want to delete client "${name}"?`)) {
       try {
         //await axios.delete(`http://localhost:5000/api/clients/${id}`);
-        await axios.delete(API_URL_CLIENTS+`${id}`);
+        await axios.delete(API_URL_CLIENTS + `${id}`);
         fetchClients();
       } catch (err) {
         alert("Failed to delete client.");
@@ -118,7 +121,7 @@ const ClientList = () => {
   };
 
   const handleEdit = (client, e) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     setIsEditing(true);
     setCurrentId(client._id);
     setFormData({
@@ -132,7 +135,7 @@ const ClientList = () => {
     try {
       if (isEditing) {
         //await axios.put(`http://localhost:5000/api/clients/${currentId}`, formData);
-        await axios.put(API_URL_CLIENTS+`${currentId}`, formData);
+        await axios.put(API_URL_CLIENTS + `/${currentId}`, formData);
       } else {
         //await axios.post('http://localhost:5000/api/clients', formData);
         await axios.post(API_URL_CLIENTS, formData);
@@ -144,6 +147,38 @@ const ClientList = () => {
       alert("Error saving client.");
     }
   };
+
+
+  // Export to Excel (CSV format)
+  const exportToExcel = () => {
+    const headers = ["Company Name", "Contact Person", "Phone", "Email"];
+    const rows = filteredClientsforExcel.flatMap(client =>
+      client.contacts.map(contact => [
+        client.companyName,
+        contact.name,
+        contact.phone,
+        contact.email
+      ])
+    );
+
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + [headers, ...rows].map(e => e.map(val => `"${val || ''}"`).join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Client_List_${new Date().toLocaleDateString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const filteredClientsforExcel = clients
+    .filter(c => c.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => {
+      if (sortOrder === 'asc') return a.companyName.localeCompare(b.companyName);
+      return b.companyName.localeCompare(a.companyName);
+    });
 
   const resetForm = () => {
     setFormData({ companyName: '', contacts: [{ name: '', phone: '', email: '' }] });
@@ -158,19 +193,19 @@ const ClientList = () => {
         <h1 className="text-xl font-black text-gray-800 tracking-tight uppercase whitespace-nowrap border-r pr-6 border-gray-200">
           Client Management
         </h1>
-        
+
         {/* Search Bar with Clear Button */}
         <div className="flex-grow max-w-2xl relative group">
           <span className="absolute left-3 top-3 text-gray-400">🔍</span>
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Search by company or contact name..."
             className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none transition bg-gray-50/50"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && (
-            <button 
+            <button
               onClick={() => setSearchTerm('')}
               className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-full w-6 h-6 flex items-center justify-center transition"
             >
@@ -179,12 +214,21 @@ const ClientList = () => {
           )}
         </div>
 
-        <button 
-          onClick={() => { resetForm(); setShowModal(true); }} 
+        <button
+          onClick={() => { resetForm(); setShowModal(true); }}
           className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-indigo-700 shadow-md transition whitespace-nowrap flex-shrink-0"
         >
           + Add Client
         </button>
+
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 bg-white border-2 border-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"
+        >
+          <Download size={16} />
+          Export
+        </button>
+
       </div>
 
       {/* TABLE */}
@@ -193,7 +237,7 @@ const ClientList = () => {
           <thead className="bg-gray-100 border-b border-gray-200 uppercase text-[11px] font-black text-gray-500">
             <tr>
               <th className="p-3 w-10"></th>
-              <th 
+              <th
                 className="p-3 cursor-pointer hover:text-indigo-600 transition flex items-center gap-1"
                 onClick={toggleSort}
               >
@@ -208,7 +252,7 @@ const ClientList = () => {
               const isExpanded = expandedRows.includes(c._id);
               return (
                 <React.Fragment key={c._id}>
-                  <tr 
+                  <tr
                     onClick={() => toggleRow(c._id)}
                     className={`cursor-pointer border-b transition-colors ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-gray-50'}`}
                   >
@@ -217,12 +261,12 @@ const ClientList = () => {
                     </td>
                     <td className="p-3 font-bold text-gray-700 uppercase text-sm">{c.companyName}</td>
                     <td className="p-3 text-sm text-gray-500">
-                      {c.contacts[0]?.name || '---'} 
+                      {c.contacts[0]?.name || '---'}
                       {c.contacts.length > 1 && <span className="ml-2 text-[10px] bg-gray-200 px-1.5 py-0.5 rounded-full">+{c.contacts.length - 1} more</span>}
                     </td>
                     <td className="p-3 text-right">
-                       <button onClick={(e) => handleEdit(c, e)} className="text-indigo-600 font-bold text-[11px] hover:underline mr-4 uppercase">Edit</button>
-                       <button onClick={(e) => handleDelete(c._id, c.companyName, e)} className="text-red-500 font-bold text-[11px] hover:underline uppercase">Delete</button>
+                      <button onClick={(e) => handleEdit(c, e)} className="text-indigo-600 font-bold text-[11px] hover:underline mr-4 uppercase">Edit</button>
+                      <button onClick={(e) => handleDelete(c._id, c.companyName, e)} className="text-red-500 font-bold text-[11px] hover:underline uppercase">Delete</button>
                     </td>
                   </tr>
 
@@ -261,14 +305,14 @@ const ClientList = () => {
               </h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-900 text-2xl">✕</button>
             </div>
-            
+
             <div className="space-y-6">
               <div>
                 <label className="text-[10px] font-black text-gray-400 mb-1 block uppercase">Company Name</label>
-                <input 
-                  className="w-full border-2 border-gray-100 p-3 rounded-lg focus:border-indigo-500 outline-none font-bold" 
-                  value={formData.companyName} 
-                  onChange={e => setFormData({...formData, companyName: e.target.value})} 
+                <input
+                  className="w-full border-2 border-gray-100 p-3 rounded-lg focus:border-indigo-500 outline-none font-bold"
+                  value={formData.companyName}
+                  onChange={e => setFormData({ ...formData, companyName: e.target.value })}
                 />
               </div>
 
@@ -295,8 +339,8 @@ const ClientList = () => {
 
             <div className="flex justify-end gap-4 border-t mt-8 pt-6">
               <button onClick={() => setShowModal(false)} className="px-6 py-2 text-gray-400 font-bold">Cancel</button>
-              <button 
-                onClick={handleSave} 
+              <button
+                onClick={handleSave}
                 className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg"
               >
                 Confirm

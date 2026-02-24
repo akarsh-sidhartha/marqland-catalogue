@@ -18,7 +18,11 @@ router.post('/process', async (req, res) => {
 
   const base64Content = image.split(',')[1];
   const apiKey = process.env.GEMINI_API_KEY;
-
+  // 2. CRITICAL for NSSM: Check if API Key loaded correctly
+  if (!apiKey) {
+    console.error("NSSM ERROR: GEMINI_API_KEY is not defined in Service Environment.");
+    return res.status(500).json({ error: "Server Configuration Error: API Key missing." });
+  }
   const systemPrompt = `Extract Indian Tax Invoice details. Return ONLY a valid JSON object with: 
     vendor_name, 
     vendor_gst (15-char GSTIN), 
@@ -35,8 +39,9 @@ router.post('/process', async (req, res) => {
 
   while (attempt <= maxRetries) {
     try {
+      const modelName = "gemini-2.5-flash";
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
         {
           contents: [{
             parts: [

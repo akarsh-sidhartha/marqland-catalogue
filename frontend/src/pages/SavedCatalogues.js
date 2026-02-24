@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { getBaseUrl } from '../baseurl'; // Import the central function
 import { Search, X, RefreshCw, Trash2, Edit3 } from 'lucide-react';
 
 const SavedCatalogues = () => {
@@ -8,6 +9,7 @@ const SavedCatalogues = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  /*
   const getBaseUrl = () => {
     const { hostname } = window.location;
     // If we are on localhost, use localhost. 
@@ -17,7 +19,7 @@ const SavedCatalogues = () => {
       : hostname;
     return `http://${host}:5000/api`;
   };
-
+*/
   const API_URL_PRODUCT_CATALOGUES = `${getBaseUrl()}/catalogues`;
 
   /* const getApiUrl = () => {

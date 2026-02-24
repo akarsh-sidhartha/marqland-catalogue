@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import { getBaseUrl } from '../baseurl'; // Import the central function
+
 import { 
   Search, X, Plus, ChevronDown, ChevronRight, MapPin, 
   Trash2, Edit3, Phone, Mail, User, Building, Globe, Image as ImageIcon,
@@ -39,6 +41,7 @@ const PropertyManager = () => {
    * Dynamically detects the host IP to ensure other laptops in the 
    * office network can communicate with the backend server.
    */
+  /*
   const getBaseUrl = () => {
     const { hostname } = window.location;
     // If we are on localhost, use localhost. 
@@ -48,6 +51,7 @@ const PropertyManager = () => {
       : hostname;
     return `http://${host}:5000/api`;
   };
+*/
 
   const API_URL_PROPERTIES = `${getBaseUrl()}/properties`;
   const API_URL_OFFSITE = `${getBaseUrl()}/offsitecatalogues`;
