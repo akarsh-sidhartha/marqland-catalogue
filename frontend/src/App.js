@@ -34,6 +34,7 @@ import MarqlandLetterHead from './pages/MarqlandLetterHead';
 import InvoiceTracking from './pages/Invoice';
 import InvoiceScanMobileVersionPage from './pages/InvoiceScanMobileVersion';
 import OrderTracker from './pages/OrderTracker';
+import SamplesProvided from './pages/SamplesProvided';
 
 
 /**
@@ -135,6 +136,7 @@ const Sidebar = () => {
           {(openSections.gifting || isCollapsed) && (
             <div className="flex flex-col gap-1">
               <NavLink to="/products" icon={Package} label="Products" />
+              <NavLink to="/samplesprovided" icon={Package} label="SamplesProvided" />
               <NavLink to="/vendors" icon={Users} label="Vendors" />
               <NavLink to="/clients" icon={Building} label="Clients" />
               <NavLink to="/savedcatalogues" icon={Bookmark} label="Saved Catalogues" />
@@ -196,6 +198,7 @@ function App() {
           <Routes>
             <Route path="/" element={<OrderTracker/>}/>
             <Route path="/products" element={<ProductList />} />
+            <Route path="samplesprovided" element={<SamplesProvided/>}/>
             <Route path="/vendors" element={<VendorList />} />
             <Route path="/clients" element={<ClientList />} />
             <Route path="/builder" element={<CatalogueBuilder />} />

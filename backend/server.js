@@ -32,6 +32,7 @@ const propertyRoutes = require('./routes/propertyRoutes');
 const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
 const invoiceRoutes = require('./routes/invoiceRoute');
 const orderInquiry = require('./routes/orderInquiry');
+const SamplesProvided = require('./routes/samplesProvided');
 
 
 
@@ -58,6 +59,7 @@ app.use('/api/properties', propertyRoutes);
 app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
 app.use('/api/invoices',invoiceRoutes);
 app.use('/api/orders',orderInquiry);
+app.use('/api/challans', SamplesProvided);
 
 /**
  * 5. SERVER STARTUP
