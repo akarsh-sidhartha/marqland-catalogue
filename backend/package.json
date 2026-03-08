@@ -18,6 +18,7 @@
     "express": "^5.2.1",
     "mongoose": "^9.1.2",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "nodemon": "^3.1.11"
   }
 }

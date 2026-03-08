@@ -19,7 +19,8 @@ import {
   ChevronDown,
   ChevronRight,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  MessageSquare
 } from 'lucide-react';
 
 import ProductList from './pages/ProductList';
@@ -35,7 +36,7 @@ import InvoiceTracking from './pages/Invoice';
 import InvoiceScanMobileVersionPage from './pages/InvoiceScanMobileVersion';
 import OrderTracker from './pages/OrderTracker';
 import SamplesProvided from './pages/SamplesProvided';
-
+import BroadCastMessage from './pages/VendorMessaging';
 
 /**
  * SIDEBAR COMPONENT
@@ -137,6 +138,7 @@ const Sidebar = () => {
             <div className="flex flex-col gap-1">
               <NavLink to="/products" icon={Package} label="Products" />
               <NavLink to="/samplesprovided" icon={Package} label="SamplesProvided" />
+               <NavLink to="/broadcastmessage" icon={MessageSquare} label="Message Vendors" />
               <NavLink to="/vendors" icon={Users} label="Vendors" />
               <NavLink to="/clients" icon={Building} label="Clients" />
               <NavLink to="/savedcatalogues" icon={Bookmark} label="Saved Catalogues" />
@@ -198,7 +200,7 @@ function App() {
           <Routes>
             <Route path="/" element={<OrderTracker/>}/>
             <Route path="/products" element={<ProductList />} />
-            <Route path="samplesprovided" element={<SamplesProvided/>}/>
+            <Route path="/samplesprovided" element={<SamplesProvided/>}/>
             <Route path="/vendors" element={<VendorList />} />
             <Route path="/clients" element={<ClientList />} />
             <Route path="/builder" element={<CatalogueBuilder />} />
@@ -208,6 +210,7 @@ function App() {
             <Route path="/offsite-builder" element={<OffsiteBuilder />} />
             <Route path="/MarqlandLetterHead" element={<MarqlandLetterHead />} />
             <Route path="/InvoiceTracking" element={<InvoiceTracking />} />
+             <Route path="/broadcastmessage" element={<BroadCastMessage />} />
             <Route path="/scaninvoice" element={<InvoiceScanMobileVersionPage/>} />
           </Routes>
         </main>

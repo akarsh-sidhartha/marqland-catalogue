@@ -34,6 +34,7 @@ const CatalogueBuilder = () => {
     if (imgStr.startsWith('data:') || imgStr.startsWith('http')) {
       return imgStr;
     }
+    return imgStr.startsWith('/') ? imgStr : `/${imgStr}`;
     // If it's a local path like /uploads/... ensure it has leading slash or fix it
     const path = imgStr.startsWith('/') ? imgStr : `/${imgStr}`;
     return `${getApiUrl()}${path}`;
@@ -61,7 +62,8 @@ useEffect(() => {
             name: p.name,
             desc: p.desc || p.description || '', 
             price: p.price ? p.price.toString().replace('₹', '').trim() : '0',
-            image: p.image || (p.imageUrl ? (p.imageUrl.startsWith('http') ? p.imageUrl : `http://localhost:5000${p.imageUrl}`) : null)
+            image: formatImageUrl(p.imageUrl || p.image)   
+            //image: p.image || (p.imageUrl ? (p.imageUrl.startsWith('http') ? p.imageUrl : `http://localhost:5000${p.imageUrl}`) : null)
           }));
           setItems(selectedProducts);
           
@@ -146,7 +148,8 @@ useEffect(() => {
         name: item.name,
         description: item.desc || item.description, 
         price: item.price,
-        imageUrl: item.image || item.imageUrl // Ensure we catch both possibilities
+        imageUrl: item.image 
+        //imageUrl: item.image || item.imageUrl // Ensure we catch both possibilities
       }));
 
       const payload = {
@@ -155,10 +158,11 @@ useEffect(() => {
         items: mappedItems,
         id: currentId 
       };
-      
+      /*
       const hostname = window.location.hostname || 'localhost';
       const apiUrl = `http://${hostname}:5000/api/catalogues`;
-      
+      */
+      const  apiUrl = `${getBaseUrl()}/catalogues`;
       console.log("🚀 Saving Catalogue:", payload);
       const res = await axios.post(apiUrl, payload);
       

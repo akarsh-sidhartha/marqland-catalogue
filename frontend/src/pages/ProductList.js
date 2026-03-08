@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { getBaseUrl } from '../baseurl'; // Import the central function
-import { Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil, RotateCcw, Info, CheckSquare, Square } from 'lucide-react';
-
+import { Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil, RotateCcw, Info, CheckSquare, Square, MessageSquare } from 'lucide-react';
 /**
  * Custom Creatable Select to replace 'react-select/creatable' 
  */
@@ -38,7 +37,7 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
   return (
     <div className="relative w-full" ref={wrapperRef}>
       <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">{label}</label>
-      <div 
+      <div
         onClick={() => !isDisabled && setIsOpen(!isOpen)}
         className={`w-full border rounded-lg p-2 flex items-center justify-between cursor-pointer bg-white ${isDisabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:border-indigo-300'}`}
       >
@@ -49,7 +48,7 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
       {isOpen && (
         <div className="absolute z-[150] w-full mt-1 bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto">
           <div className="p-2 border-b sticky top-0 bg-white">
-            <input 
+            <input
               autoFocus
               className="w-full p-2 text-xs border rounded-md outline-none focus:ring-1 ring-indigo-500"
               placeholder="Search or type new..."
@@ -61,7 +60,7 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
             />
           </div>
           {options.filter(o => o.label.toLowerCase().includes(inputValue.toLowerCase())).map((opt, idx) => (
-            <div 
+            <div
               key={idx}
               onClick={() => handleSelect(opt.value)}
               className="p-2 text-xs hover:bg-indigo-50 cursor-pointer"
@@ -70,7 +69,7 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
             </div>
           ))}
           {inputValue && !options.some(o => o.label.toLowerCase() === inputValue.toLowerCase()) && (
-            <div 
+            <div
               onClick={handleCreate}
               className="p-2 text-xs text-indigo-600 font-bold hover:bg-indigo-50 cursor-pointer border-t"
             >
@@ -92,8 +91,8 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
     return `http://${host}:5000/api`;
   };
 */
-  const API_URL_PRODUCTS = `${getBaseUrl()}/products`;
-  const API_URL_PRODUCTS_CATALOGUE = `${getBaseUrl()}/catalogues`;
+const API_URL_PRODUCTS = `${getBaseUrl()}/products`;
+const API_URL_PRODUCTS_CATALOGUE = `${getBaseUrl()}/catalogues`;
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -112,24 +111,29 @@ const ProductList = () => {
   const [isUpdatingCatalogue, setIsUpdatingCatalogue] = useState(false);
 
   const [formData, setFormData] = useState({
-    brand: '', category: '', subCategory: '', name: '', description: '', purchasePrice: '', markupPercent: 30 
+    brand: '', category: '', subCategory: '', name: '', description: '', purchasePrice: '', markupPercent: 30
   });
   const [imageFile, setImageFile] = useState(null);
-  const [filters, setFilters] = useState({ 
-    brand: '', category: '', subCategory: '', minPrice: '', maxPrice: '', searchTerm: '' 
+  const [filters, setFilters] = useState({
+    brand: '', category: '', subCategory: '', minPrice: '', maxPrice: '', searchTerm: ''
   });
+
+  const getAssetUrl = (path) => {
+    const baseUrl = getBaseUrl().replace('/api', ''); // Remove /api suffix
+    return `${baseUrl}${path}`;
+  };
 
   const fetchData = async () => {
     try {
       const [pRes, mRes] = await Promise.all([
         axios.get(API_URL_PRODUCTS),
-        axios.get(API_URL_PRODUCTS+`/meta`)
+        axios.get(API_URL_PRODUCTS + `/meta`)
       ]);
       setProducts(pRes.data || []);
       // The backend uses 'subCategories', ensure we handle both keys for robustness
       const metaData = mRes.data || { brands: [], categories: [], subCategories: {} };
       if (metaData.subCategoryMap && !metaData.subCategories) {
-          metaData.subCategories = metaData.subCategoryMap;
+        metaData.subCategories = metaData.subCategoryMap;
       }
       setMeta(metaData);
     } catch (err) {
@@ -172,7 +176,7 @@ const ProductList = () => {
 
   const selectAllInCategory = (categoryProducts) => {
     const allSelected = categoryProducts.every(p => selectedProducts.some(sp => sp._id === p._id));
-    
+
     if (allSelected) {
       const categoryIds = categoryProducts.map(p => p._id);
       setSelectedProducts(selectedProducts.filter(sp => !categoryIds.includes(sp._id)));
@@ -195,7 +199,7 @@ const ProductList = () => {
 
   const handleOpenBuilder = () => {
     const dataToSave = selectedProducts.map(p => ({
-      _id: p._id, name: p.name, imageUrl: p.imageUrl, description: p.description, price: p.price 
+      _id: p._id, name: p.name, imageUrl: p.imageUrl, description: p.description, price: p.price
     }));
     localStorage.setItem('catalogue_selection', JSON.stringify(dataToSave));
     window.open('/builder', '_blank');
@@ -204,7 +208,7 @@ const ProductList = () => {
   const openAddToExistingModal = async () => {
     setShowCatalogueModal(true);
     try {
-     const res = await axios.get(API_URL_PRODUCTS_CATALOGUE);
+      const res = await axios.get(API_URL_PRODUCTS_CATALOGUE);
       setSavedCatalogues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch catalogues", err);
@@ -283,8 +287,8 @@ const ProductList = () => {
 
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
-      try { 
-        await axios.delete(API_URL_PRODUCTS+`/${id}`);
+      try {
+        await axios.delete(API_URL_PRODUCTS + `/${id}`);
         fetchData();
         setSelectedProducts(prev => prev.filter(p => p._id !== id));
       } catch (err) {
@@ -305,9 +309,9 @@ const ProductList = () => {
       purchasePrice: p.purchasePrice || '',
       markupPercent: p.markupPercent || 30
     });
-    
-    const subCats = (meta.subCategories && p.category && meta.subCategories[p.category]) || 
-                    (meta.subCategoryMap && p.category && meta.subCategoryMap[p.category]) || [];
+
+    const subCats = (meta.subCategories && p.category && meta.subCategories[p.category]) ||
+      (meta.subCategoryMap && p.category && meta.subCategoryMap[p.category]) || [];
     setAvailableSubCats(subCats.map(s => ({ label: s, value: s })));
     setShowModal(true);
   };
@@ -338,73 +342,73 @@ const ProductList = () => {
   return (
     <div className="max-w-7xl mx-auto p-4 pb-28 min-h-screen bg-gray-50/50">
       <div className="sticky top-0 z-40 bg-gray-50/50 pb-2">
-      <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-3 border-r pr-3 border-gray-100 flex-shrink-0">
-          <h1 className="text-xs font-black text-indigo-600 uppercase tracking-tighter">Catalogue</h1>
-          <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white w-8 h-8 rounded-lg shadow-sm flex items-center justify-center transition flex-shrink-0">
-            <Plus size={18} />
-          </button>
-        </div>
-
-        <div className="relative flex-shrink-0 w-32 md:w-40 lg:w-48">
-          <input 
-            type="text" 
-            placeholder="Search..."
-            className="w-full pl-8 pr-8 py-2 rounded-lg border border-gray-100 focus:border-indigo-300 outline-none text-xs bg-gray-50/50"
-            value={filters.searchTerm}
-            onChange={(e) => setFilters({...filters, searchTerm: e.target.value})}
-          />
-          <Search size={12} className="absolute left-2.5 top-2.5 text-gray-300" />
-          {filters.searchTerm && (
-            <button 
-                onClick={() => setFilters({...filters, searchTerm: ''})}
-                className="absolute right-2 top-2.5 text-gray-300 hover:text-indigo-600"
-            >
-                <X size={12} />
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-3 border-r pr-3 border-gray-100 flex-shrink-0">
+            <h1 className="text-xs font-black text-indigo-600 uppercase tracking-tighter">Catalogue</h1>
+            <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white w-8 h-8 rounded-lg shadow-sm flex items-center justify-center transition flex-shrink-0">
+              <Plus size={18} />
             </button>
-          )}
-        </div>
+          </div>
 
-        <div className="flex items-center gap-2 flex-grow min-w-max">
-          <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[90px]" value={filters.brand} onChange={e => setFilters({...filters, brand: e.target.value})}>
-            <option value="">All Brands</option>
-            {meta.brands.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-          
-          <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[100px]" value={filters.category} onChange={e => setFilters({...filters, category: e.target.value, subCategory: ''})}>
-            <option value="">All Categories</option>
-            {meta.categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <div className="relative flex-shrink-0 w-32 md:w-40 lg:w-48">
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full pl-8 pr-8 py-2 rounded-lg border border-gray-100 focus:border-indigo-300 outline-none text-xs bg-gray-50/50"
+              value={filters.searchTerm}
+              onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
+            />
+            <Search size={12} className="absolute left-2.5 top-2.5 text-gray-300" />
+            {filters.searchTerm && (
+              <button
+                onClick={() => setFilters({ ...filters, searchTerm: '' })}
+                className="absolute right-2 top-2.5 text-gray-300 hover:text-indigo-600"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
 
-          <select 
-            disabled={!filters.category}
-            className={`border border-gray-100 p-2 rounded-lg text-[10px] font-bold outline-none min-w-[100px] transition-opacity ${!filters.category ? 'bg-gray-50 opacity-50 cursor-not-allowed' : 'bg-white'}`} 
-            value={filters.subCategory} 
-            onChange={e => setFilters({...filters, subCategory: e.target.value})}
-          >
-            <option value="">All Sub Cats</option>
-            {/* Added safety check to prevent crash on undefined category key */}
-            {filters.category && (meta.subCategories?.[filters.category] || meta.subCategoryMap?.[filters.category])?.map(s => (
+          <div className="flex items-center gap-2 flex-grow min-w-max">
+            <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[90px]" value={filters.brand} onChange={e => setFilters({ ...filters, brand: e.target.value })}>
+              <option value="">All Brands</option>
+              {meta.brands.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+
+            <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[100px]" value={filters.category} onChange={e => setFilters({ ...filters, category: e.target.value, subCategory: '' })}>
+              <option value="">All Categories</option>
+              {meta.categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            <select
+              disabled={!filters.category}
+              className={`border border-gray-100 p-2 rounded-lg text-[10px] font-bold outline-none min-w-[100px] transition-opacity ${!filters.category ? 'bg-gray-50 opacity-50 cursor-not-allowed' : 'bg-white'}`}
+              value={filters.subCategory}
+              onChange={e => setFilters({ ...filters, subCategory: e.target.value })}
+            >
+              <option value="">All Sub Cats</option>
+              {/* Added safety check to prevent crash on undefined category key */}
+              {filters.category && (meta.subCategories?.[filters.category] || meta.subCategoryMap?.[filters.category])?.map(s => (
                 <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          
-          <button 
-            onClick={resetFilters}
-            className="p-2 text-gray-300 hover:text-indigo-600 transition-colors flex-shrink-0"
-            title="Reset Filters"
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
+              ))}
+            </select>
 
-        <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 flex-shrink-0 ml-auto">
-          <span className="text-[9px] font-black text-gray-400 uppercase">₹</span>
-          <input type="number" placeholder="Min" className="w-10 bg-transparent text-[10px] font-bold outline-none" value={filters.minPrice} onChange={e => setFilters({...filters, minPrice: e.target.value})} />
-          <span className="text-gray-300">-</span>
-          <input type="number" placeholder="Max" className="w-10 bg-transparent text-[10px] font-bold outline-none" value={filters.maxPrice} onChange={e => setFilters({...filters, maxPrice: e.target.value})} />
+            <button
+              onClick={resetFilters}
+              className="p-2 text-gray-300 hover:text-indigo-600 transition-colors flex-shrink-0"
+              title="Reset Filters"
+            >
+              <RotateCcw size={14} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 flex-shrink-0 ml-auto">
+            <span className="text-[9px] font-black text-gray-400 uppercase">₹</span>
+            <input type="number" placeholder="Min" className="w-10 bg-transparent text-[10px] font-bold outline-none" value={filters.minPrice} onChange={e => setFilters({ ...filters, minPrice: e.target.value })} />
+            <span className="text-gray-300">-</span>
+            <input type="number" placeholder="Max" className="w-10 bg-transparent text-[10px] font-bold outline-none" value={filters.maxPrice} onChange={e => setFilters({ ...filters, maxPrice: e.target.value })} />
+          </div>
         </div>
-      </div>
       </div>
 
       {selectedProducts.length > 0 && (
@@ -422,6 +426,13 @@ const ProductList = () => {
             <button onClick={handleOpenBuilder} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider shadow-lg transition transform active:scale-95 flex items-center gap-2">
               Build New
               <Plus size={14} />
+            </button>
+            <button
+              onClick={() => window.open('/broadcastmessage', '_blank')}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
+            >
+              <MessageSquare size={16} />
+              Broadcast Message
             </button>
           </div>
         </div>
@@ -445,11 +456,10 @@ const ProductList = () => {
                   </h2>
                 </div>
 
-                <button 
-                    onClick={() => selectAllInCategory(categoryProducts)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${
-                      isAllInCategorySelected 
-                      ? 'bg-indigo-600 border-indigo-600 text-white' 
+                <button
+                  onClick={() => selectAllInCategory(categoryProducts)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${isAllInCategorySelected
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
                       : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-500'
                     }`}
                 >
@@ -466,39 +476,39 @@ const ProductList = () => {
                     const isSelected = selectedProducts.some(sp => sp._id === p._id);
                     return (
                       <div key={p._id} className={`bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col relative transition-all duration-200 ${isSelected ? 'ring-2 ring-indigo-500' : ''}`}>
-                        <div 
-                            className={`absolute top-2 right-2 z-20 cursor-pointer w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/80 border-gray-300 text-transparent'}`}
-                            onClick={() => toggleProductSelection(p)}
+                        <div
+                          className={`absolute top-2 right-2 z-20 cursor-pointer w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/80 border-gray-300 text-transparent'}`}
+                          onClick={() => toggleProductSelection(p)}
                         >
-                            <Check size={14} strokeWidth={4} />
+                          <Check size={14} strokeWidth={4} />
                         </div>
-                        <div 
+                        <div
                           className="h-32 bg-gray-50 flex items-center justify-center relative overflow-hidden cursor-zoom-in group/img"
                           onClick={() => setPreviewProduct(p)}
                         >
-                            {p.imageUrl && <img src={`http://${window.location.hostname || 'localhost'}:5000${p.imageUrl}`} alt={p.name} className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" />}
-                            <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
-                                <Info size={20} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />
-                            </div>
+                          {p.imageUrl && <img src={getAssetUrl(p.imageUrl)} alt={p.name} className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" />}
+                          <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
+                            <Info size={20} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />
+                          </div>
                         </div>
                         <div className="p-3 flex-grow flex flex-col justify-between">
-                            <div>
-                                <h3 className="font-bold text-xs text-gray-800 leading-tight line-clamp-2 mb-2">
-                                  <span className="text-indigo-500 uppercase inline-block mr-1.5 font-black">{p.brand}</span>
-                                  {p.name}
-                                </h3>
-                                <div className="flex items-center justify-between text-[10px] bg-gray-50 p-1.5 rounded-lg mb-2">
-                                    <div><span className="text-gray-400 block font-bold uppercase text-[7px]">Cost</span><span className="text-gray-600 font-bold">₹{p.purchasePrice}</span></div>
-                                    <div className="text-right"><span className="text-gray-400 block font-bold uppercase text-[7px]">Markup</span><span className="text-indigo-600 font-black">+{p.markupPercent}%</span></div>
-                                </div>
+                          <div>
+                            <h3 className="font-bold text-xs text-gray-800 leading-tight line-clamp-2 mb-2">
+                              <span className="text-indigo-500 uppercase inline-block mr-1.5 font-black">{p.brand}</span>
+                              {p.name}
+                            </h3>
+                            <div className="flex items-center justify-between text-[10px] bg-gray-50 p-1.5 rounded-lg mb-2">
+                              <div><span className="text-gray-400 block font-bold uppercase text-[7px]">Cost</span><span className="text-gray-600 font-bold">₹{p.purchasePrice}</span></div>
+                              <div className="text-right"><span className="text-gray-400 block font-bold uppercase text-[7px]">Markup</span><span className="text-indigo-600 font-black">+{p.markupPercent}%</span></div>
                             </div>
-                            <div className="flex justify-between items-end mt-1">
-                                <div><span className="text-gray-400 block font-bold uppercase text-[7px]">Sale Price</span><span className="text-sm font-black text-green-600">₹{calculateSellingPrice(p.purchasePrice, p.markupPercent)}</span></div>
-                                <div className="flex gap-1">
-                                    <button onClick={() => handleEditClick(p)} className="p-1.5 hover:bg-indigo-50 text-indigo-400 rounded transition" title="Edit"><Pencil size={13} /></button>
-                                    <button onClick={() => handleDelete(p._id)} className="p-1.5 hover:bg-red-50 text-red-400 rounded transition" title="Delete"><Trash2 size={13} /></button>
-                                </div>
+                          </div>
+                          <div className="flex justify-between items-end mt-1">
+                            <div><span className="text-gray-400 block font-bold uppercase text-[7px]">Sale Price</span><span className="text-sm font-black text-green-600">₹{calculateSellingPrice(p.purchasePrice, p.markupPercent)}</span></div>
+                            <div className="flex gap-1">
+                              <button onClick={() => handleEditClick(p)} className="p-1.5 hover:bg-indigo-50 text-indigo-400 rounded transition" title="Edit"><Pencil size={13} /></button>
+                              <button onClick={() => handleDelete(p._id)} className="p-1.5 hover:bg-red-50 text-red-400 rounded transition" title="Delete"><Trash2 size={13} /></button>
                             </div>
+                          </div>
                         </div>
                       </div>
                     )
@@ -552,37 +562,37 @@ const ProductList = () => {
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <CustomCreatableSelect label="Brand" isDisabled={isEditing} options={meta.brands.map(b => ({label: b, value: b}))} value={formData.brand ? {label: formData.brand, value: formData.brand} : null} onChange={(v) => setFormData({...formData, brand: v?.value})} />
-                <CustomCreatableSelect label="Category" isDisabled={isEditing} options={meta.categories.map(c => ({label: c, value: c}))} value={formData.category ? {label: formData.category, value: formData.category} : null} onChange={handleCategoryChange} />
+                <CustomCreatableSelect label="Brand" isDisabled={isEditing} options={meta.brands.map(b => ({ label: b, value: b }))} value={formData.brand ? { label: formData.brand, value: formData.brand } : null} onChange={(v) => setFormData({ ...formData, brand: v?.value })} />
+                <CustomCreatableSelect label="Category" isDisabled={isEditing} options={meta.categories.map(c => ({ label: c, value: c }))} value={formData.category ? { label: formData.category, value: formData.category } : null} onChange={handleCategoryChange} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <CustomCreatableSelect label="Sub Category" isDisabled={isEditing || !formData.category} value={formData.subCategory ? {label: formData.subCategory, value: formData.subCategory} : null} options={availableSubCats} onChange={(v) => setFormData({...formData, subCategory: v?.value})} />
+                <CustomCreatableSelect label="Sub Category" isDisabled={isEditing || !formData.category} value={formData.subCategory ? { label: formData.subCategory, value: formData.subCategory } : null} options={availableSubCats} onChange={(v) => setFormData({ ...formData, subCategory: v?.value })} />
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Name</label>
-                  <input className="w-full border rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  <input className="w-full border rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Description</label>
-                <textarea className="w-full border rounded-lg p-2 h-20 text-sm" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                <textarea className="w-full border rounded-lg p-2 h-20 text-sm" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Cost Price (₹)</label>
-                  <input type="number" className="w-full border rounded-lg p-2 text-sm" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} />
+                  <input type="number" className="w-full border rounded-lg p-2 text-sm" value={formData.purchasePrice} onChange={e => setFormData({ ...formData, purchasePrice: e.target.value })} />
                 </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Image</label>
-                    <input type="file" onChange={(e) => setImageFile(e.target.files[0])} className="text-[10px] mt-1" />
-                    {isEditing && <p className="text-[8px] text-indigo-500 mt-1 italic">Leave empty to keep current</p>}
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Image</label>
+                  <input type="file" onChange={(e) => setImageFile(e.target.files[0])} className="text-[10px] mt-1" />
+                  {isEditing && <p className="text-[8px] text-indigo-500 mt-1 italic">Leave empty to keep current</p>}
+                </div>
               </div>
               <div className="bg-indigo-50 p-6 rounded-xl">
                 <div className="grid grid-cols-2 items-center gap-4">
                   <div>
                     <label className="block text-[11px] font-black text-indigo-900 uppercase mb-1">Margin (%)</label>
-                    <select className="w-full border rounded-lg p-2 bg-white font-black" value={formData.markupPercent} onChange={e => setFormData({...formData, markupPercent: parseInt(e.target.value)})}>
-                      {[10,15,20,25,30,35,40,45,50].map(m => <option key={m} value={m}>{m}%</option>)}
+                    <select className="w-full border rounded-lg p-2 bg-white font-black" value={formData.markupPercent} onChange={e => setFormData({ ...formData, markupPercent: parseInt(e.target.value) })}>
+                      {[10, 15, 20, 25, 30, 35, 40, 45, 50].map(m => <option key={m} value={m}>{m}%</option>)}
                     </select>
                   </div>
                   <div className="text-right">
@@ -603,11 +613,21 @@ const ProductList = () => {
       {previewProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4" onClick={() => setPreviewProduct(null)}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up" onClick={e => e.stopPropagation()}>
-            <div className="relative h-64 bg-gray-100">
-               {previewProduct.imageUrl && <img src={`http://${window.location.hostname || 'localhost'}:5000${previewProduct.imageUrl}`} alt={previewProduct.name} className="w-full h-full object-cover" />}
-               <button onClick={() => setPreviewProduct(null)} className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-full text-gray-800 shadow-sm hover:bg-white transition-colors">
-                 <X size={20} />
-               </button>
+            <div className="relative w-full h-[45vh] md:h-full md:w-3/5 bg-gray-50 flex items-center justify-center overflow-hidden">
+              {previewProduct.imageUrl && (
+                <img
+                  src={getAssetUrl(previewProduct.imageUrl)}
+                  alt={previewProduct.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://via.placeholder.com/400?text=No+Image';
+                  }}
+                />
+              )}
+              <button onClick={() => setPreviewProduct(null)} className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-full text-gray-800 shadow-sm hover:bg-white transition-colors">
+                <X size={20} />
+              </button>
             </div>
             <div className="p-8">
               <div className="mb-4">
@@ -617,11 +637,11 @@ const ProductList = () => {
               <p className="text-sm text-gray-500 mb-6">{previewProduct.description || 'No description available.'}</p>
               <div className="flex justify-between items-center border-t pt-6">
                 <div>
-                    <span className="text-gray-400 block font-bold uppercase text-[10px]">Price</span>
-                    <span className="text-3xl font-black text-green-600">₹{calculateSellingPrice(previewProduct.purchasePrice, previewProduct.markupPercent)}</span>
+                  <span className="text-gray-400 block font-bold uppercase text-[10px]">Selling Price</span>
+                  <span className="text-3xl font-black text-green-600">₹{calculateSellingPrice(previewProduct.purchasePrice, previewProduct.markupPercent)}</span>
                 </div>
                 <button onClick={() => { toggleProductSelection(previewProduct); setPreviewProduct(null); }} className={`px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${selectedProducts.some(p => p._id === previewProduct._id) ? 'bg-red-50 text-red-500' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'}`}>
-                    {selectedProducts.some(p => p._id === previewProduct._id) ? 'Remove Selection' : 'Select Item'}
+                  {selectedProducts.some(p => p._id === previewProduct._id) ? 'Remove Selection' : 'Select Item'}
                 </button>
               </div>
             </div>

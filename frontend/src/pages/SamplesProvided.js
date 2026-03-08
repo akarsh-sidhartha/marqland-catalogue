@@ -6,7 +6,7 @@ import {
   Camera, X, Check, AlertCircle, ChevronRight, User, 
   FileText, Archive, Filter, Eye, Edit3, Image as ImageIcon,
   ShieldAlert, ClipboardEdit, Paperclip, Info, Clock, AlertTriangle,
-  CheckCircle2, Upload, Download, File, ExternalLink
+  CheckCircle2, Upload, Download, File, ExternalLink,BriefcaseBusiness
 } from 'lucide-react';
 
 /*
@@ -356,7 +356,8 @@ const SamplesProvided = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
-                    <span className="flex items-center gap-1.5"><User size={14}/> {challan.clientName}</span>
+                    <span className="flex items-center gap-1.5"><BriefcaseBusiness size={14}/> {challan.clientName}</span>
+                     <span className="flex items-center gap-1.5"><User size={14}/>{challan.orderedBy}</span>
                     <span className="flex items-center gap-1.5"><Calendar size={14}/> {new Date(challan.date).toLocaleDateString()}</span>
                   </div>
                 </div>

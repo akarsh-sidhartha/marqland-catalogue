@@ -411,7 +411,7 @@ export default function App() {
 
       {editOrder && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl p-8 space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <div className="fixed inset-0 z-50 bg-white flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300 bg-white w-full  rounded-[2.5rem] shadow-2xl p-8 space-y-6 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                 <h2 className="text-lg font-black uppercase">Record Details</h2>
                 <button onClick={() => setEditOrder(null)}><X size={20}/></button>
