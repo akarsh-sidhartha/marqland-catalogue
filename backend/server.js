@@ -1,13 +1,15 @@
+const dotenv = require('dotenv');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const cron = require('node-cron');
-require('dotenv').config(); 
 const app = express();
 
 const whatsappService = require('./services/whatsappService');
-
+// We use path.resolve with __dirname to point specifically to the 'backend' folder
+//const envPath = path.resolve(__dirname, '.env');
+//const result = dotenv.config({ path: envPath });
 /**
  * 1. CORS CONFIGURATION
  * Allows other laptops in the office to make requests to this server.
@@ -31,7 +33,6 @@ const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
 const invoiceRoutes = require('./routes/invoiceRoute');
 const orderInquiry = require('./routes/orderInquiry');
 const SamplesProvided = require('./routes/samplesProvided');
-const sendWhatsappMessageToVendors = require('./routes/sendMessages');
 
 /**
  * 2. STATIC FILE SERVING
@@ -54,7 +55,7 @@ app.use((req, res, next) => {
     return next();
   }
   // Otherwise, send the index.html for React to handle the routing
-  res.sendFile(path.join(buildPath, 'index.html'));						
+  res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 mongoose.connect('mongodb://127.0.0.1:27017/bizManager')
@@ -65,49 +66,51 @@ app.use('/api/products', productRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/catalogues', catalogueRoutes);
-app.use('/api/properties', propertyRoutes); 
+app.use('/api/properties', propertyRoutes);
 app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
-app.use('/api/invoices',invoiceRoutes);
-app.use('/api/orders',orderInquiry);
+app.use('/api/invoices', invoiceRoutes.router);
+//app.use('/api/invoices',invoiceRoutes);
+app.use('/api/orders', orderInquiry);
 app.use('/api/challans', SamplesProvided);
-app.use('/api/whatsapp', sendWhatsappMessageToVendors);
 /**
  * 5. AUTOMATED TASKS (CRON)
  * Runs daily at 10:00 AM (IST) to sync Outlook invoices and 
  * send a status report to your WhatsApp.
  */
 cron.schedule('0 10 * * *', async () => {
-    console.log("--- Starting Scheduled Automation Task ---");
-    let stats = { outlookStatus: "Pending", invoicesCount: 0 };
+  console.log("--- Starting Scheduled Automation Task ---");
+  let stats = { outlookStatus: "Pending", invoicesCount: 0 };
 
-    try {
-        // Trigger the Outlook Sync function exported from invoiceRoute
-        if (invoiceRoutes.syncOutlookInvoices) {
-            console.log("📡 Scanning Outlook for new invoices...");
-            const syncResult = await invoiceRoutes.syncOutlookInvoices();
-            stats.outlookStatus = syncResult.success ? "Success" : "Failed";
-            stats.invoicesCount = syncResult.processed || 0;
-        } else {
-            stats.outlookStatus = "Sync function missing";
-        }
-
-        // Send the summary report via WhatsApp
-        console.log("📱 Sending daily status report to WhatsApp...");
-        await whatsappService.sendDailyStatus(stats);
-        
-    } catch (err) {
-        console.error("❌ Global Cron Error:", err);
-        // Alert admin of the system error
-        await whatsappService.sendDailyStatus({
-            outlookStatus: `Error: ${err.message}`,
-            invoicesCount: 0
-        }).catch(() => {});
+  try {
+    // Trigger the Outlook Sync function exported from invoiceRoute
+    if (invoiceRoutes.syncOutlookInvoices) {
+      console.log("📡 Scanning Outlook for new invoices...");
+      const syncResult = await invoiceRoutes.syncOutlookInvoices();
+      stats.outlookStatus = syncResult.success ? "Success" : "Failed";
+      stats.invoicesCount = syncResult.processed || 0;
+    } else {
+      stats.outlookStatus = "Sync function missing";
     }
-    
-    console.log("--- Scheduled Task Cycle Finished ---");
+    console.log("📱 Checking WhatsApp for invoices...");
+    // You need to implement this 'syncWhatsAppInvoices' in your service
+    await whatsappService.syncWhatsAppInvoices();
+    // Send the summary report via WhatsApp
+    console.log("📱 Sending daily status report to WhatsApp...");
+    await whatsappService.sendDailyStatus(stats);
+
+  } catch (err) {
+    console.error("❌ Global Cron Error:", err);
+    // Alert admin of the system error
+    await whatsappService.sendDailyStatus({
+      outlookStatus: `Error: ${err.message}`,
+      invoicesCount: 0
+    }).catch(() => { });
+  }
+
+  console.log("--- Scheduled Task Cycle Finished ---");
 }, {
-    scheduled: true,
-    timezone: "Asia/Kolkata"
+  scheduled: true,
+  timezone: "Asia/Kolkata"
 });
 
 
@@ -117,7 +120,7 @@ cron.schedule('0 10 * * *', async () => {
  * on the local office network.
  */
 const PORT = 80;
-const HOST = '0.0.0.0'; 
+const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
   console.log(`--------------------------------------------------`);

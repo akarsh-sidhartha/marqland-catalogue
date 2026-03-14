@@ -613,7 +613,7 @@ const ProductList = () => {
       {previewProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4" onClick={() => setPreviewProduct(null)}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up" onClick={e => e.stopPropagation()}>
-            <div className="relative w-full h-[45vh] md:h-full md:w-3/5 bg-gray-50 flex items-center justify-center overflow-hidden">
+            <div className="relative w-full h-[45vh] md:h-full  bg-gray-50 flex items-center justify-center overflow-hidden">
               {previewProduct.imageUrl && (
                 <img
                   src={getAssetUrl(previewProduct.imageUrl)}

@@ -9,6 +9,7 @@ const OrderInquirySchema = new mongoose.Schema({
   },
   clientName: { 
     type: String, 
+    index: true,
     required: [true, 'Client name is required'], 
     trim: true 
   },
@@ -19,6 +20,7 @@ const OrderInquirySchema = new mongoose.Schema({
   },
   orderPlacedBy: { 
     type: String, 
+    index: true,
     required: [true, 'Assignee/Order placer is required'], 
     trim: true 
   },
@@ -33,6 +35,10 @@ const OrderInquirySchema = new mongoose.Schema({
   invoiceNumber: {
     type: String,
     trim: true
+  },
+  
+  oneDriveFolderUrl:{
+     type: String
   },
   
   // Status Tracking: inquiry, ongoing, completed
@@ -60,5 +66,6 @@ const OrderInquirySchema = new mongoose.Schema({
   // Automatically manage createdAt and updatedAt timestamps
   timestamps: true
 });
-
+// Create a compound index for the specific "Client -> Contact" relationship
+OrderInquirySchema.index({ clientName: 1, orderPlacedBy: 1 });
 module.exports = mongoose.model('OrderInquiry', OrderInquirySchema);

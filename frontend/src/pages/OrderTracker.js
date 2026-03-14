@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getBaseUrl } from '../baseurl'; // Import the central function
-import { 
-  Plus, 
-  ArrowRight, 
-  CheckCircle, 
-  Clock, 
-  FileText, 
+import CreatableSelect from 'react-select/creatable';
+import {
+  Plus,
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  FileText,
   Image as ImageIcon,
   Trash2,
   ChevronRight,
@@ -22,15 +23,6 @@ import {
   Search // Added for the search icon
 } from 'lucide-react';
 
-/*
-  const getBaseUrl = () => {
-    const { hostname } = window.location;
-    const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname;
-    return `http://${host}:5000/api`;
-  };
-*/
 const API_BASE_URL = `${getBaseUrl()}/orders`;
 
 export default function App() {
@@ -41,9 +33,13 @@ export default function App() {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState({});
-  const [quotePrompt, setQuotePrompt] = useState(null); 
+  const [quotePrompt, setQuotePrompt] = useState(null);
   const [completionPrompt, setCompletionPrompt] = useState(null);
   const [searchTerm, setSearchTerm] = useState(''); // Added search state
+  const [selectedClient, setSelectedClient] = useState('');
+  const [selectedContact, setSelectedContact] = useState('');
+
+  const [meta, setMeta] = useState({ clients: [], clientContacts: {} });
 
   // Refs for Rich Text Editors
   const createEditorRef = useRef(null);
@@ -61,29 +57,89 @@ export default function App() {
     fetchOrders();
   }, []);
 
-    // Filter orders by activeTab and searchTerm
   const filteredOrders = useMemo(() => {
     return (orders || []).filter(order => {
       const matchesTab = order.status === activeTab;
-      const term = searchTerm.toLowerCase();
-      const matchesSearch = 
-        !searchTerm || 
-        order.clientName?.toLowerCase().includes(term) ||
-        order.title?.toLowerCase().includes(term) || // Changed projectName to title to match schema
-        order._id?.toLowerCase().includes(term) ||
-        order.refNumber?.toLowerCase().includes(term);
-      
-      return matchesTab && matchesSearch;
-    });
-  }, [orders, activeTab, searchTerm]);
 
-  const fetchOrders = async () => {
+      // 1. Dropdown Filters
+      const matchesClient = !selectedClient || order.clientName === selectedClient;
+      const matchesContact = !selectedContact || order.orderPlacedBy === selectedContact;
+
+      // 2. Deep Search across all fields
+      const term = searchTerm.toLowerCase();
+      const searchFields = [
+        order.clientName,
+        order.title,
+        order.refNumber,
+        order._id,
+        order.orderPlacedBy,
+        order.invoiceNumber,
+        order.description // Includes searching inside HTML notes
+      ].join(' ').toLowerCase();
+
+      const matchesSearch = !searchTerm || searchFields.includes(term);
+
+      return matchesTab && matchesClient && matchesContact && matchesSearch;
+    });
+  }, [orders, activeTab, searchTerm, selectedClient, selectedContact]);
+
+  // Function to "delete" from dropdown (filters current view)
+  const deleteMetaItem = (type, value, parentClient = null) => {
+    setMeta(prev => {
+      if (type === 'clients') {
+        const newContacts = { ...prev.clientContacts };
+        delete newContacts[value];
+        return {
+          clients: prev.clients.filter(item => item !== value),
+          clientContacts: newContacts
+        };
+      } else {
+        // Deleting a specific contact under a client
+        return {
+          ...prev,
+          clientContacts: {
+            ...prev.clientContacts,
+            [parentClient]: prev.clientContacts[parentClient].filter(item => item !== value)
+          }
+        };
+      }
+    });
+  };
+
+const fetchOrders = async () => {
     try {
       const res = await fetch(API_BASE_URL);
       const data = await res.json();
-      setOrders(data);
+      
+      if (Array.isArray(data)) {
+        // 1. Calculate meta data directly from the FRESH 'data' array, not 'orders' state
+        const clients = [...new Set(data.map(o => o.clientName).filter(Boolean))].sort();
+        
+        // 2. Create the contact mapping
+        const mapping = data.reduce((acc, order) => {
+          if (order.clientName && order.orderPlacedBy) {
+            if (!acc[order.clientName]) acc[order.clientName] = new Set();
+            acc[order.clientName].add(order.orderPlacedBy);
+          }
+          return acc;
+        }, {});
+
+        // 3. Convert Sets to sorted Arrays
+        const formattedMapping = {};
+        for (const client in mapping) {
+          formattedMapping[client] = [...mapping[client]].sort();
+        }
+
+        // 4. Update both states
+        setMeta({ clients, clientContacts: formattedMapping });
+        setOrders(data);
+      } else {
+        console.error("Received non-array data:", data);
+        setOrders([]);
+      }
     } catch (err) {
       console.error("Fetch error:", err);
+      setOrders([]);
     }
   };
 
@@ -107,9 +163,10 @@ export default function App() {
   const getFinancialYear = (dateStr) => {
     const date = new Date(dateStr);
     const year = date.getFullYear();
-    const month = date.getMonth(); 
+    const month = date.getMonth();
     const fyStart = month >= 3 ? year : year - 1;
-    return `FY ${fyStart}-${(fyStart + 1).toString().slice(-2)}`;
+    //return `FY ${fyStart}-${(fyStart + 1).toString().slice(-2)}`;
+    return `${(fyStart).toString().slice(-2)}-${(fyStart + 1).toString().slice(-2)}`;
   };
 
   const getMonthName = (dateStr) => {
@@ -119,13 +176,13 @@ export default function App() {
   const groupedCompleted = useMemo(() => {
     // Apply search filter even to completed orders if searching
     const completed = orders.filter(o => {
-        const isCompleted = o.status === 'completed';
-        const term = searchTerm.toLowerCase();
-        const matchesSearch = !searchTerm || 
-            o.clientName?.toLowerCase().includes(term) ||
-            o.title?.toLowerCase().includes(term) ||
-            o.invoiceNumber?.toLowerCase().includes(term);
-        return isCompleted && matchesSearch;
+      const isCompleted = o.status === 'completed';
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm ||
+        o.clientName?.toLowerCase().includes(term) ||
+        o.title?.toLowerCase().includes(term) ||
+        o.invoiceNumber?.toLowerCase().includes(term);
+      return isCompleted && matchesSearch;
     });
 
     const hierarchy = {};
@@ -143,21 +200,36 @@ export default function App() {
   const toggleFolder = (path) => {
     setExpandedFolders(prev => ({ ...prev, [path]: !prev[path] }));
   };
-
   const handleFileUpload = (e, isEdit = false) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = () => {
-        const newAttachment = {
-          fileName: file.name,
-          fileType: file.type,
-          data: reader.result
-        };
+      reader.onload = (event) => {
         if (isEdit) {
-          setEditOrder(prev => ({ ...prev, attachments: [...(prev.attachments || []), newAttachment] }));
-        } else {
-          setFormData(prev => ({ ...prev, attachments: [...prev.attachments, newAttachment] }));
+          setEditOrder(prev => ({
+            ...prev,
+            attachments: [
+              ...(prev.attachments || []),
+              {
+                name: file.name,
+                base64: event.target.result, // This sends the file data to the backend
+                isNew: true
+              }
+            ]
+          }));
+        }
+        else {
+          setFormData(prev => ({
+            ...prev,
+            attachments: [
+              ...(prev.attachments || []),
+              {
+                name: file.name,
+                base64: event.target.result, // This sends the file data to the backend
+                isNew: true
+              }
+            ]
+          }));
         }
       };
       reader.readAsDataURL(file);
@@ -168,16 +240,59 @@ export default function App() {
     e.preventDefault();
     setLoading(true);
     const richDescription = createEditorRef.current ? createEditorRef.current.innerHTML : formData.description;
-    
+    const financialYear = getFinancialYear(new Date().toISOString());
+
+    // Find all orders that belong to the current calculated FY
+    const fyOrders = orders.filter(o =>
+      o.refNumber && o.refNumber.startsWith(financialYear)
+    );
+
+    let nextNumber = 1;
+    if (fyOrders.length > 0) {
+      // Extract the digits after the slash and find the maximum
+      const lastNumbers = fyOrders.map(o => {
+        const parts = o.refNumber.split('/');
+        return parts.length > 1 ? parseInt(parts[1], 10) : 0;
+      }).filter(num => !isNaN(num));
+
+      nextNumber = Math.max(...lastNumbers) + 1;
+    }
+
+    // Format: YY-YY/00X
+    const generatedRef = `INQ-${financialYear}-${String(nextNumber).padStart(3, '0')}`;
+
+    // 3. Construct the Payload
+    const payload = {
+      ...formData, // Contains clientName and orderPlacedBy from the selects
+      refNumber: generatedRef,
+      description: richDescription,
+      status: 'inquiry',
+      attachments: formData.attachments
+      // Ensure attachments are cleaned of local base64 data to save DB space if needed
+      //attachments: formData.attachments.map(a => ({ ...a, base64: null })) // earlier workign code.
+    };
+
     try {
       const res = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, description: richDescription, status: 'inquiry' })
+        body: JSON.stringify(payload)
+        //body: JSON.stringify({ ...formData, refNumber: generatedRef, description: richDescription, status: 'inquiry' })
       });
       if (res.ok) {
         setIsModalOpen(false);
-        setFormData({ title: '', clientName: '', orderPlacedBy: '', description: '', attachments: [] });
+        // Reset form to original state
+        setFormData({
+          title: '',
+          clientName: '',
+          orderPlacedBy: '',
+          description: '',
+          attachments: []
+        });
+
+        /* this is the workign code for mongo DB directly. 
+        setFormData({ title: '', clientName: '', refNumber: '', orderPlacedBy: '', description: '', attachments: [] });
+        */
         fetchOrders();
       }
     } catch (err) { console.error(err); }
@@ -188,7 +303,7 @@ export default function App() {
     if (e) e.stopPropagation();
     const finalPayload = { ...payload };
     if (editEditorRef.current && id === editOrder?._id) {
-        finalPayload.description = editEditorRef.current.innerHTML;
+      finalPayload.description = editEditorRef.current.innerHTML;
     }
 
     try {
@@ -201,11 +316,55 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
+  const CustomCreatableSelect = ({ label, options, value, onChange, onDelete, isDisabled }) => {
+    return (
+      <div className="space-y-1">
+        <label className="text-[10px] font-black text-slate-400 uppercase px-1">{label}</label>
+        <CreatableSelect
+          isClearable
+          isDisabled={isDisabled}
+          options={options}
+          value={value}
+          onChange={onChange}
+          formatOptionLabel={(option, { context }) => (
+            <div className="flex justify-between items-center">
+              <span>{option.label}</span>
+              {context === 'menu' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(option.value);
+                  }}
+                  className="hover:text-red-500 p-1"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
+          styles={{
+            control: (base) => ({
+              ...base,
+              border: 'none',
+              borderRadius: '0.75rem',
+              padding: '4px',
+              backgroundColor: '#f8fafc', // slate-50
+              fontSize: '14px',
+              fontWeight: 'bold',
+            }),
+          }}
+        />
+      </div>
+    );
+  };
+
   const downloadFile = (file, e) => {
     e.stopPropagation();
+    // Use the direct download URL if available, otherwise fallback to webUrl
+    const url = file.downloadUrl || file["@microsoft.graph.downloadUrl"] || file.webUrl;
     const link = document.createElement('a');
-    link.href = file.data;
-    link.download = file.fileName;
+    link.href = url;
+    link.setAttribute('download', file.name);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -218,24 +377,24 @@ export default function App() {
   };
 
   const OrderRow = ({ order }) => (
-    <tr 
+    <tr
       onClick={() => setEditOrder(order)}
       className="hover:bg-slate-50/80 cursor-pointer transition-colors border-b border-slate-100 last:border-0"
     >
       <td className="px-6 py-4">
         <div className="flex flex-col gap-1">
           {order.status === 'completed' ? (
-             order.invoiceNumber && (
+            order.invoiceNumber && (
               <span className="text-[10px] font-black bg-emerald-600 text-white px-2 py-1 rounded uppercase tracking-wider w-fit flex items-center gap-1">
                 <Receipt size={10} /> {order.invoiceNumber}
               </span>
-             )
+            )
           ) : (
             <>
               {order.refNumber ? (
-                  <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-1 rounded uppercase tracking-wider w-fit">{order.refNumber}</span>
+                <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-1 rounded uppercase tracking-wider w-fit">{order.refNumber}</span>
               ) : (
-                  <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded w-fit">#{order._id.slice(-6)}</span>
+                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded w-fit">#{order._id.slice(-6)}</span>
               )}
             </>
           )}
@@ -249,14 +408,39 @@ export default function App() {
         </div>
       </td>
       <td className="px-6 py-4 max-w-xs">
-        <div 
+        <div
           className="text-xs text-slate-500 line-clamp-1 italic pointer-events-none"
           dangerouslySetInnerHTML={{ __html: order.description?.replace(/<img[^>]*>/g, '[Image]') || '...' }}
         />
       </td>
       <td className="px-6 py-4">
         <div className="flex flex-wrap gap-1.5">
-          {order.attachments?.map((file, idx) => (
+          {order.attachments && order.attachments.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {order.attachments.map((file, idx) => (
+                <a
+                  key={idx}
+                  href={file.webUrl} // The URL returned by Microsoft Graph
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                >
+                  <FileText size={12} />
+                  <span className="truncate max-w-[100px]">{file.name}</span>
+                  <button onClick={(e) => {
+                    // FIX 2: Prevent row click (popup)
+                    e.stopPropagation();
+                    // FIX 3: Prevent the <a> tag from opening a new tab
+                    e.preventDefault();
+                    downloadFile(file, e)
+                  }} className="text-indigo-500"><Download size={14} /></button>
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* {order.attachments?.map((file, idx) => (
             <button 
               key={idx} 
               onClick={(e) => downloadFile(file, e)}
@@ -266,13 +450,13 @@ export default function App() {
               <span className="text-[9px] font-bold text-slate-600 truncate max-w-[60px]">{file.fileName}</span>
               <Download size={10} className="text-slate-300 group-hover/btn:text-indigo-500" />
             </button>
-          ))}
+          ))} */}
         </div>
       </td>
       <td className="px-6 py-4 text-right">
         <div className="flex items-center justify-end gap-2">
           {order.status === 'inquiry' && (
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); setQuotePrompt(order); }}
               className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-black text-[10px] hover:bg-indigo-100 transition-colors uppercase"
             >
@@ -280,15 +464,15 @@ export default function App() {
             </button>
           )}
           {order.status === 'ongoing' && (
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); setCompletionPrompt(order); }}
               className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
             >
-              <CheckCircle size={18}/>
+              <CheckCircle size={18} />
             </button>
           )}
           {order.status !== 'completed' && (
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); setDeleteId(order._id); }}
               className="p-2 text-slate-300 hover:text-red-500 transition-colors"
             >
@@ -302,25 +486,71 @@ export default function App() {
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans text-slate-900">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter">Order Management</h1>
           <p className="text-slate-500 text-sm font-bold">Update Order Status Over Here</p>
         </div>
-        {/* Search Bar added inside the requested div */}
-        <div className="relative mx-4 flex-1 max-w-md hidden md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="text"
-            placeholder="Search client, project or ID..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-100 outline-none"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+
+        <div className="flex flex-1 items-center gap-2 max-w-4xl">
+          {/* Global Search */}
+          <div className="relative flex-1 hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search everything..."
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-100 outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {/* Client Filter */}
+          <select
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 font-bold text-xs outline-none focus:ring-2 focus:ring-indigo-100"
+            value={selectedClient}
+            onChange={(e) => {
+              setSelectedClient(e.target.value);
+              setSelectedContact(''); // Reset contact when client changes
+            }}
+          >
+            <option value="">All Clients</option>
+            {meta.clients.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          {/* Contact Filter */}
+          <select
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 font-bold text-xs outline-none focus:ring-2 focus:ring-indigo-100"
+            value={selectedContact}
+            onChange={(e) => setSelectedContact(e.target.value)}
+          >
+            <option value="">All Contacts</option>
+            {/* Show only contacts belonging to the selected client, or all unique contacts if no client selected */}
+            {(selectedClient
+              ? (meta.clientContacts[selectedClient] || [])
+              : Array.from(new Set(Object.values(meta.clientContacts).flat()))
+            ).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          {/* Reset Button */}
+          {(searchTerm || selectedClient || selectedContact) && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedClient('');
+                setSelectedContact('');
+              }}
+              className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Reset Filters"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
-        <button 
+
+        <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg"
+          className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg whitespace-nowrap"
         >
           <Plus size={18} /> NEW INQUIRY
         </button>
@@ -335,11 +565,10 @@ export default function App() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${
-              activeTab === tab.id 
-              ? 'bg-white text-indigo-600 shadow-sm' 
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${activeTab === tab.id
+              ? 'bg-white text-indigo-600 shadow-sm'
               : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             <tab.icon size={14} />
             {tab.label}
@@ -365,9 +594,9 @@ export default function App() {
               ))}
               {filteredOrders.length === 0 && (
                 <tr>
-                    <td colSpan="5" className="py-20 text-center text-slate-400 font-bold text-sm uppercase">
-                        No matches found for "{searchTerm}"
-                    </td>
+                  <td colSpan="5" className="py-20 text-center text-slate-400 font-bold text-sm uppercase">
+                    No matches found for "{searchTerm}"
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -382,7 +611,7 @@ export default function App() {
                 <button onClick={() => toggleFolder(fy)} className="w-full flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
                   <FolderOpen size={18} className="text-indigo-500" />
                   <span className="font-black text-sm uppercase">{fy}</span>
-                  {expandedFolders[fy] ? <ChevronDown size={16} className="ml-auto opacity-40"/> : <ChevronRight size={16} className="ml-auto opacity-40"/>}
+                  {expandedFolders[fy] ? <ChevronDown size={16} className="ml-auto opacity-40" /> : <ChevronRight size={16} className="ml-auto opacity-40" />}
                 </button>
                 {expandedFolders[fy] && (
                   <div className="ml-6 space-y-2">
@@ -413,18 +642,18 @@ export default function App() {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
           <div className="fixed inset-0 z-50 bg-white flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300 bg-white w-full  rounded-[2.5rem] shadow-2xl p-8 space-y-6 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                <h2 className="text-lg font-black uppercase">Record Details</h2>
-                <button onClick={() => setEditOrder(null)}><X size={20}/></button>
+              <h2 className="text-lg font-black uppercase">Record Details</h2>
+              <button onClick={() => setEditOrder(null)}><X size={20} /></button>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 px-1">Project Title</label>
-                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none" value={editOrder.title || ''} onChange={e => setEditOrder({...editOrder, title: e.target.value})} />
+                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none" value={editOrder.title || ''} onChange={e => setEditOrder({ ...editOrder, title: e.target.value })} />
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 px-1">Client Name</label>
-                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none" value={editOrder.clientName || ''} onChange={e => setEditOrder({...editOrder, clientName: e.target.value})} />
+                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none" value={editOrder.clientName || ''} onChange={e => setEditOrder({ ...editOrder, clientName: e.target.value })} />
               </div>
             </div>
 
@@ -433,11 +662,11 @@ export default function App() {
                 <label className="text-[9px] font-black uppercase text-slate-400 px-1">
                   {activeTab === 'ongoing' ? 'Quote Number' : 'Ref Number'}
                 </label>
-                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none uppercase" value={editOrder.refNumber || ''} onChange={e => setEditOrder({...editOrder, refNumber: e.target.value})} />
+                <input readOnly className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none uppercase" value={(editOrder.refNumber) || ''} onChange={e => setEditOrder({ ...editOrder, refNumber: e.target.value })} />
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 px-1">Order Placed By</label>
-                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none uppercase" placeholder="N/A" value={editOrder.orderPlacedBy || ''} onChange={e => setEditOrder({...editOrder, orderPlacedBy: e.target.value})} />
+                <input className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none uppercase" placeholder="N/A" value={editOrder.orderPlacedBy || ''} onChange={e => setEditOrder({ ...editOrder, orderPlacedBy: e.target.value })} />
               </div>
             </div>
 
@@ -445,34 +674,52 @@ export default function App() {
               <div className="flex items-center justify-between px-1">
                 <label className="text-[9px] font-black uppercase text-slate-400">Project Notes</label>
                 <div className="flex gap-2 text-slate-300">
-                    <ImageIcon size={12} title="Screenshots supported" />
-                    <TableIcon size={12} title="Tables supported" />
+                  <ImageIcon size={12} title="Screenshots supported" />
+                  <TableIcon size={12} title="Tables supported" />
                 </div>
               </div>
-              <div 
+              <div
                 ref={editEditorRef}
                 contentEditable
                 onPaste={handlePaste}
                 dangerouslySetInnerHTML={{ __html: editOrder.description || '' }}
-                className="w-full bg-slate-50 p-5 rounded-xl font-bold text-sm outline-none min-h-[200px] border-2 border-transparent focus:border-indigo-100 transition-all overflow-y-auto"
+                className="w-full bg-slate-50 p-5 rounded-xl font-bold text-sm outline-none min-h-[500px] border-2 border-transparent focus:border-indigo-100 transition-all overflow-y-auto"
                 style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', display: 'block' }}
               />
             </div>
-            
+
             <div className="space-y-2">
               <p className="text-[10px] font-black uppercase text-slate-400">Attachments</p>
               <div className="flex flex-wrap gap-2">
-                {editOrder.attachments?.map((file, idx) => (
+                {editOrder.attachments && editOrder.attachments.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {editOrder.attachments.map((file, idx) => (
+                      <a
+                        key={idx}
+                        href={file.webUrl} // The URL returned by Microsoft Graph
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                      >
+                        <FileText size={12} />
+                        <span className="truncate max-w-[100px]">{file.name}</span>
+                        <button onClick={(e) => downloadFile(file, e)} className="text-indigo-500"><Download size={14} /></button>
+                        <button onClick={() => setEditOrder({ ...editOrder, attachments: editOrder.attachments.filter((_, i) => i !== idx) })} className="text-red-400"><X size={14} /></button>
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {/* {editOrder.attachments?.map((file, idx) => (
                   <div key={idx} className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-lg">
                     {getFileIcon(file.fileType)}
                     <span className="text-[10px] font-bold truncate max-w-[150px]">{file.fileName}</span>
-                    <button onClick={(e) => downloadFile(file, e)} className="text-indigo-500"><Download size={14}/></button>
-                    <button onClick={() => setEditOrder({...editOrder, attachments: editOrder.attachments.filter((_, i) => i !== idx)})} className="text-red-400"><X size={14}/></button>
+                    <button onClick={(e) => downloadFile(file, e)} className="text-indigo-500"><Download size={14} /></button>
+                    <button onClick={() => setEditOrder({ ...editOrder, attachments: editOrder.attachments.filter((_, i) => i !== idx) })} className="text-red-400"><X size={14} /></button>
                   </div>
-                ))}
+                ))} */}
                 <label className="cursor-pointer bg-indigo-50 text-indigo-500 p-2 rounded-lg flex items-center justify-center w-10 h-10">
-                    <Plus size={16}/>
-                    <input type="file" multiple className="hidden" onChange={(e) => handleFileUpload(e, true)} />
+                  <Plus size={16} />
+                  <input type="file" multiple className="hidden" onChange={(e) => handleFileUpload(e, true)} />
                 </label>
               </div>
             </div>
@@ -487,40 +734,59 @@ export default function App() {
           <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div>
-                  <h2 className="text-lg font-black uppercase leading-tight">Create New Inquiry</h2>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pasting screenshots & tables supported</p>
+                <h2 className="text-lg font-black uppercase leading-tight">Create New Inquiry</h2>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pasting screenshots & tables supported</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20}/></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
             </div>
             <form onSubmit={saveOrder} className="p-8 space-y-5 overflow-y-auto custom-scrollbar">
-              <input required placeholder="Project Title" className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-indigo-100 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <input required placeholder="Project Title" className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-indigo-100 transition-all" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
               <div className="grid grid-cols-2 gap-4">
-                <input required placeholder="Client Company" className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} />
-                <input required placeholder="Contact Person" className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none" value={formData.orderPlacedBy} onChange={e => setFormData({...formData, orderPlacedBy: e.target.value})} />
+                {/* Client Select */}
+                <CustomCreatableSelect
+                  label="Client Company"
+                  options={meta.clients.map(c => ({ label: c, value: c }))}
+                  value={formData.clientName ? { label: formData.clientName, value: formData.clientName } : null}
+                  onChange={(v) => {
+                    // Reset contact person if client changes
+                    setFormData({ ...formData, clientName: v?.value || '', orderPlacedBy: '' });
+                  }}
+                  onDelete={(val) => deleteMetaItem('clients', val)}
+                />
+
+                {/* Contact Person Select (Dependent on Client) */}
+                <CustomCreatableSelect
+                  label="Contact Person"
+                  isDisabled={!formData.clientName} // Enabled only after client selection
+                  options={(meta.clientContacts[formData.clientName] || []).map(c => ({ label: c, value: c }))}
+                  value={formData.orderPlacedBy ? { label: formData.orderPlacedBy, value: formData.orderPlacedBy } : null}
+                  onChange={(v) => setFormData({ ...formData, orderPlacedBy: v?.value || '' })}
+                  onDelete={(val) => deleteMetaItem('contacts', val, formData.clientName)}
+                />
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between px-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Requirements</label>
-                    <div className="flex gap-2 text-slate-400">
-                        <ImageIcon size={14} />
-                        <TableIcon size={14} />
-                    </div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Requirements</label>
+                  <div className="flex gap-2 text-slate-400">
+                    <ImageIcon size={14} />
+                    <TableIcon size={14} />
+                  </div>
                 </div>
-                <div 
-                    ref={createEditorRef}
-                    contentEditable
-                    onPaste={handlePaste}
-                    onInput={(e) => setFormData({...formData, description: e.currentTarget.innerHTML})}
-                    className="w-full bg-slate-50 p-6 rounded-2xl text-sm outline-none min-h-[250px] border-2 border-transparent focus:border-indigo-100 transition-all shadow-inner custom-scrollbar"
-                    style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', display: 'block' }}
-                    data-placeholder="Describe project details... Paste images or Excel tables directly here."
+                <div
+                  ref={createEditorRef}
+                  contentEditable
+                  onPaste={handlePaste}
+                  onInput={(e) => setFormData({ ...formData, description: e.currentTarget.innerHTML })}
+                  className="w-full bg-slate-50 p-6 rounded-2xl text-sm outline-none min-h-[250px] border-2 border-transparent focus:border-indigo-100 transition-all shadow-inner custom-scrollbar"
+                  style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', display: 'block' }}
+                  data-placeholder="Describe project details... Paste images or Excel tables directly here."
                 />
               </div>
 
               <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
                 <label className="cursor-pointer bg-white text-slate-600 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 border border-slate-200 shadow-sm">
-                  <Plus size={14}/> Attach Files
+                  <Plus size={14} /> Attach Files
                   <input type="file" multiple className="hidden" onChange={(e) => handleFileUpload(e, false)} />
                 </label>
                 <div className="text-[10px] font-bold text-slate-400">{formData.attachments.length} files attached</div>
@@ -537,11 +803,11 @@ export default function App() {
         <div className="fixed inset-0 z-[100] bg-indigo-950/70 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-sm w-full space-y-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Hash size={24}/></div>
+              <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Hash size={24} /></div>
               <h3 className="text-lg font-black uppercase">Finalize Quote</h3>
               <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Assign a reference number to move to production</p>
             </div>
-            <input 
+            <input
               autoFocus
               id="refInput"
               placeholder="e.g. Q-2024-001"
@@ -549,10 +815,10 @@ export default function App() {
             />
             <div className="flex gap-2">
               <button onClick={() => setQuotePrompt(null)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Cancel</button>
-              <button 
+              <button
                 onClick={() => {
                   const val = document.getElementById('refInput').value.trim();
-                  if(val) {
+                  if (val) {
                     updateOrder(quotePrompt._id, { status: 'ongoing', refNumber: val });
                     setQuotePrompt(null);
                   }
@@ -570,12 +836,12 @@ export default function App() {
         <div className="fixed inset-0 z-[100] bg-emerald-950/70 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-sm w-full space-y-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Receipt size={24}/></div>
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Receipt size={24} /></div>
               <h3 className="text-lg font-black uppercase">Completed Order</h3>
               <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Enter Final Invoice Number</p>
               <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Before Moving to Completed State</p>
             </div>
-            <input 
+            <input
               autoFocus
               id="invoiceInput"
               placeholder="e.g. INV-10293"
@@ -583,14 +849,14 @@ export default function App() {
             />
             <div className="flex gap-2">
               <button onClick={() => setCompletionPrompt(null)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Cancel</button>
-              <button 
+              <button
                 onClick={() => {
                   const val = document.getElementById('invoiceInput').value.trim();
-                  if(val) {
-                    updateOrder(completionPrompt._id, { 
-                      status: 'completed', 
+                  if (val) {
+                    updateOrder(completionPrompt._id, {
+                      status: 'completed',
                       invoiceNumber: val,
-                      completedAt: new Date().toISOString() 
+                      completedAt: new Date().toISOString()
                     });
                     setCompletionPrompt(null);
                   }
@@ -607,7 +873,7 @@ export default function App() {
       {deleteId && (
         <div className="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-[2rem] shadow-2xl max-w-sm w-full text-center space-y-4">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto"><AlertTriangle size={32}/></div>
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto"><AlertTriangle size={32} /></div>
             <h3 className="text-xl font-black uppercase">Confirm Delete</h3>
             <div className="flex gap-3">
               <button onClick={() => setDeleteId(null)} className="flex-1 py-3 text-slate-400 font-black uppercase text-[10px]">Cancel</button>

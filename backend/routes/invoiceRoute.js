@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const Invoice = require('../models/Invoice');
+const whatsappService = require('../services/whatsappService');
+const qs = require('qs');
 
 /**
- * Helper function to delay execution (sleep)
+ * Helper: Delay execution for API rate limits
  */
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -33,160 +35,231 @@ const processWithGemini = async (base64Data, mimeType) => {
         contents: [{
             parts: [
                 { text: systemPrompt },
-                { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } }
+                { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64Data } }
             ]
         }]
     };
 
-    const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        payload
-    );
-
-    const text = response.data.candidates[0].content.parts[0].text;
-    const cleanJson = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(cleanJson);
+    let attempts = 0;
+    while (attempts < 5) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const response = await axios.post(url, payload);
+            const text = response.data.candidates[0].content.parts[0].text;
+            const cleanJson = text.replace(/```json|```/g, "").trim();
+            return JSON.parse(cleanJson);
+        } catch (err) {
+            attempts++;
+            if (attempts === 5) throw err;
+            await sleep(Math.pow(2, attempts) * 1000);
+        }
+    }
 };
 
 /**
- * Shared Handler for Automated Sources (WhatsApp/Outlook)
+ * SHARED LOGIC: Process, Extract, and Save
  */
-const handleAutomatedInvoice = async (base64, mimeType) => {
+const handleAutomatedInvoice = async (base64Data, mimeType, source, metadata = {}) => {
     try {
-        const extractedData = await processWithGemini(base64, mimeType);
-        const isDup = await checkIfDuplicate(extractedData.vendor_gst, extractedData.invoice_number);
+        const extraction = await processWithGemini(base64Data, mimeType);
         
-        if (isDup) {
-            console.log(`[Auto-Scan] Skip duplicate: ${extractedData.invoice_number}`);
-            return { success: false, reason: "duplicate" };
-        }
+        const isDup = await checkIfDuplicate(extraction.vendor_gst, extraction.invoice_number);
+        if (isDup) return { success: false, reason: 'Duplicate', data: extraction };
 
         const newInvoice = new Invoice({
-            ...extractedData,
-            image: `data:${mimeType};base64,${base64}`,
+            ...extraction,
+            total_amount: Number(extraction.total_amount || 0),
+            image: `data:${mimeType};base64,${base64Data}`,
             mimeType: mimeType,
-            status: 'pending', // Default status for new automated invoices
+            receivedVia: source,
+            notes: metadata.notes || `Automatically processed via ${source}`,
             createdAt: new Date()
         });
 
         await newInvoice.save();
-        console.log(`✅ Auto-Saved: ${extractedData.invoice_number}`);
-        return { success: true };
+        return { success: true, data: newInvoice };
     } catch (err) {
-        console.error("Automated Flow Error:", err.message);
+        console.error(`Error in handleAutomatedInvoice (${source}):`, err);
         throw err;
     }
 };
 
-// --- WHATSAPP WEBHOOK HANDLERS ---
+/**
+ * WHATSAPP WEBHOOK (POST): Handle Incoming Messages
+ * This is where your new SIM card "lives" now.
+ */
+router.post('/whatsapp-webhook', async (req, res) => {
+    try {
+        const entry = req.body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
 
-router.get('/whatsapp/webhook', (req, res) => {
+        // Metadata about YOUR new SIM
+        const receiverPhoneId = value?.metadata?.phone_number_id;
+        const receiverDisplayNumber = value?.metadata?.display_phone_number;
+
+        // If no messages (like a status update), just acknowledge and exit
+        if (!value?.messages) return res.sendStatus(200);
+
+        const msg = value.messages[0];
+        const fromNumber = msg.from; // Vendor's number
+        
+        // Detect if the vendor sent a Document (PDF) or an Image
+        const media = msg.document || (msg.image ? msg.image : null);
+
+        if (media) {
+            console.log(`📩 WhatsApp Invoice Received on ${receiverDisplayNumber} from ${fromNumber}`);
+            
+            // 1. Tell the vendor you are processing (Good UX)
+            await whatsappService.sendReply(
+                receiverPhoneId, 
+                fromNumber, 
+                "⏳ Reading your invoice... please wait."
+            ).catch(() => {});
+
+            // 2. Download the media from Meta Servers using the Media ID
+            const mediaData = await whatsappService.downloadWhatsAppMedia(media.id);
+            
+            if (mediaData) {
+                // 3. Process with Gemini
+                const result = await handleAutomatedInvoice(
+                    mediaData.base64, 
+                    mediaData.mimeType, 
+                    'whatsapp',
+                    { notes: `WhatsApp Receiver: ${receiverDisplayNumber} | From: ${fromNumber}` }
+                );
+
+                // 4. Send the result back to the vendor
+                if (result.success) {
+                    await whatsappService.sendReply(
+                        receiverPhoneId, 
+                        fromNumber, 
+                        `✅ Invoice Saved!\n\n*Vendor:* ${result.data.vendor_name}\n*Inv No:* ${result.data.invoice_number}\n*Amount:* ₹${result.data.total_amount}`
+                    );
+                } else if (result.reason === 'Duplicate') {
+                    await whatsappService.sendReply(
+                        receiverPhoneId,
+                        fromNumber,
+                        `⚠️ *Duplicate:* Invoice #${result.data.invoice_number} from ${result.data.vendor_name} is already in our vault.`
+                    );
+                }
+            }
+        } else {
+            // If they sent text instead of an image
+            await whatsappService.sendReply(
+                receiverPhoneId,
+                fromNumber,
+                "👋 Hello! Please send an *Image* or *PDF* of the tax invoice for automated processing."
+            );
+        }
+
+        res.sendStatus(200);
+    } catch (err) {
+        console.error("WhatsApp Webhook Error:", err);
+        // Always send 200 to Meta so they don't keep retrying the same error
+        res.sendStatus(200);
+    }
+});
+
+/**
+ * WHATSAPP WEBHOOK (GET): Required for Meta Verification
+ */
+router.get('/whatsapp-webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-
-    if (mode === 'subscribe' && token === "MARQLAND_SECRET_TOKEN") {
+    
+    // WHATSAPP_VERIFY_TOKEN is a random string you set in Meta Portal
+    if (mode && token === process.env.WHATSAPP_VERIFY_TOKEN) {
         res.status(200).send(challenge);
     } else {
         res.sendStatus(403);
     }
 });
 
-router.post('/whatsapp/webhook', async (req, res) => {
-    try {
-        const entry = req.body.entry?.[0]?.changes?.[0]?.value;
-        const message = entry?.messages?.[0];
-
-        if (message && (message.image || message.document)) {
-            const mediaId = message.image ? message.image.id : message.document.id;
-            const media = await whatsappService.downloadWhatsAppMedia(mediaId);
-            if (media) {
-                await handleAutomatedInvoice(media.base64, media.mimeType);
-            }
-        }
-        res.sendStatus(200);
-    } catch (err) {
-        console.error("WhatsApp Webhook Logic Error:", err.message);
-        res.sendStatus(200); 
-    }
-});
-
-// --- MICROSOFT OUTLOOK SYNC ---
-
+/**
+ * MICROSOFT OUTLOOK SYNC LOGIC (Domain-wide Scan)
+ */
 const getMicrosoftAccessToken = async () => {
-    try {
-        const url = `https://login.microsoftonline.com/${process.env.OUTLOOK_TENANT_ID}/oauth2/v2.0/token`;
-        const data = qs.stringify({
-            client_id: process.env.OUTLOOK_CLIENT_ID,
-            scope: 'https://graph.microsoft.com/.default',
-            client_secret: process.env.OUTLOOK_CLIENT_SECRET,
-            grant_type: 'client_credentials',
-        });
+    const tokenUrl = `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID}/oauth2/v2.0/token`;
+    const data = qs.stringify({
+        client_id: process.env.MICROSOFT_CLIENT_ID,
+        scope: 'https://graph.microsoft.com/.default',
+        client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+        grant_type: 'client_credentials'
+    });
 
-        const response = await axios.post(url, data, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
-        return response.data.access_token;
-    } catch (err) {
-        console.error("Outlook Auth Error:", err.response?.data || err.message);
-        throw new Error("Failed to authenticate with Microsoft");
-    }
+    const response = await axios.post(tokenUrl, data, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    return response.data.access_token;
 };
 
 const syncOutlookInvoices = async () => {
-    console.log("📂 [Cron] Starting Outlook Scan...");
-    let processed = 0;
-
     try {
+        console.log("🔍 Starting Domain-Wide Outlook Sync...");
         const token = await getMicrosoftAccessToken();
-        const userId = process.env.OUTLOOK_USER_ID; 
-        
-        const mailUrl = `https://graph.microsoft.com/v1.0/users/${userId}/messages?$filter=hasAttachments eq true and isRead eq false&$select=id,subject`;
-        const mailRes = await axios.get(mailUrl, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const headers = { Authorization: `Bearer ${token}` };
 
-        const messages = mailRes.data.value || [];
+        // 1. Fetch all users in the organization
+        const usersUrl = `https://graph.microsoft.com/v1.0/users?$select=id,userPrincipalName`;
+        const usersResponse = await axios.get(usersUrl, { headers });
+        const users = usersResponse.data.value;
 
-        for (const msg of messages) {
-            const attachUrl = `https://graph.microsoft.com/v1.0/users/${userId}/messages/${msg.id}/attachments`;
-            const attachRes = await axios.get(attachUrl, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+        let totalProcessedCount = 0;
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-            const attachments = attachRes.data.value || [];
+        // 2. Iterate through each user and check their mailbox
+        for (const user of users) {
+            try {
+                const userEmail = user.userPrincipalName;
+                const mailUrl = `https://graph.microsoft.com/v1.0/users/${user.id}/messages?$filter=hasAttachments eq true and receivedDateTime ge ${yesterday}&$select=id,subject,from,receivedDateTime`;
 
-            for (const file of attachments) {
-                if ((file.contentType.includes('image') || file.contentType.includes('pdf')) && file.contentBytes) {
-                    try {
-                        const res = await handleAutomatedInvoice(file.contentBytes, file.contentType);
-                        if (res.success) processed++;
-                        await sleep(1000); 
-                    } catch (e) {
-                        console.error(`Error processing file ${file.name}: ${e.message}`);
+                const mailResponse = await axios.get(mailUrl, { headers });
+                const messages = mailResponse.data.value;
+
+                for (const msg of messages) {
+                    const attachUrl = `https://graph.microsoft.com/v1.0/users/${user.id}/messages/${msg.id}/attachments`;
+                    const attachRes = await axios.get(attachUrl, { headers });
+                    
+                    for (const attachment of attachRes.data.value) {
+                        const isImage = attachment.contentType?.startsWith('image/');
+                        const isPdf = attachment.contentType === 'application/pdf';
+
+                        if (isImage || isPdf) {
+                            const result = await handleAutomatedInvoice(
+                                attachment.contentBytes,
+                                attachment.contentType,
+                                'outlook',
+                                { notes: `User: ${userEmail} | From: ${msg.from.emailAddress.address} | Subject: ${msg.subject}` }
+                            );
+                            if (result.success) totalProcessedCount++;
+                        }
                     }
                 }
+            } catch (userErr) {
+                // If a user doesn't have a mailbox (e.g., service account), skip them
+                console.warn(`Could not scan mailbox for ${user.userPrincipalName}:`, userErr.message);
+                continue;
             }
-
-            // Mark email as read
-            await axios.patch(`https://graph.microsoft.com/v1.0/users/${userId}/messages/${msg.id}`, 
-                { isRead: true },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
         }
-
-        return { success: true, processed };
+        
+        console.log(`✅ Sync Complete. Total Invoices Found: ${totalProcessedCount}`);
+        return { success: true, processed: totalProcessedCount };
     } catch (err) {
-        console.error("Outlook Sync Error:", err.message);
-        return { success: false, processed: 0, error: err.message };
+        console.error("Outlook Domain Sync Error:", err.response?.data || err.message);
+        return { success: false, error: err.message };
     }
 };
 
-router.post('/sync-outlook', async (req, res) => {
+router.post('/outlook-sync', async (req, res) => {
     const result = await syncOutlookInvoices();
     res.json(result);
 });
 
+/**
+ * STANDARD CRUD & UI ROUTES
+ */
 router.post('/process', async (req, res) => {
     try {
         const { image, mimeType } = req.body;
@@ -198,131 +271,42 @@ router.post('/process', async (req, res) => {
     }
 });
 
-/**
- * @route POST /api/invoices/process
- * @desc Process document with Gemini AI with Exponential Backoff for 429 errors
- * This is a workign code for Process API
- */
-/*
-router.post('/process', async (req, res) => {
-  const { image, mimeType, prompt: userPrompt } = req.body;
-  if (!image) return res.status(400).json({ error: "No image data provided" });
-
-  const base64Content = image.split(',')[1];
-  const apiKey = process.env.GEMINI_API_KEY;
-  // 2. CRITICAL for NSSM: Check if API Key loaded correctly
-  if (!apiKey) {
-    console.error("NSSM ERROR: GEMINI_API_KEY is not defined in Service Environment.");
-    return res.status(500).json({ error: "Server Configuration Error: API Key missing." });
-  }
-  const systemPrompt = `Extract Indian Tax Invoice details. Return ONLY a valid JSON object with: 
-    vendor_name, 
-    vendor_gst (15-char GSTIN), 
-    invoice_number, 
-    date (YYYY-MM-DD), 
-    total_amount (Number), 
-    cgst (Number), 
-    sgst (Number), 
-    igst (Number). 
-    If a value is not found, use null or 0 for numbers.`;
-
-  const maxRetries = 5;
-  let attempt = 0;
-
-  while (attempt <= maxRetries) {
-    try {
-      const modelName = "gemini-2.5-flash";
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-        {
-          contents: [{
-            parts: [
-              { text: userPrompt || "Analyze this document and extract billing info." },
-              { inlineData: { mimeType: mimeType || 'image/png', data: base64Content } }
-            ]
-          }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { responseMimeType: "application/json" }
-        }
-      );
-
-      const extracted = JSON.parse(response.data.candidates[0].content.parts[0].text);
-      return res.json(extracted); // Success!
-
-    } catch (error) {
-      const status = error.response ? error.response.status : null;
-
-      if (status === 429 && attempt < maxRetries) {
-        attempt++;
-        const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s...
-        console.log(`Rate limited (429). Retrying in ${delay}ms (Attempt ${attempt}/${maxRetries})...`);
-        await sleep(delay);
-        continue; 
-      }
-
-      console.error("Gemini AI Error:", error.response?.data || error.message);
-      return res.status(status || 500).json({ 
-        error: status === 429 ? "Rate limit exceeded. Please try again in a minute." : "AI Processing failed" 
-      });
-    }
-  }
-});
-*/
-
-
-/**
- * @route GET /api/invoices
- */
 router.get('/', async (req, res) => {
-  try {
-    const invoices = await Invoice.find().sort({ createdAt: -1 });
-    res.json(invoices);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+        const invoices = await Invoice.find().sort({ createdAt: -1 });
+        res.json(invoices);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-/**
- * @route POST /api/invoices
- */
 router.post('/', async (req, res) => {
-  try {
-    const invoiceData = {
-      vendor_name: req.body.vendor_name,
-      vendor_gst: req.body.vendor_gst,
-      invoice_number: req.body.invoice_number,
-      date: req.body.date,
-      total_amount: Number(req.body.total_amount),
-      cgst: Number(req.body.cgst || 0),
-      sgst: Number(req.body.sgst || 0),
-      igst: Number(req.body.igst || 0),
-      financialYear: req.body.financialYear,
-      month: req.body.month,
-      image: req.body.image,
-      mimeType: req.body.mimeType,
-      createdAt: new Date()
-    };
+    try {
+        const isDup = await checkIfDuplicate(req.body.vendor_gst, req.body.invoice_number);
+        if (isDup) return res.status(400).json({ error: "Invoice exists in vault." });
 
-    const newInvoice = new Invoice(invoiceData);
-    await newInvoice.save();
-    res.status(201).json(newInvoice);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+        const newInvoice = new Invoice({
+            ...req.body,
+            total_amount: Number(req.body.total_amount || 0),
+            createdAt: new Date()
+        });
+        await newInvoice.save();
+        res.status(201).json(newInvoice);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
 });
 
-/**
- * @route DELETE /api/invoices/:id
- */
 router.delete('/:id', async (req, res) => {
-  try {
-    await Invoice.findByIdAndDelete(req.params.id);
-    res.json({ message: "Invoice deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+        await Invoice.findByIdAndDelete(req.params.id);
+        res.json({ message: "Invoice deleted" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-module.exports = router;
-// Exporting syncOutlookInvoices for the global cron job in server.js
-module.exports.syncOutlookInvoices = syncOutlookInvoices;
+module.exports = {
+    router,
+    syncOutlookInvoices
+};
