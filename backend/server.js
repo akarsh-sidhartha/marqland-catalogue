@@ -7,9 +7,11 @@ const cron = require('node-cron');
 const app = express();
 
 const whatsappService = require('./services/whatsappService');
+
 // We use path.resolve with __dirname to point specifically to the 'backend' folder
 //const envPath = path.resolve(__dirname, '.env');
 //const result = dotenv.config({ path: envPath });
+
 /**
  * 1. CORS CONFIGURATION
  * Allows other laptops in the office to make requests to this server.
@@ -30,9 +32,11 @@ const clientRoutes = require('./routes/clientRoutes');
 const catalogueRoutes = require('./routes/catalogueRoutes');
 const propertyRoutes = require('./routes/propertyRoutes');
 const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
-const invoiceRoutes = require('./routes/invoiceRoute');
+//const invoiceRoutes = require('./routes/invoiceRoute');
 const orderInquiry = require('./routes/orderInquiry');
 const SamplesProvided = require('./routes/samplesProvided');
+const SourcingHub = require('./routes/inquiryRoutes');
+const { router: paymentTracker, syncOutlookInvoices } = require('./routes/paymentTrackerRoutes');
 
 /**
  * 2. STATIC FILE SERVING
@@ -46,15 +50,23 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 const buildPath = path.join(__dirname, '..', 'frontend', 'build');
 app.use(express.static(buildPath));
 
-// B. The Bulletproof Catch-all Middleware
-// Instead of app.get('*') or app.get('/:slug'), we use a general middleware
+// Catch-all: serve React for non-API routes
+// Mobile devices are restricted to /paymenttracker only
 app.use((req, res, next) => {
   console.log(`Incoming request: ${req.method} ${req.url}`);
-  // If the request is for an API or a static file, skip this
   if (req.url.startsWith('/api') || req.url.startsWith('/public') || req.url.startsWith('/uploads')) {
     return next();
   }
-  // Otherwise, send the index.html for React to handle the routing
+
+  // Detect mobile User-Agent
+  const ua = req.headers['user-agent'] || '';
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+  // Block mobile from all routes except /paymenttracker
+  if (isMobile && req.url !== '/paymenttracker' && !req.url.startsWith('/paymenttracker')) {
+    return res.redirect(301, '/paymenttracker');
+  }
+
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
@@ -68,10 +80,11 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
-app.use('/api/invoices', invoiceRoutes.router);
-//app.use('/api/invoices',invoiceRoutes);
+//app.use('/api/invoices', invoiceRoutes.router);
 app.use('/api/orders', orderInquiry);
 app.use('/api/challans', SamplesProvided);
+app.use('/api/inquiries', SourcingHub);
+app.use('/api/payment-tracker', paymentTracker);
 /**
  * 5. AUTOMATED TASKS (CRON)
  * Runs daily at 10:00 AM (IST) to sync Outlook invoices and 

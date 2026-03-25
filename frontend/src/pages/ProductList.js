@@ -427,13 +427,6 @@ const ProductList = () => {
               Build New
               <Plus size={14} />
             </button>
-            <button
-              onClick={() => window.open('/broadcastmessage', '_blank')}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
-            >
-              <MessageSquare size={16} />
-              Broadcast Message
-            </button>
           </div>
         </div>
       )}

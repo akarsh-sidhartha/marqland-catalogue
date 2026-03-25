@@ -20,7 +20,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
-  MessageSquare
+  RadioTower
 } from 'lucide-react';
 
 import ProductList from './pages/ProductList';
@@ -36,6 +36,9 @@ import InvoiceTracking from './pages/Invoice';
 import InvoiceScanMobileVersionPage from './pages/InvoiceScanMobileVersion';
 import OrderTracker from './pages/OrderTracker';
 import SamplesProvided from './pages/SamplesProvided';
+//import InquiryManagement from './pages/InquiryManagement';
+import SourcingHub from './pages/SourcingHub';
+import PaymentTracker from './pages/PaymentTracker';
 
 /**
  * SIDEBAR COMPONENT
@@ -50,7 +53,9 @@ const Sidebar = () => {
     orders: true
   });
 
-  if (location.pathname === '/scaninvoice') {
+  // Hide sidebar entirely on mobile or on the payment tracker route
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+  if (location.pathname === '/scaninvoice' || (isMobile && location.pathname.startsWith('/paymenttracker'))) {
     return null;
   }
 
@@ -117,6 +122,7 @@ const Sidebar = () => {
           {(openSections.orders || isCollapsed) && (
             <div className="flex flex-col gap-1">
               <NavLink to="/" icon={Package} label="Order Tracker" />
+              <NavLink to="/sourcinghub" icon={Package} label="Sourcing Hub" />
             </div>
           )}
         </nav>
@@ -137,12 +143,34 @@ const Sidebar = () => {
             <div className="flex flex-col gap-1">
               <NavLink to="/products" icon={Package} label="Products" />
               <NavLink to="/samplesprovided" icon={Package} label="SamplesProvided" />
-              <NavLink to="/vendors" icon={Users} label="Vendors" />
-              <NavLink to="/clients" icon={Building} label="Clients" />
               <NavLink to="/savedcatalogues" icon={Bookmark} label="Saved Catalogues" />
             </div>
           )}
         </nav>
+        
+        {/* Documentation Section */}
+        <nav>
+          <button 
+            onClick={() => toggleSection('documentation')}
+            className={`w-full px-4 py-2 mb-1 flex items-center justify-between group focus:outline-none hover:bg-slate-50 rounded-lg transition-colors ${isCollapsed ? 'justify-center px-0' : ''}`}
+          >
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 group-hover:text-indigo-600">
+              <FileText size={12} className="text-indigo-400 shrink-0" /> 
+              {!isCollapsed && "Documentation"}
+            </span>
+            {!isCollapsed && (openSections.documentation ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />)}
+          </button>
+          {(openSections.documentation || isCollapsed) && (
+            <div className="flex flex-col gap-1">
+              <NavLink to="/paymenttracker" icon={Bookmark} label="Invoice & Payment Tracker" />
+              <NavLink to="/vendors" icon={Users} label="Vendors" />
+              <NavLink to="/clients" icon={Building} label="Clients" />
+              <NavLink to="/MarqlandLetterHead" icon={LetterTextIcon} label="Marqland Letter Head" />
+              {/* <NavLink to="/InvoiceTracking" icon={AlbumIcon} label="Invoice Tracking" /> */}
+              {/*<NavLink to="/scaninvoice" icon={Camera} label="Mobile Scanner" /> */}
+            </div>
+          )}
+        </nav> 
 
         {/* Offsites Section */}
         <nav>
@@ -162,28 +190,7 @@ const Sidebar = () => {
               <NavLink to="/saved-offsites" icon={HardDrive} label="Saved Offsites" />
             </div>
           )}
-        </nav>
-        
-        {/* Documentation Section */}
-        <nav>
-          <button 
-            onClick={() => toggleSection('documentation')}
-            className={`w-full px-4 py-2 mb-1 flex items-center justify-between group focus:outline-none hover:bg-slate-50 rounded-lg transition-colors ${isCollapsed ? 'justify-center px-0' : ''}`}
-          >
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 group-hover:text-indigo-600">
-              <FileText size={12} className="text-indigo-400 shrink-0" /> 
-              {!isCollapsed && "Documentation"}
-            </span>
-            {!isCollapsed && (openSections.documentation ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />)}
-          </button>
-          {(openSections.documentation || isCollapsed) && (
-            <div className="flex flex-col gap-1">
-              <NavLink to="/MarqlandLetterHead" icon={LetterTextIcon} label="Marqland Letter Head" />
-              <NavLink to="/InvoiceTracking" icon={AlbumIcon} label="Invoice Tracking" />
-              <NavLink to="/scaninvoice" icon={Camera} label="Mobile Scanner" />
-            </div>
-          )}
-        </nav>   
+        </nav>  
       </div>
     </aside>
   );
@@ -209,6 +216,8 @@ function App() {
             <Route path="/MarqlandLetterHead" element={<MarqlandLetterHead />} />
             <Route path="/InvoiceTracking" element={<InvoiceTracking />} />
             <Route path="/scaninvoice" element={<InvoiceScanMobileVersionPage/>} />
+            <Route path="/SourcingHub" element={<SourcingHub/>} />
+            <Route path="/paymenttracker" element={<PaymentTracker/>} />
           </Routes>
         </main>
       </div>

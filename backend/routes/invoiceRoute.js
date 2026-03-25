@@ -19,6 +19,20 @@ const checkIfDuplicate = async (vendor_gst, invoice_number) => {
     return !!existing;
 };
 
+const getAvailableGeminiModels = async (apiKey) => {
+    try {
+        const response = await axios.get(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+        );
+        return response.data.models
+            .map(m => m.name.replace('models/', ''))
+            .filter(name => name.includes('flash') || name.includes('pro'))
+            .filter(name => !name.includes('gemini-1.0')); // exclude old retired ones
+    } catch {
+        return GEMINI_MODELS; // fall back to hardcoded list if this call fails
+    }
+};
+
 /**
  * CORE AI LOGIC: Shared extraction via Gemini
  */
@@ -43,7 +57,9 @@ const processWithGemini = async (base64Data, mimeType) => {
     let attempts = 0;
     while (attempts < 5) {
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            //const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const models = await getAvailableGeminiModels(apiKey);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${models}:generateContent?key=${apiKey}`;
             const response = await axios.post(url, payload);
             const text = response.data.candidates[0].content.parts[0].text;
             const cleanJson = text.replace(/```json|```/g, "").trim();
@@ -170,7 +186,7 @@ router.get('/whatsapp-webhook', (req, res) => {
     const challenge = req.query['hub.challenge'];
     
     // WHATSAPP_VERIFY_TOKEN is a random string you set in Meta Portal
-    if (mode && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    if (mode && token === process.env.WHATSAPP_TOKEN) {
         res.status(200).send(challenge);
     } else {
         res.sendStatus(403);

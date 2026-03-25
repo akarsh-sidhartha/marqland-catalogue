@@ -6,6 +6,7 @@ const vendorSchema = new mongoose.Schema({
   suppliedProducts: { type: String },
   category: { type: String }, // New Field Added
   description: String,
+   gstNumber: { type: String, default: "" },
   contacts: [{
     name: String,
     phone: String,

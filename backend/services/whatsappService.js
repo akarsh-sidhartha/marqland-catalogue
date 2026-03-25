@@ -8,6 +8,39 @@ const WHATSAPP_CONFIG = {
 };
 
 /**
+ * Sends a generic text message to a specific number using the default Phone ID.
+ * This is the function called by the Inquiries route.
+ */
+async function sendWhatsAppMessage(to, text) {
+    if (!WHATSAPP_CONFIG.token || !WHATSAPP_CONFIG.phoneId) {
+        console.error("WhatsApp credentials missing in .env");
+        return;
+    }
+
+    const url = `https://graph.facebook.com/${WHATSAPP_CONFIG.version}/${WHATSAPP_CONFIG.phoneId}/messages`;
+    
+    const messageData = {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "text",
+        text: { body: text }
+    };
+
+    try {
+        await axios.post(url, messageData, {
+            headers: { 
+                'Authorization': `Bearer ${WHATSAPP_CONFIG.token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        console.log(`✅ WhatsApp sent to ${to}`);
+    } catch (err) {
+        console.error("WhatsApp Send Error:", err.response?.data || err.message);
+        throw new Error(err.response?.data?.error?.message || "Failed to send WhatsApp");
+    }
+}
+
+/**
  * Sends a daily status report (Existing logic)
  * Keeps using the primary phoneId from .env
  */
@@ -92,6 +125,7 @@ async function downloadWhatsAppMedia(mediaId) {
 }
 
 module.exports = {
+    sendWhatsAppMessage,
     sendDailyStatus,
     sendReply,
     downloadWhatsAppMedia,
