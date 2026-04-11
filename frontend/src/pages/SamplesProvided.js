@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl';
+import api from '../api';
 import { 
   Plus, Trash2, Truck, Search, Calendar, Hash, Package, 
   Camera, X, Check, AlertCircle, ChevronRight, User, 
@@ -33,7 +32,6 @@ const SamplesProvided = () => {
   const [targetSettleId, setTargetSettleId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = `${getBaseUrl()}/challans`;
 
   useEffect(() => {
     fetchChallans();
@@ -41,7 +39,7 @@ const SamplesProvided = () => {
 
   const fetchChallans = async () => {
     try {
-      const res = await axios.get(API_URL);
+      const res = await api.get('/challans');
       setChallans(res.data);
     } catch (err) {
       console.error("Fetch error:", err);
@@ -53,9 +51,9 @@ const SamplesProvided = () => {
     setLoading(true);
     try {
       if (currentChallan._id) {
-        await axios.put(`${API_URL}/${currentChallan._id}`, currentChallan);
+        await api.put(`/challans/${currentChallan._id}`, currentChallan);
       } else {
-        await axios.post(API_URL, currentChallan);
+        await api.post('/challans', currentChallan);
       }
       fetchChallans();
       setShowModal(false);
@@ -82,7 +80,7 @@ const SamplesProvided = () => {
         writeOffRemarks: s.qtyMissing > 0 ? settleReason : s.writeOffRemarks
       }));
   
-      await axios.put(`${API_URL}/${targetSettleId}`, { 
+      await api.put(`/challans/${targetSettleId}`, { 
         status: 'settled',
         settledAt: new Date(),
         samples: updatedSamples,

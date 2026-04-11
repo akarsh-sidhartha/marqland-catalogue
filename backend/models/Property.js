@@ -41,6 +41,17 @@ const contactSchema = new mongoose.Schema({
 });
 
 /**
+ * Day Package sub-document — multiple packages per Day Outing
+ */
+const dayPackageSchema = new mongoose.Schema({
+  name:          { type: String, default: '' },
+  activities:    { type: String, default: '' },
+  purchasePrice: { type: Number, default: 0 },
+  margin:        { type: Number, default: 15 },
+  sellingPrice:  { type: Number, default: 0 },
+}, { _id: true });
+
+/**
  * Property Schema
  * Defines the structure for property listings including pricing for 
  * additional services like DJ, Snacks, and Banquet Hall.
@@ -60,12 +71,19 @@ const propertySchema = new mongoose.Schema({
   doublePrice: { type: Number, default: 0 },
   triplePrice: { type: Number, default: 0 },
   
-  purchasePriceDouble: { type: Number, default: 0 },
-  purchasePriceTriple: { type: Number, default: 0 },
-  marginDouble: { type: Number, default: 15 },
-  marginTriple: { type: Number, default: 15 },
+  singlePrice:          { type: Number, default: 0 },
+  purchasePriceSingle:  { type: Number, default: 0 },
+  marginSingle:         { type: Number, default: 15 },
+  purchasePriceDouble:  { type: Number, default: 0 },
+  marginDouble:         { type: Number, default: 15 },
+  purchasePriceTriple:  { type: Number, default: 0 },
+  marginTriple:         { type: Number, default: 15 },
+  purchasePricePackage: { type: Number, default: 0 },
+  marginPackage:        { type: Number, default: 15 },
   
-  // New fields to handle the missing data
+  dayPackages: [dayPackageSchema],  // multi-package for Day Outing
+
+  // Add-on costs
   djCost: { type: Number, default: 0 },
   licenseFeeDJ: { type: Number, default: 0 },
   cocktailSnacks: { type: Number, default: 0 },

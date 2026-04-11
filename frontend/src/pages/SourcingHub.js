@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl';
+import api from '../api';
 import {
   Search, Plus, Send, Paperclip, Mic, X, Filter,
   Link as LinkIcon, Archive, Trash2, ChevronDown,
@@ -57,8 +56,8 @@ const SourcingHub = () => {
     setLoading(true);
     try {
       const [inqRes, venRes] = await Promise.all([
-        axios.get(`${getBaseUrl()}/inquiries`),
-        axios.get(`${getBaseUrl()}/vendors`)
+        api.get('/inquiries'),
+        api.get('/vendors')
       ]);
       setInquiries(inqRes.data);
       setVendors(venRes.data);
@@ -136,7 +135,7 @@ const SourcingHub = () => {
   const handleCreateInquiry = async () => {
     if (!newInq.clientName || newInq.targetVendors.length === 0) return alert("Fill required fields and select vendors");
     try {
-      await axios.post(`${getBaseUrl()}/inquiries`, newInq);
+      await api.post('/inquiries', newInq);
       setShowInquiryModal(false);
       setNewInq({ clientName: '', quantity: '', deadline: '', internalNotes: '', publicDescription: '', targetVendors: [] });
       fetchInitialData();
@@ -146,7 +145,7 @@ const SourcingHub = () => {
   const handleSendBroadcast = async () => {
     if (!broadcast.message || broadcast.targetVendors.length === 0) return alert("Message and Vendors required");
     try {
-      await axios.post(`${getBaseUrl()}/inquiries/broadcast`, broadcast);
+      await api.post('/inquiries/broadcast', broadcast);
       setShowBroadcastModal(false);
       setBroadcast({ message: '', attachments: [], targetVendors: [] });
       alert("Broadcast sent successfully!");
@@ -155,9 +154,9 @@ const SourcingHub = () => {
   const handleArchive = async (id, currentStatus) => {
     try {
       const newStatus = currentStatus === 'archived' ? 'live' : 'archived';
-      await axios.put(`${getBaseUrl()}/inquiries/${id}`, { status: newStatus });
+      await api.put(`/inquiries/${id}`, { status: newStatus });
       // Refresh list
-      const res = await axios.get(`${getBaseUrl()}/inquiries`);
+      const res = await api.get('/inquiries');
       setInquiries(res.data);
     } catch (err) {
       console.error("Error archiving:", err);
@@ -167,7 +166,7 @@ const SourcingHub = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this inquiry?")) return;
     try {
-      await axios.delete(`${getBaseUrl()}/inquiries/${id}`);
+      await api.delete(`/inquiries/${id}`);
       setInquiries(inquiries.filter(inq => inq._id !== id));
     } catch (err) {
       console.error("Error deleting:", err);

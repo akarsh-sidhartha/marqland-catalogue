@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Printer, ChevronLeft, Upload, GripVertical, Save } from 'lucide-react';
-import { getBaseUrl } from '../baseurl'; // Import the central function
-import axios from 'axios';
+import api from '../api';
 
 const CatalogueBuilder = () => {
   const [clientName, setClientName] = useState('');
@@ -23,7 +22,6 @@ const CatalogueBuilder = () => {
     return `http://${hostname}:5000/api/offsitecatalogues`;
   };
   */
-   const API_URL_PROPERTIES = `${getBaseUrl()}/offsitecatalogues`;
     /**
    * Helper function to format image URLs correctly
    * If it's Base64 or already a full URL, return it as is.
@@ -162,9 +160,8 @@ useEffect(() => {
       const hostname = window.location.hostname || 'localhost';
       const apiUrl = `http://${hostname}:5000/api/catalogues`;
       */
-      const  apiUrl = `${getBaseUrl()}/catalogues`;
       console.log("🚀 Saving Catalogue:", payload);
-      const res = await axios.post(apiUrl, payload);
+      const res = await api.post('/catalogues', payload);
       
       const savedId = res.data?._id || res.data?.id || currentId;
       const finalName = res.data?.name || name;

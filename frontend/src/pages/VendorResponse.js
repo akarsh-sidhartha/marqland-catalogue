@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Mic, Paperclip, Send, CheckCircle, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
-import axios from 'axios';
 
 const VendorResponse = () => {
   const { id } = useParams();
@@ -20,7 +19,8 @@ const VendorResponse = () => {
 
   useEffect(() => {
     // Fetch public details and check if active
-    axios.get(`/api/inquiries/public/${id}`)
+    fetch(`/api/inquiries/public/${id}`)
+      .then(r => r.json())
       .then(res => {
         // If the backend returns that it's archived, we set an error
         if (res.data.status === 'archived') {
@@ -39,7 +39,11 @@ const VendorResponse = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`/api/inquiries/public/${id}/respond`, formData);
+      await fetch(`/api/inquiries/public/${id}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
       setSubmitted(true);
     } catch (err) {
       alert("Error submitting response. Please try again.");

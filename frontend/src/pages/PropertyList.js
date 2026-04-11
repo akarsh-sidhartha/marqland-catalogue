@@ -1,841 +1,620 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl'; // Import the central function
-
-import { 
-  Search, X, Plus, ChevronDown, ChevronRight, MapPin, 
-  Trash2, Edit3, Phone, Mail, User, Building, Globe, Image as ImageIcon,
-  RotateCcw, Save, PlusCircle, MinusCircle, Percent, TrendingUp,
-  Link as LinkIcon, Filter, ExternalLink, Info, CheckCircle2, Circle, Briefcase,
-  Music, Utensils, Home, FileText
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../api';
+import {
+  Plus, Trash2, Pencil, X, Search, RotateCcw,
+  MapPin, Globe, Check, Square, CheckSquare,
+  Moon, Sun, Link2, FileText,
 } from 'lucide-react';
+import usePortalItems from '../hooks/usePortalItems';
 
-const PropertyManager = () => {
+// Simple ₹ input — no spinners, no up/down arrows
+const MoneyInput = ({ label, value, onChange, hint, accent = 'indigo' }) => (
+  <div>
+    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</label>
+    {hint && <div className="text-[9px] text-slate-300 mb-1">{hint}</div>}
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">₹</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={value}
+        onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ''); onChange(v); }}
+        className={`w-full bg-slate-50 border border-slate-200 rounded-lg pl-7 pr-3 py-2 text-sm font-bold outline-none focus:border-${accent}-300 transition-colors`}
+      />
+    </div>
+  </div>
+);
+
+// Cost + Margin → Auto-calculated sell price row
+const OccupancyPricing = ({ label, costKey, marginKey, sellKey, formData, setFormData, accent = 'indigo' }) => {
+  const cost   = formData[costKey]   || '';
+  const margin = formData[marginKey] ?? 15;
+  const sell   = formData[sellKey]   || '';
+
+  const updateCost = (v) => {
+    const newSell = calcSell(v, margin);
+    setFormData({ ...formData, [costKey]: v, [sellKey]: newSell });
+  };
+  const updateMargin = (v) => {
+    const newSell = calcSell(cost, v);
+    setFormData({ ...formData, [marginKey]: v, [sellKey]: newSell });
+  };
+
+  return (
+    <div className={`bg-white border border-${accent}-100 rounded-xl p-3 space-y-2`}>
+      <div className={`text-[10px] font-black text-${accent}-600 uppercase tracking-widest`}>{label}</div>
+      <div className="grid grid-cols-3 gap-2">
+        {/* Cost */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost price</label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={cost}
+              onChange={e => updateCost(e.target.value.replace(/[^0-9]/g, ''))}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-indigo-300 transition-colors" />
+          </div>
+        </div>
+        {/* Margin % */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Margin %</label>
+          <div className="relative">
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={margin}
+              onChange={e => updateMargin(e.target.value.replace(/[^0-9]/g, ''))}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 pr-6 py-1.5 text-sm font-bold outline-none focus:border-indigo-300 transition-colors text-center" />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
+          </div>
+        </div>
+        {/* Sell price — auto-calculated, editable override */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell price</label>
+          <div className={`relative bg-${accent}-50 border border-${accent}-200 rounded-lg px-2 pl-5 py-1.5 flex items-center`}>
+            <span className={`absolute left-2 text-${accent}-400 text-xs font-bold`}>₹</span>
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={sell}
+              onChange={e => setFormData({ ...formData, [sellKey]: e.target.value.replace(/[^0-9]/g, '') })}
+              className={`w-full bg-transparent text-sm font-black text-${accent}-700 outline-none`} />
+          </div>
+          <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Price = ({ value }) => (
+  <span className="font-black text-slate-800 text-xs">
+    {value > 0 ? `₹${Number(value).toLocaleString('en-IN')}` : '—'}
+  </span>
+);
+
+const EMPTY_FORM = {
+  propertyName: '', state: '', place: '', website: '', imageUrl: '',
+  type: 'Night Stay', details: '',
+  // Night Stay
+  purchasePriceSingle: '', marginSingle: 15, singlePrice: '',
+  purchasePriceDouble: '', marginDouble: 15, doublePrice: '',
+  purchasePriceTriple: '', marginTriple: 15, triplePrice: '',
+  djCost: '', licenseFeeDJ: '', cocktailSnacks: '', banquetHall: '',
+  // Day Outing — multi-package
+  dayPackages: [{ name: '', activities: '', purchasePrice: '', margin: 15, sellingPrice: '' }],
+};
+
+// Auto-calculate sell price from cost + margin
+const calcSell = (cost, margin) => {
+  const c = parseFloat(cost);
+  const m = parseFloat(margin);
+  if (!c || c <= 0) return '';
+  return Math.ceil(c * (1 + m / 100)).toString();
+};
+
+const PropertyList = () => {
   const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedRows, setExpandedRows] = useState(new Set());
-  
-    // State for the "Add to Existing" feature
-    const [showCatalogueModal, setShowCatalogueModal] = useState(false);
-    const [savedCatalogues, setSavedCatalogues] = useState([]);
-    const [isUpdatingCatalogue, setIsUpdatingCatalogue] = useState(false);
-
-  // Selection State
-  const [selectedProperties, setSelectedProperties] = useState(new Set());
-  
-  // Filter States
-  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [showModal, setShowModal]   = useState(false);
+  const [isEditing, setIsEditing]   = useState(false);
+  const [currentId, setCurrentId]   = useState(null);
+  const [formData, setFormData]     = useState(EMPTY_FORM);
   const [stateFilter, setStateFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
+  const [typeFilter, setTypeFilter]   = useState('');
+  const [searchTerm, setSearchTerm]   = useState('');
+  const [selected, setSelected]       = useState([]);
 
-  // UI States
-  const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentId, setCurrentId] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
+  const { addToPortal, PortalModal } = usePortalItems('offsite');
+  const navigate = useNavigate();
 
-    /**
-   * API ENDPOINT CONFIGURATION
-   * Dynamically detects the host IP to ensure other laptops in the 
-   * office network can communicate with the backend server.
-   */
-  /*
-  const getBaseUrl = () => {
-    const { hostname } = window.location;
-    // If we are on localhost, use localhost. 
-    // Otherwise, use the IP address currently in the browser's address bar.
-    const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname;
-    return `http://${host}:5000/api`;
-  };
-*/
-
-  const API_URL_PROPERTIES = `${getBaseUrl()}/properties`;
-  const API_URL_OFFSITE = `${getBaseUrl()}/offsitecatalogues`;
-
-    // Determine the API Base URL based on the current environment
-    //getApiUrlForProperties and getApiUrlForOffsiteCatalogue to be deleted.
-  /* const getApiUrlForProperties = () => {
-    const hostname = window.location.hostname;
-    // If running in a cloud/preview environment, we might need a relative path or specific proxy
-    // For local development, it defaults to localhost:5000
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `http://localhost:5000/api/properties`;
-    }
-    // Fallback for custom local network IPs or production
-    return `http://${hostname}:5000/api/properties`;
+  // ── Send selected properties to OffsiteBuilder for PDF catalogue ─────────
+  const openInOffsiteBuilder = () => {
+    localStorage.setItem('offsite_selection', JSON.stringify(selected));
+    navigate('/offsite-builder');
   };
 
-  const getApiUrlForOffsiteCatalogue = () => {
-    // If running in a cloud/preview environment, we might need a relative path or specific proxy
-    // For local development, it defaults to localhost:5000
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `http://localhost:5000/api/offsitecatalogues`;
-    }
-    // Fallback for custom local network IPs or production
-    return `http://${hostname}:5000/api/offsitecatalogues`;
-  }
-*/
-  // This is the working API, you can switch back to this API. 
-  //const API_BASE_URL = window.location.hostname === 'localhost' ? `http://localhost:5000/api/properties` : `/api/properties`;
-
-  const calculateSelling = (purchase, margin) => {
-    const p = parseFloat(purchase) || 0;
-    const m = parseFloat(margin) || 0;
-    return Math.round(p * (1 + m / 100));
-  };
-
-  const initialFormState = {
-    propertyName: '',
-    state: '',
-    place: '',
-    website: '',
-    imageUrl: '',
-    type: 'Night Stay',
-    totalInventory: '',
-    purchasePriceDouble: '',
-    marginDouble: 15,
-    purchasePriceTriple: '',
-    marginTriple: 15,
-    cocktailSnacks: '',
-    djCost: '',
-    banquetHall: '',
-    licenseFeeDJ: '',
-    details: '',
-    contacts: [{ name: '', phone: '', email: '' }]
-  };
-
-  const [formData, setFormData] = useState(initialFormState);
+  useEffect(() => { fetchProperties(); }, []);
 
   const fetchProperties = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      //const res = await axios.get(API_BASE_URL);
-      const res = await axios.get(API_URL_PROPERTIES);
-      const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-      const mappedData = data.map(p => ({
-        ...p,
-        purchasePriceDouble: p.purchasePriceDouble || Math.round(p.doublePrice / 1.15) || 0,
-        marginDouble: p.marginDouble || 15,
-        purchasePriceTriple: p.purchasePriceTriple || Math.round(p.triplePrice / 1.15) || 0,
-        marginTriple: p.marginTriple || 15
-      }));
-      setProperties(mappedData);
+      const res = await api.get('/properties');
+      setProperties(res.data || []);
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error('Failed to fetch:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchProperties(); }, []);
-
-  const resetFilters = () => {
-    setSearchTerm('');
-    setStateFilter('');
-    setCategoryFilter('All');
-    setMinPrice('');
-    setMaxPrice('');
-  };
-
-  const toggleRow = (id) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(id)) newExpanded.delete(id);
-    else newExpanded.add(id);
-    setExpandedRows(newExpanded);
-  };
-
-  const toggleSelection = (id, e) => {
-    e.stopPropagation();
-    const newSelection = new Set(selectedProperties);
-    if (newSelection.has(id)) newSelection.delete(id);
-    else newSelection.add(id);
-    setSelectedProperties(newSelection);
-  };
-
-  const selectAllFiltered = () => {
-    const allIds = filteredProperties.map(p => p._id);
-    setSelectedProperties(new Set(allIds));
-  };
-
-  const deselectAll = () => {
-    setSelectedProperties(new Set());
-  };
-
-  const handleAddToCatalogue = () => {
-    const selectedData = properties.filter(p => selectedProperties.has(p._id)).map(p => {
-      // Base data common to both types
-      const commonData = {
-        propertyName: p.propertyName,
-        state: p.state,
-        place: p.place,
-        website: p.website,
-        image: p.imageUrl,
-        details: p.details,
-        type: p.type // Useful for the builder to know the category
-      };
-
-      if (p.type === 'Night Stay') {
-        return {
-          ...commonData,
-          // Calculate selling prices on the fly to ensure accuracy
-          doublePrice: calculateSelling(p.purchasePriceDouble, p.marginDouble),
-          triplePrice: calculateSelling(p.purchasePriceTriple, p.marginTriple),
-          djCost: Number(p.djCost) || 0,
-          licenseFeeDJ: Number(p.licenseFeeDJ) || 0,
-          cocktailSnacks: Number(p.cocktailSnacks) || 0,
-          banquetHall: Number(p.banquetHall) || 0
-        };
-      } else {
-        // Day Outing Mapping
-        return {
-          ...commonData,
-          // For Day Outing, 'package price' usually maps to the doublePrice field
-          packagePrice: calculateSelling(p.purchasePriceDouble, p.marginDouble)
-        };
-      }
-    });
-
-    localStorage.setItem('offsite_selection', JSON.stringify(selectedData));
-    window.open('/offsite-builder', '_blank');
-  };
-  
-    const openAddToExistingModal = async () => {
-    setShowCatalogueModal(true);
-    //const baseUrl = `http://${hostname}:5000/api/offsitecatalogues`;
+  const handleSave = async () => {
+    if (!formData.propertyName.trim()) return alert('Property name is required.');
     try {
-      // below 2 lines are working code. 
-      //const hostname = window.location.hostname || 'localhost';
-      //const res = await axios.get(`http://${hostname}:5000/api/offsitecatalogues`);
-      const res = await axios.get(API_URL_OFFSITE);
-
-      console.log(" openAddToExistingModal res = ",res);
-      setSavedCatalogues(Array.isArray(res.data.data) ? res.data.data : []);
-      console.log("savedCatalogues value = ",savedCatalogues);
-    } catch (err) {
-      console.error("Failed to fetch catalogues", err);
-      setSavedCatalogues([]);
-    } 
-  };
-
-    const appendToCatalogue = async (targetCat) => {
-    if (!targetCat || isUpdatingCatalogue) return;
-    setIsUpdatingCatalogue(true);
-    try {
-      
-      
-      // akarsh changes
-       const selectedData = properties.filter(p => selectedProperties.has(p._id)).map(p => {
-      // Base data common to both types
-      const commonData = {
-        name: p.propertyName,
-        sku: p.place + " "+ p.state,
-        website: p.website,
-        image: p.imageUrl,
-        desc: p.details,
-        type: p.type // Useful for the builder to know the category
+      const payload = {
+        ...formData,
+        purchasePriceSingle:  Number(formData.purchasePriceSingle)  || 0,
+        marginSingle:         Number(formData.marginSingle)         || 15,
+        singlePrice:          Number(formData.singlePrice)          || 0,
+        purchasePriceDouble:  Number(formData.purchasePriceDouble)  || 0,
+        marginDouble:         Number(formData.marginDouble)         || 15,
+        doublePrice:          Number(formData.doublePrice)          || 0,
+        purchasePriceTriple:  Number(formData.purchasePriceTriple)  || 0,
+        marginTriple:         Number(formData.marginTriple)         || 15,
+        triplePrice:          Number(formData.triplePrice)          || 0,
+        djCost:               Number(formData.djCost)               || 0,
+        licenseFeeDJ:         Number(formData.licenseFeeDJ)         || 0,
+        cocktailSnacks:       Number(formData.cocktailSnacks)       || 0,
+        banquetHall:          Number(formData.banquetHall)          || 0,
+        dayPackages: (formData.dayPackages || [])
+          .filter(pkg => pkg.name || pkg.purchasePrice)
+          .map(pkg => ({
+            name:          pkg.name        || '',
+            activities:    pkg.activities  || '',
+            purchasePrice: Number(pkg.purchasePrice) || 0,
+            margin:        Number(pkg.margin)        || 15,
+            sellingPrice:  Number(pkg.sellingPrice)  || 0,
+          })),
       };
-
-      if (p.type === 'Night Stay') {
-        return {
-          ...commonData,
-          // Calculate selling prices on the fly to ensure accuracy
-          price:calculateSelling(p.purchasePriceDouble, p.marginDouble),
-          doubleOccupancy: calculateSelling(p.purchasePriceDouble, p.marginDouble),
-          tripleOccupancy: calculateSelling(p.purchasePriceTriple, p.marginTriple),
-          djCost: Number(p.djCost) || 0,
-          licenseFeeDJ: Number(p.licenseFeeDJ) || 0,
-          cocktailSnacks: Number(p.cocktailSnacks) || 0,
-          banquetHall: Number(p.banquetHall) || 0
-        };
-      } else {
-        // Day Outing Mapping
-        return {
-          ...commonData,
-          // For Day Outing, 'package price' usually maps to the doublePrice field
-          packagePrice: calculateSelling(p.purchasePriceDouble, p.marginDouble)
-        };
-      }
-    });
-    console.log(" inside appendToCatalogue and selectedData values are = ",selectedData)
-      // akarsh changes end 
-      const updatedPayload = {
-         id: targetCat._id,
-         title: targetCat.title,
-         description: targetCat.description,
-         items: [...(targetCat.items || []), ...selectedData]
-      };
-      // updatedPayload.name = targetCat.title;
-      // updatedPayload.subtitle = targetCat.description;
-      // below 2 lines are working APIS. 
-      //const hostname = window.location.hostname || 'localhost';
-      //await axios.post(`http://${hostname}:5000/api/offsitecatalogues`, updatedPayload);
-      await axios.post(API_URL_OFFSITE,updatedPayload);
-      setSavedCatalogues([]);
-      setShowCatalogueModal(false);
-    } catch (err) {
-      console.error("Error updating catalogue: ", err);
-    } finally {
-      setIsUpdatingCatalogue(false);
-    }
-  };
-
-    const handleSave = async () => {
-    // Calculate final selling prices before saving
-    const sellingDouble = calculateSelling(formData.purchasePriceDouble, formData.marginDouble);
-    const sellingTriple = calculateSelling(formData.purchasePriceTriple, formData.marginTriple);
-
-    // Ensure we send numbers to the backend, even if inputs were strings
-    const payload = {
-      ...formData,
-      doublePrice: sellingDouble,
-      triplePrice: formData.type === 'Night Stay' ? sellingTriple : 0,
-      // Explicitly ensuring these are numbers
-      cocktailSnacks: Number(formData.cocktailSnacks) || 0,
-      djCost: Number(formData.djCost) || 0,
-      banquetHall: Number(formData.banquetHall) || 0,
-      licenseFeeDJ: Number(formData.licenseFeeDJ) || 0,
-      purchasePriceDouble: Number(formData.purchasePriceDouble) || 0,
-      purchasePriceTriple: Number(formData.purchasePriceTriple) || 0,
-      marginDouble: Number(formData.marginDouble) || 0,
-      marginTriple: Number(formData.marginTriple) || 0,
-      totalInventory: Number(formData.totalInventory) || 0
-    };
-
-    try {
       if (isEditing) {
-        //await axios.put(`${API_BASE_URL}/${currentId}`, payload);
-        await axios.put(API_URL_PROPERTIES+`/${currentId}`, payload);
+        await api.put(`/properties/${currentId}`, payload);
       } else {
-        //await axios.post(API_BASE_URL, payload);
-        await axios.post(API_URL_PROPERTIES, payload);
+        await api.post('/properties', payload);
       }
       setShowModal(false);
-      fetchProperties(); // Refresh list
+      resetForm();
+      fetchProperties();
     } catch (err) {
-      console.error("Failed to save property:", err);
+      console.error('Save error:', err);
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this property?')) return;
     try {
-      //await axios.delete(`${API_BASE_URL}/${deleteId}`);
-      await axios.delete(API_URL_PROPERTIES+`/${deleteId}`);
-      setProperties(properties.filter(p => p._id !== deleteId));
-      setDeleteId(null);
+      await api.delete(`/properties/${id}`);
+      fetchProperties();
+      setSelected(prev => prev.filter(p => p._id !== id));
     } catch (err) {
-      console.error("Delete failed");
+      console.error('Delete error:', err);
     }
   };
 
-  const addContact = () => {
+  const handleEdit = (p) => {
+    setIsEditing(true);
+    setCurrentId(p._id);
     setFormData({
-      ...formData,
-      contacts: [...formData.contacts, { name: '', phone: '', email: '' }]
+      propertyName:         p.propertyName         || '',
+      state:                p.state                || '',
+      place:                p.place                || '',
+      website:              p.website              || '',
+      imageUrl:             p.imageUrl             || '',
+      type:                 p.type                 || 'Night Stay',
+      details:              p.details              || '',
+      purchasePriceSingle:  p.purchasePriceSingle  || '',
+      marginSingle:         p.marginSingle         ?? 15,
+      singlePrice:          p.singlePrice          || '',
+      purchasePriceDouble:  p.purchasePriceDouble  || '',
+      marginDouble:         p.marginDouble         ?? 15,
+      doublePrice:          p.doublePrice          || '',
+      purchasePriceTriple:  p.purchasePriceTriple  || '',
+      marginTriple:         p.marginTriple         ?? 15,
+      triplePrice:          p.triplePrice          || '',
+      djCost:               p.djCost               || '',
+      licenseFeeDJ:         p.licenseFeeDJ         || '',
+      cocktailSnacks:       p.cocktailSnacks        || '',
+      banquetHall:          p.banquetHall           || '',
+      dayPackages: (p.dayPackages && p.dayPackages.length > 0)
+        ? p.dayPackages.map(pkg => ({
+            name:          pkg.name          || '',
+            activities:    pkg.activities    || '',
+            purchasePrice: String(pkg.purchasePrice || ''),
+            margin:        pkg.margin        ?? 15,
+            sellingPrice:  String(pkg.sellingPrice  || ''),
+          }))
+        : [{ name: '', activities: '', purchasePrice: '', margin: 15, sellingPrice: '' }],
     });
+    setShowModal(true);
   };
 
-  const removeContact = (index) => {
-    const newContacts = [...formData.contacts];
-    newContacts.splice(index, 1);
-    setFormData({ ...formData, contacts: newContacts });
+  const resetForm = () => { setFormData(EMPTY_FORM); setIsEditing(false); setCurrentId(null); };
+
+  const isSelected = (p) => selected.some(s => s._id === p._id);
+  const toggleSelect = (p) => setSelected(
+    isSelected(p) ? selected.filter(s => s._id !== p._id) : [...selected, p]
+  );
+
+  const states = [...new Set(properties.map(p => p.state).filter(Boolean))].sort();
+  const filtered = properties.filter(p => {
+    const s = searchTerm.toLowerCase();
+    return (
+      (!s || p.propertyName?.toLowerCase().includes(s) || p.place?.toLowerCase().includes(s) || p.state?.toLowerCase().includes(s)) &&
+      (!stateFilter || p.state === stateFilter) &&
+      (!typeFilter  || p.type  === typeFilter)
+    );
+  });
+
+  const allSelected = filtered.length > 0 && filtered.every(p => isSelected(p));
+  const toggleAll = () => {
+    if (allSelected) {
+      const ids = new Set(filtered.map(p => p._id));
+      setSelected(selected.filter(p => !ids.has(p._id)));
+    } else {
+      const ids = new Set(selected.map(p => p._id));
+      setSelected([...selected, ...filtered.filter(p => !ids.has(p._id))]);
+    }
   };
-
-  const handleContactChange = (index, field, value) => {
-    const newContacts = [...formData.contacts];
-    newContacts[index][field] = value;
-    setFormData({ ...formData, contacts: newContacts });
-  };
-
-  const uniqueStates = useMemo(() => {
-    const states = properties.map(p => p.state).filter(Boolean);
-    return [...new Set(states)].sort();
-  }, [properties]);
-
-  const filteredProperties = useMemo(() => {
-    return properties.filter(p => {
-      const sellingP = calculateSelling(p.purchasePriceDouble, p.marginDouble);
-      const matchesSearch = (p.propertyName || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesState = !stateFilter || p.state === stateFilter;
-      const matchesCategory = categoryFilter === 'All' || p.type === categoryFilter;
-      const matchesMin = !minPrice || sellingP >= parseFloat(minPrice);
-      const matchesMax = !maxPrice || sellingP <= parseFloat(maxPrice);
-      return matchesSearch && matchesState && matchesCategory && matchesMin && matchesMax;
-    });
-  }, [properties, searchTerm, stateFilter, categoryFilter, minPrice, maxPrice]);
 
   return (
-    <div className="p-6 bg-[#F8FAFC] min-h-screen font-sans text-slate-900 pb-32">
-      
-      {/* Header & Main Search */}
-      <div className="max-w-7xl mx-auto mb-4 flex flex-col md:flex-row gap-4 items-center">
-          <div className="relative flex-1 w-full">
-             <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-             <input 
-               className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl border border-slate-200 outline-none focus:ring-4 ring-indigo-50 transition-all font-bold shadow-sm" 
-               placeholder="Search properties by name..."
-               value={searchTerm}
-               onChange={e => setSearchTerm(e.target.value)}
-             />
+    <div className="max-w-7xl mx-auto p-4 pb-28 min-h-screen bg-gray-50/50">
+
+      {/* Top bar */}
+      <div className="sticky top-0 z-40 bg-gray-50/50 pb-2">
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 border-r pr-3 border-gray-100">
+            <h1 className="text-xs font-black text-orange-500 uppercase tracking-tighter">Properties</h1>
+            <button onClick={() => { resetForm(); setShowModal(true); }}
+              className="bg-orange-500 hover:bg-orange-600 text-white w-8 h-8 rounded-lg flex items-center justify-center transition">
+              <Plus size={18} />
+            </button>
           </div>
-          <button onClick={() => { setIsEditing(false); setFormData(initialFormState); setShowModal(true); }} className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-900 transition-all shadow-lg shadow-indigo-100">
-           <Plus size={20} /> Add Property
-         </button>
+          <div className="relative">
+            <input type="text" placeholder="Search..." value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-8 pr-8 py-2 rounded-lg border border-gray-100 focus:border-orange-300 outline-none text-xs bg-gray-50 w-44" />
+            <Search size={12} className="absolute left-2.5 top-2.5 text-gray-300" />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-2 top-2.5 text-gray-300 hover:text-orange-500"><X size={12} /></button>
+            )}
+          </div>
+          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
+            className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none">
+            <option value="">All States</option>
+            {states.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+            className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none">
+            <option value="">All Types</option>
+            <option value="Night Stay">Night Stay</option>
+            <option value="Day Outing">Day Outing</option>
+          </select>
+          <button onClick={() => { setSearchTerm(''); setStateFilter(''); setTypeFilter(''); }}
+            className="p-2 text-gray-300 hover:text-orange-500 transition-colors" title="Reset filters">
+            <RotateCcw size={14} />
+          </button>
+          <button onClick={toggleAll}
+            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all ${allSelected ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-orange-300 hover:text-orange-500'}`}>
+            {allSelected ? <CheckSquare size={12} /> : <Square size={12} />}
+            {allSelected ? 'Deselect all' : 'Select all'}
+          </button>
+        </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="max-w-7xl mx-auto mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center">
-        <div className="flex items-center gap-2 text-slate-400 px-2 border-r pr-4">
-          <Filter size={16} />
-          <span className="text-[10px] font-black uppercase tracking-widest">Filters</span>
-        </div>
+      {/* Loading */}
+      {loading && <div className="text-center py-20 text-slate-400 font-bold uppercase tracking-widest text-xs">Loading...</div>}
 
-        <select 
-          className="bg-slate-50 px-4 py-2 rounded-xl outline-none font-bold text-[11px] uppercase border border-slate-100"
-          value={stateFilter}
-          onChange={e => setStateFilter(e.target.value)}
-        >
-          <option value="">All States</option>
-          {uniqueStates.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-
-        <select 
-          className="bg-slate-50 px-4 py-2 rounded-xl outline-none font-bold text-[11px] uppercase border border-slate-100"
-          value={categoryFilter}
-          onChange={e => setCategoryFilter(e.target.value)}
-        >
-          <option>All Categories</option>
-          <option>Night Stay</option>
-          <option>Day Outing</option>
-        </select>
-
-        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-xl border border-slate-100">
-          <span className="text-[10px] font-black text-slate-400 uppercase">Min ₹</span>
-          <input type="number" className="w-20 bg-transparent outline-none text-xs font-bold" value={minPrice} onChange={e => setMinPrice(e.target.value)} />
-        </div>
-
-        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-xl border border-slate-100">
-          <span className="text-[10px] font-black text-slate-400 uppercase">Max ₹</span>
-          <input type="number" className="w-20 bg-transparent outline-none text-xs font-bold" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} />
-        </div>
-
-        <button onClick={resetFilters} className="ml-auto flex items-center gap-2 text-slate-400 hover:text-indigo-600 text-[10px] font-black uppercase tracking-widest transition-colors">
-          <RotateCcw size={14} /> Reset
-        </button>
-      </div>
-
-      {/* Results Table */}
-      <div className="max-w-7xl mx-auto bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-              <th className="p-6 w-12 text-center">
-                <button 
-                  onClick={selectedProperties.size > 0 ? deselectAll : selectAllFiltered}
-                  className="hover:text-indigo-600 transition-colors"
-                >
-                    {selectedProperties.size > 0 ? <CheckCircle2 size={20} className="text-indigo-600 mx-auto" /> : <Circle size={20} className="mx-auto" />}
-                </button>
-              </th>
-              <th className="p-6">Property</th>
-              <th className="p-6">Type</th>
-              <th className="p-6">Purchase (Base)</th>
-              <th className="p-6">Margin %</th>
-              <th className="p-6 text-indigo-600">Selling Price</th>
-              <th className="p-6 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProperties.map(p => {
-              const isNight = p.type === 'Night Stay';
-              const isExpanded = expandedRows.has(p._id);
-              const isSelected = selectedProperties.has(p._id);
-              return (
-                <React.Fragment key={p._id}>
-                  <tr 
-                    className={`group border-b border-slate-50 hover:bg-indigo-50/20 transition-all cursor-pointer ${isExpanded ? 'bg-indigo-50/30' : ''} ${isSelected ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`}
-                    onClick={() => toggleRow(p._id)}
-                  >
-                    <td className="p-6 text-center" onClick={(e) => toggleSelection(p._id, e)}>
-                       {isSelected ? 
-                        <CheckCircle2 size={22} className="text-indigo-600 mx-auto animate-in zoom-in-50 duration-200" /> : 
-                        <div className="w-5 h-5 rounded-full border-2 border-slate-200 mx-auto group-hover:border-indigo-300 transition-colors" />
-                       }
-                    </td>
-                    <td className="p-6">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
-                          {p.imageUrl ? <img src={p.imageUrl} className="w-full h-full object-cover" alt="" /> : <ImageIcon className="w-full h-full p-3 text-slate-300"/>}
-                        </div>
-                        <div>
-                          <div className="font-black text-slate-900 uppercase text-sm flex items-center gap-2">
-                            {p.propertyName}
-                            {p.website && <a href={p.website} onClick={e => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-indigo-500"><ExternalLink size={12}/></a>}
-                          </div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase">{p.place}, {p.state}</div>
-                        </div>
+      {/* Grid */}
+      {!loading && (
+        filtered.length === 0
+          ? <div className="text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">No properties found</div>
+          : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-2">
+              {filtered.map(p => {
+                const sel = isSelected(p);
+                const isNight = p.type === 'Night Stay';
+                return (
+                  <div key={p._id} className={`bg-white rounded-xl overflow-hidden border shadow-sm flex flex-col transition-all duration-200 ${sel ? 'ring-2 ring-orange-400 border-orange-200' : 'border-gray-100'}`}>
+                    {/* Image */}
+                    <div className="relative h-40 bg-slate-100 overflow-hidden">
+                      {p.imageUrl
+                        ? <img src={p.imageUrl} alt={p.propertyName} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center text-slate-200"><MapPin size={32} /></div>
+                      }
+                      <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-black uppercase ${isNight ? 'bg-indigo-600 text-white' : 'bg-amber-500 text-white'}`}>
+                        {isNight ? <Moon size={9} /> : <Sun size={9} />} {p.type}
                       </div>
-                    </td>
-                    <td className="p-6">
-                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${isNight ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
-                        {p.type}
-                      </span>
-                    </td>
-                    <td className="p-6">
-                      <div className="space-y-1 text-xs font-black text-slate-500">
-                        <div className="flex gap-2">
-                          <span className="text-[9px] text-slate-300 w-4">{isNight ? 'D' : 'P'}</span>
-                          <span>₹{p.purchasePriceDouble}</span>
-                        </div>
-                        {isNight && (
-                          <div className="flex gap-2">
-                            <span className="text-[9px] text-slate-300 w-4">T</span>
-                            <span>₹{p.purchasePriceTriple}</span>
-                          </div>
-                        )}
+                      <div onClick={() => toggleSelect(p)}
+                        className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${sel ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white/80 border-gray-300 text-transparent'}`}>
+                        <Check size={13} strokeWidth={3} />
                       </div>
-                    </td>
-                    <td className="p-6">
-                      <div className="space-y-2 text-[11px] font-black text-slate-700">
-                        <div className="bg-slate-100 w-fit px-2 py-1 rounded-lg">{p.marginDouble}%</div>
-                        {isNight && <div className="bg-slate-100 w-fit px-2 py-1 rounded-lg">{p.marginTriple}%</div>}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-3 flex-1 flex flex-col">
+                      <div className="font-black text-sm text-slate-800 leading-tight mb-1">{p.propertyName}</div>
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-2">
+                        <MapPin size={10} className="text-orange-400" />
+                        {[p.place, p.state].filter(Boolean).join(', ') || 'Location TBD'}
                       </div>
-                    </td>
-                    <td className="p-6">
-                      <div className="space-y-2">
-                        <div className="text-sm font-black text-indigo-600">₹{calculateSelling(p.purchasePriceDouble, p.marginDouble)}</div>
-                        {isNight && <div className="text-sm font-black text-indigo-600">₹{calculateSelling(p.purchasePriceTriple, p.marginTriple)}</div>}
-                      </div>
-                    </td>
-                    <td className="p-6 text-right">
-                      <div className="flex justify-end items-center gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); setCurrentId(p._id); setFormData({...p}); setIsEditing(true); setShowModal(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
-                          <Edit3 size={18}/>
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); setDeleteId(p._id); }} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                          <Trash2 size={18}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  
-                  {isExpanded && (
-                    <tr className="bg-indigo-50/30 border-b border-slate-100">
-                      <td colSpan="7" className="p-8">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                          <div className="space-y-4">
-                            <h4 className="text-[10px] font-black uppercase text-indigo-500 tracking-widest flex items-center gap-2"><Info size={14}/> General Info</h4>
-                            <div className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm space-y-2">
-                              {isNight && <p className="text-xs font-bold text-slate-500 uppercase">Inventory: <span className="text-slate-900">{p.totalInventory || 'N/A'}</span></p>}
-                              <p className="text-xs font-medium text-slate-600">{p.details || 'No additional details provided for this property.'}</p>
-                            </div>
-                            
-                            {isNight && (
-                               <div className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm space-y-2">
-                                  <h5 className="text-[9px] font-black uppercase text-slate-400 mb-2">Event Add-ons</h5>
-                                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-600">
-                                     <div className="flex items-center gap-1"><Utensils size={10}/> Snacks: ₹{p.cocktailSnacks || 0}</div>
-                                     <div className="flex items-center gap-1"><Music size={10}/> DJ: ₹{p.djCost || 0}</div>
-                                     <div className="flex items-center gap-1"><Home size={10}/> Hall: ₹{p.banquetHall || 0}</div>
-                                     <div className="flex items-center gap-1"><FileText size={10}/> License: ₹{p.licenseFeeDJ || 0}</div>
-                                  </div>
-                               </div>
+                      {p.details && <p className="text-[10px] text-slate-400 line-clamp-2 mb-2">{p.details}</p>}
+                      <div className="mt-auto">
+                        {isNight ? (
+                          <div className="grid grid-cols-3 gap-1.5 mb-2">
+                            {p.singlePrice > 0 && (
+                              <div className="bg-slate-50 rounded-lg p-1.5 text-center">
+                                <div className="text-[8px] font-black text-slate-400 uppercase">Single</div>
+                                <Price value={p.singlePrice} />
+                              </div>
+                            )}
+                            {p.doublePrice > 0 && (
+                              <div className="bg-slate-50 rounded-lg p-1.5 text-center">
+                                <div className="text-[8px] font-black text-slate-400 uppercase">Double</div>
+                                <Price value={p.doublePrice} />
+                              </div>
+                            )}
+                            {p.triplePrice > 0 && (
+                              <div className="bg-slate-50 rounded-lg p-1.5 text-center">
+                                <div className="text-[8px] font-black text-slate-400 uppercase">Triple</div>
+                                <Price value={p.triplePrice} />
+                              </div>
                             )}
                           </div>
-                          <div className="md:col-span-2 space-y-4">
-                            <h4 className="text-[10px] font-black uppercase text-indigo-500 tracking-widest flex items-center gap-2"><User size={14}/> Contact Details</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              {p.contacts && p.contacts.map((c, i) => (
-                                <div key={i} className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
-                                  <div className="font-black text-xs uppercase text-slate-900 mb-2">{c.name || 'Unnamed Contact'}</div>
-                                  <div className="flex items-center gap-4 text-[11px] font-bold text-slate-500">
-                                    <span className="flex items-center gap-1"><Phone size={12}/> {c.phone}</span>
-                                    <span className="flex items-center gap-1"><Mail size={12}/> {c.email}</span>
-                                  </div>
+                        ) : (
+                          (p.dayPackages && p.dayPackages.length > 0)
+                          ? <div className="flex flex-col gap-1 mb-2">
+                              {p.dayPackages.slice(0, 3).map((pkg, i) => (
+                                <div key={i} className="bg-amber-50 border border-amber-100 rounded-lg p-1.5 flex items-center justify-between gap-1">
+                                  <span className="text-[9px] font-bold text-amber-700 truncate flex-1">{pkg.name || `Package ${i + 1}`}</span>
+                                  <span className="text-[10px] font-black text-slate-800 shrink-0">
+                                    {pkg.sellingPrice > 0 ? `₹${Number(pkg.sellingPrice).toLocaleString('en-IN')}` : '—'}
+                                  </span>
                                 </div>
                               ))}
+                              {p.dayPackages.length > 3 && (
+                                <div className="text-[9px] text-slate-400 text-center font-bold">+{p.dayPackages.length - 3} more packages</div>
+                              )}
                             </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Floating Selection Bar */}
-      {selectedProperties.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[70]">
-          <div className="bg-slate-900 text-white p-4 rounded-3xl shadow-2xl flex items-center justify-between border border-slate-700 animate-in slide-in-from-bottom-10">
-            <div className="flex items-center gap-4 pl-4">
-              <div className="bg-indigo-600 w-10 h-10 rounded-2xl flex items-center justify-center font-black">
-                {selectedProperties.size}
-              </div>
-              <div>
-                <p className="text-sm font-black uppercase tracking-widest">Properties Selected</p>
-                <button 
-                  onClick={deselectAll}
-                  className="text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-tighter"
-                >
-                  Deselect all
-                </button>
-              </div>
-            </div>
-            <button 
-              onClick={openAddToExistingModal} className="bg-white text-slate-900 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-lg"
-            >
-              <Briefcase size={18} />
-              Add to Existing
-            </button>
-            <button 
-              onClick={handleAddToCatalogue} className="bg-white text-slate-900 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-lg"
-            >
-              <Briefcase size={18} />
-              Add to Catalogue
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ADD TO EXISTING MODAL */}
-      {showCatalogueModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up">
-            <div className="p-8 border-b border-gray-50 flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">Select Catalogue</h2>
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Appending {selectedProperties.size} items</p>
-              </div>
-              <button onClick={() => setShowCatalogueModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X size={20} className="text-gray-400" />
-              </button>
-            </div>
-            <div className="max-h-[400px] overflow-y-auto p-4 space-y-2">
-              {!savedCatalogues || savedCatalogues.length === 0 ? (
-                <div className="text-center py-10"><p className="text-gray-400 text-sm italic">No saved catalogues found.</p></div>
-              ) : (
-                savedCatalogues.map(cat => (
-                  <button key={cat._id} disabled={isUpdatingCatalogue} onClick={() => appendToCatalogue(cat)} className="w-full text-left p-5 rounded-3xl hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-all flex justify-between items-center group disabled:opacity-50">
-                    <div>
-                      <h4 className="font-black text-gray-800 uppercase group-hover:text-indigo-600 transition-colors">{cat.title}</h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase">{(cat.items || []).length} current items</p>
-                    </div>
-                    <div className="bg-gray-50 p-2 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-all"><Plus size={18} /></div>
-                  </button>
-                ))
-              )}
-            </div>
-            <div className="p-4 bg-gray-50"><button onClick={() => setShowCatalogueModal(false)} className="w-full py-4 text-xs font-black uppercase text-gray-400 tracking-widest">Cancel</button></div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal for Add/Edit */}
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[80] overflow-y-auto">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-5xl w-full shadow-2xl my-8">
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white">
-                   {isEditing ? <Edit3 size={24}/> : <Plus size={24}/>}
-                 </div>
-                 <h2 className="text-2xl font-black uppercase tracking-tight">{isEditing ? 'Edit Property' : 'Add New Property'}</h2>
-              </div>
-              <button onClick={() => setShowModal(false)} className="p-3 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={24}/></button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              {/* Left Column: General Info & Event Add-ons */}
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Property Identity</label>
-                      <input placeholder="Hotel Name / Resort Name" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm" value={formData.propertyName} onChange={e => setFormData({...formData, propertyName: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">State</label>
-                      <input placeholder="e.g. Goa" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Place / City</label>
-                      <input placeholder="e.g. Vagator" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Category</label>
-                    <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                      <option>Night Stay</option>
-                      <option>Day Outing</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-black uppercase mb-2 block tracking-widest ${formData.type === 'Night Stay' ? 'text-slate-400' : 'text-slate-200'}`}>Inventory</label>
-                    <input 
-                        type="number" 
-                        disabled={formData.type !== 'Night Stay'}
-                        placeholder={formData.type === 'Night Stay' ? "Total Rooms/Pax" : "Disabled for Day Outing"}
-                        className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed" 
-                        value={formData.totalInventory} 
-                        onChange={e => setFormData({...formData, totalInventory: e.target.value})} 
-                    />
-                  </div>
-                </div>
-
-                {/* Event Fields (Only for Night Stay) */}
-                <div className={`p-6 rounded-[2rem] border transition-all ${formData.type === 'Night Stay' ? 'bg-amber-50/30 border-amber-100 opacity-100' : 'bg-slate-50 border-slate-100 opacity-40 grayscale'}`}>
-                    <label className="text-[10px] font-black uppercase text-amber-600 mb-4 block tracking-widest">Event Support (Night Stay Only)</label>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Cocktail Snacks (2+2)</label>
-                            <input 
-                                type="number" 
-                                disabled={formData.type !== 'Night Stay'}
-                                className="w-full p-3 bg-white rounded-xl border border-amber-100 outline-none font-bold text-sm" 
-                                value={formData.cocktailSnacks} 
-                                onChange={e => setFormData({...formData, cocktailSnacks: e.target.value})} 
-                            />
-                        </div>
-                        <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">DJ Cost</label>
-                            <input 
-                                type="number" 
-                                disabled={formData.type !== 'Night Stay'}
-                                className="w-full p-3 bg-white rounded-xl border border-amber-100 outline-none font-bold text-sm" 
-                                value={formData.djCost} 
-                                onChange={e => setFormData({...formData, djCost: e.target.value})} 
-                            />
-                        </div>
-                        <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Banquet Hall</label>
-                            <input 
-                                type="number" 
-                                disabled={formData.type !== 'Night Stay'}
-                                className="w-full p-3 bg-white rounded-xl border border-amber-100 outline-none font-bold text-sm" 
-                                value={formData.banquetHall} 
-                                onChange={e => setFormData({...formData, banquetHall: e.target.value})} 
-                            />
-                        </div>
-                        <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">DJ License Fee</label>
-                            <input 
-                                type="number" 
-                                disabled={formData.type !== 'Night Stay'}
-                                className="w-full p-3 bg-white rounded-xl border border-amber-100 outline-none font-bold text-sm" 
-                                value={formData.licenseFeeDJ} 
-                                onChange={e => setFormData({...formData, licenseFeeDJ: e.target.value})} 
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">About / Details</label>
-                  <textarea rows="3" placeholder="Additional info for clients..." className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm resize-none" value={formData.details} onChange={e => setFormData({...formData, details: e.target.value})} />
-                </div>
-              </div>
-
-              {/* Right Column: Pricing, Media & Contacts */}
-              <div className="space-y-6">
-                <div>
-                   <label className="text-[10px] font-black uppercase text-indigo-500 mb-2 block tracking-widest">Pricing Strategy</label>
-                   <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100 space-y-4">
-                      {/* Pricing Row 1 */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">
-                            {formData.type === 'Night Stay' ? 'Double Occupancy (₹)' : 'Day Package (₹)'}
-                          </label>
-                          <input type="number" className="w-full p-3 bg-white rounded-xl border border-indigo-100 outline-none font-bold text-sm" value={formData.purchasePriceDouble} onChange={e => setFormData({...formData, purchasePriceDouble: e.target.value})} />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Margin (%)</label>
-                          <input type="number" className="w-full p-3 bg-white rounded-xl border border-indigo-100 outline-none font-bold text-sm" value={formData.marginDouble} onChange={e => setFormData({...formData, marginDouble: e.target.value})} />
+                          : p.packagePrice > 0 && (
+                              <div className="bg-slate-50 rounded-lg p-1.5 text-center mb-2">
+                                <div className="text-[8px] font-black text-slate-400 uppercase">Day Package</div>
+                                <Price value={p.packagePrice} />
+                              </div>
+                            )
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-1">
+                        {p.website && (
+                          <a href={p.website.startsWith('http') ? p.website : `https://${p.website}`}
+                            target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-bold">
+                            <Globe size={11} /> Website
+                          </a>
+                        )}
+                        <div className="flex gap-1 ml-auto">
+                          <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-indigo-50 text-indigo-400 rounded transition"><Pencil size={13} /></button>
+                          <button onClick={() => handleDelete(p._id)} className="p-1.5 hover:bg-red-50 text-red-400 rounded transition"><Trash2 size={13} /></button>
                         </div>
                       </div>
-                      
-                      {/* Pricing Row 2 (Only if Night Stay) */}
-                      {formData.type === 'Night Stay' && (
-                        <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
-                          <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Triple Occupancy (₹)</label>
-                            <input type="number" className="w-full p-3 bg-white rounded-xl border border-indigo-100 outline-none font-bold text-sm" value={formData.purchasePriceTriple} onChange={e => setFormData({...formData, purchasePriceTriple: e.target.value})} />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Triple Margin (%)</label>
-                            <input type="number" className="w-full p-3 bg-white rounded-xl border border-indigo-100 outline-none font-bold text-sm" value={formData.marginTriple} onChange={e => setFormData({...formData, marginTriple: e.target.value})} />
-                          </div>
-                        </div>
-                      )}
-                   </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Media Links</label>
-                  <div className="space-y-3">
-                    <input placeholder="Website URL" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm" value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} />
-                    <input placeholder="Direct Image URL" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-4 ring-indigo-50 font-bold text-sm" value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} />
+                    </div>
                   </div>
-                </div>
-
-                <div>
-                   <div className="flex justify-between items-center mb-2">
-                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Contacts</label>
-                     <button onClick={addContact} className="text-[9px] font-black uppercase bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-slate-900 transition-colors flex items-center gap-1"><PlusCircle size={12}/> Add</button>
-                   </div>
-                   <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
-                      {formData.contacts.map((contact, index) => (
-                        <div key={index} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 relative group">
-                          {formData.contacts.length > 1 && (
-                            <button onClick={() => removeContact(index)} className="absolute -top-2 -right-2 bg-white text-red-500 shadow-sm border border-red-50 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><MinusCircle size={14}/></button>
-                          )}
-                          <div className="space-y-3">
-                            <input placeholder="Contact Name" className="w-full p-2 bg-transparent border-b border-slate-200 outline-none font-bold text-xs" value={contact.name} onChange={e => handleContactChange(index, 'name', e.target.value)} />
-                            <div className="grid grid-cols-2 gap-2">
-                               <input placeholder="Phone" className="w-full p-2 bg-transparent border-b border-slate-200 outline-none font-bold text-[10px]" value={contact.phone} onChange={e => handleContactChange(index, 'phone', e.target.value)} />
-                               <input placeholder="Email" className="w-full p-2 bg-transparent border-b border-slate-200 outline-none font-bold text-[10px]" value={contact.email} onChange={e => handleContactChange(index, 'email', e.target.value)} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
+      )}
 
-            <div className="mt-10 pt-8 border-t border-slate-100 flex gap-4">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest text-slate-400 hover:text-slate-600">Discard Changes</button>
-              <button onClick={handleSave} className="flex-2 bg-slate-900 text-white px-16 py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-all shadow-2xl flex items-center justify-center gap-2">
-                 <Save size={18}/>
-                 {isEditing ? 'Update Property' : 'Deploy Property'}
-              </button>
-            </div>
+      {/* Selection bar */}
+      {selected.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 border border-gray-700">
+          <div className="flex flex-col border-r border-gray-700 pr-6">
+            <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Selection</span>
+            <span className="text-lg font-bold leading-none">{selected.length} {selected.length === 1 ? 'Property' : 'Properties'}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSelected([])}
+              className="text-[10px] font-black text-gray-400 hover:text-red-400 uppercase tracking-wider">
+              Deselect All
+            </button>
+            <button onClick={() => addToPortal(selected)}
+              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white px-5 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider shadow-lg transition">
+              <Link2 size={14} />
+              Add to Portal
+            </button>
+            <button onClick={openInOffsiteBuilder}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider shadow-lg transition">
+              <FileText size={14} />
+              Build PDF
+            </button>
           </div>
         </div>
-      )}_
+      )}
 
-      {/* Delete Confirmation */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Trash2 size={32} />
+      {/* Portal modal */}
+      <PortalModal />
+
+      {/* Add / Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-black text-slate-800 uppercase">{isEditing ? 'Edit Property' : 'Add Property'}</h2>
+              <button onClick={() => { setShowModal(false); resetForm(); }}><X size={22} className="text-slate-400" /></button>
             </div>
-            <h3 className="text-lg font-black uppercase text-slate-800 mb-2">Delete Property?</h3>
-            <p className="text-slate-500 text-sm font-medium mb-6">This action cannot be undone. All data for this property will be removed.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">Cancel</button>
-              <button onClick={handleDelete} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-red-600 transition-colors">Delete</button>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                {['Night Stay', 'Day Outing'].map(t => (
+                  <button type="button" key={t} onClick={() => setFormData({ ...formData, type: t })}
+                    className={`py-3 rounded-xl font-black text-xs uppercase tracking-widest border-2 transition-all flex items-center justify-center gap-2 ${formData.type === t ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                    {t === 'Night Stay' ? <Moon size={14} /> : <Sun size={14} />} {t}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Property Name *</label>
+                  <input value={formData.propertyName} onChange={e => setFormData({ ...formData, propertyName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">State</label>
+                  <input value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Place / City</label>
+                  <input value={formData.place} onChange={e => setFormData({ ...formData, place: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Website</label>
+                  <input value={formData.website} onChange={e => setFormData({ ...formData, website: e.target.value })}
+                    placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Image URL</label>
+                <input value={formData.imageUrl} onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
+                  placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Details / Description</label>
+                <textarea value={formData.details} onChange={e => setFormData({ ...formData, details: e.target.value })}
+                  rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300 resize-none" />
+              </div>
+              {formData.type === 'Night Stay' && (
+                <div className="bg-indigo-50 rounded-xl p-4 space-y-3">
+                  <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Night Stay Pricing</div>
+                  <OccupancyPricing label="Single Occupancy"
+                    costKey="purchasePriceSingle" marginKey="marginSingle" sellKey="singlePrice"
+                    formData={formData} setFormData={setFormData} />
+                  <OccupancyPricing label="Double Occupancy"
+                    costKey="purchasePriceDouble" marginKey="marginDouble" sellKey="doublePrice"
+                    formData={formData} setFormData={setFormData} />
+                  <OccupancyPricing label="Triple Occupancy"
+                    costKey="purchasePriceTriple" marginKey="marginTriple" sellKey="triplePrice"
+                    formData={formData} setFormData={setFormData} />
+                  <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest pt-1">Add-ons</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MoneyInput label="DJ Cost" value={formData.djCost} onChange={v => setFormData({ ...formData, djCost: v })} />
+                    <MoneyInput label="DJ License Fee" value={formData.licenseFeeDJ} onChange={v => setFormData({ ...formData, licenseFeeDJ: v })} />
+                    <MoneyInput label="Cocktails & Snacks" value={formData.cocktailSnacks} onChange={v => setFormData({ ...formData, cocktailSnacks: v })} />
+                    <MoneyInput label="Banquet Hall" value={formData.banquetHall} onChange={v => setFormData({ ...formData, banquetHall: v })} />
+                  </div>
+                </div>
+              )}
+              {formData.type === 'Day Outing' && (
+                <div className="bg-amber-50 rounded-xl p-4 space-y-4">
+                  {/* Header + Add button */}
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                      Day Packages ({(formData.dayPackages || []).length})
+                    </div>
+                    <button type="button"
+                      onClick={() => setFormData({
+                        ...formData,
+                        dayPackages: [...(formData.dayPackages || []),
+                          { name: '', activities: '', purchasePrice: '', margin: 15, sellingPrice: '' }]
+                      })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase transition-colors">
+                      <Plus size={11} /> Add Package
+                    </button>
+                  </div>
+
+                  {/* Package rows */}
+                  {(formData.dayPackages || []).map((pkg, idx) => {
+                    const setPkg = (field, val) => {
+                      const next = formData.dayPackages.map((p, i) => {
+                        if (i !== idx) return p;
+                        const updated = { ...p, [field]: val };
+                        if (field === 'purchasePrice' || field === 'margin') {
+                          const cost = field === 'purchasePrice' ? val : p.purchasePrice;
+                          const mrg  = field === 'margin'        ? val : p.margin;
+                          updated.sellingPrice = calcSell(cost, mrg);
+                        }
+                        return updated;
+                      });
+                      setFormData({ ...formData, dayPackages: next });
+                    };
+                    return (
+                      <div key={idx} className="bg-white border border-amber-200 rounded-xl p-3 space-y-3">
+                        {/* Package header */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Package {idx + 1}</span>
+                          {(formData.dayPackages || []).length > 1 && (
+                            <button type="button"
+                              onClick={() => setFormData({ ...formData, dayPackages: formData.dayPackages.filter((_, i) => i !== idx) })}
+                              className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                        {/* Package name */}
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Package name</label>
+                          <input value={pkg.name} onChange={e => setPkg('name', e.target.value)}
+                            placeholder="e.g. Basic, Premium, Corporate..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-amber-300 transition-colors" />
+                        </div>
+                        {/* Activities */}
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Activities included</label>
+                          <textarea value={pkg.activities} onChange={e => setPkg('activities', e.target.value)}
+                            placeholder="e.g. Breakfast, Pool access, Bonfire, Nature walk, Buffet lunch..."
+                            rows={3}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-amber-300 transition-colors resize-none" />
+                        </div>
+                        {/* Pricing — cost / margin / sell */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost price</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                              <input type="text" inputMode="numeric" value={pkg.purchasePrice}
+                                onChange={e => setPkg('purchasePrice', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-amber-300 transition-colors" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Margin %</label>
+                            <div className="relative">
+                              <input type="text" inputMode="numeric" value={pkg.margin}
+                                onChange={e => setPkg('margin', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 pr-6 py-1.5 text-sm font-bold outline-none focus:border-amber-300 text-center transition-colors" />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell price</label>
+                            <div className="relative bg-amber-50 border border-amber-200 rounded-lg pl-5 pr-2 py-1.5 flex items-center">
+                              <span className="absolute left-2 text-amber-400 text-xs font-bold">₹</span>
+                              <input type="text" inputMode="numeric" value={pkg.sellingPrice}
+                                onChange={e => setPkg('sellingPrice', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-transparent text-sm font-black text-amber-700 outline-none" />
+                            </div>
+                            <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Add-ons */}
+                  <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest pt-1">Add-ons</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MoneyInput label="DJ Cost" value={formData.djCost} onChange={v => setFormData({ ...formData, djCost: v })} accent="amber" />
+                    <MoneyInput label="Cocktails & Snacks" value={formData.cocktailSnacks} onChange={v => setFormData({ ...formData, cocktailSnacks: v })} accent="amber" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="px-6 py-2 text-slate-400 font-bold uppercase text-xs">Cancel</button>
+              <button onClick={handleSave} className="px-10 py-3 bg-orange-500 text-white rounded-xl font-black uppercase text-xs hover:bg-orange-600 shadow-lg">
+                {isEditing ? 'Update Property' : 'Save Property'}
+              </button>
             </div>
           </div>
         </div>
@@ -844,4 +623,4 @@ const PropertyManager = () => {
   );
 };
 
-export default PropertyManager;
+export default PropertyList;

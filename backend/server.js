@@ -1,4 +1,7 @@
 const dotenv = require('dotenv');
+// ⚠ MUST call before any require that reads process.env (authRoutes, msGraph, etc.)
+dotenv.config();
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -7,10 +10,6 @@ const cron = require('node-cron');
 const app = express();
 
 const whatsappService = require('./services/whatsappService');
-
-// We use path.resolve with __dirname to point specifically to the 'backend' folder
-//const envPath = path.resolve(__dirname, '.env');
-//const result = dotenv.config({ path: envPath });
 
 /**
  * 1. CORS CONFIGURATION
@@ -26,6 +25,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.json());
 
+const authRoutes    = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
 const clientRoutes = require('./routes/clientRoutes');
@@ -50,8 +50,30 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 const buildPath = path.join(__dirname, '..', 'frontend', 'build');
 app.use(express.static(buildPath));
 
-// Catch-all: serve React for non-API routes
-// Mobile devices are restricted to /paymenttracker only
+// [catch-all moved below API routes — see end of route registrations]
+
+mongoose.connect('mongodb://127.0.0.1:27017/bizManager')
+  .then(() => console.log('✅ Connected to MongoDB (bizManager)'))
+  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+
+app.use('/api/products', productRoutes);
+app.use('/api/vendors', vendorRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/catalogues', catalogueRoutes);
+app.use('/api/properties', propertyRoutes);
+app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
+//app.use('/api/invoices', invoiceRoutes.router);
+app.use('/api/orders', orderInquiry);
+app.use('/api/challans', SamplesProvided);
+app.use('/api/inquiries', SourcingHub);
+app.use('/api/auth',            authRoutes);
+app.use('/api/payment-tracker', paymentTracker);
+
+// Client Portal routes
+const clientPortalRoutes = require('./routes/clientPortalRoutes');
+app.use('/api/portal', clientPortalRoutes);
+
+// Catch-all: serve React for any non-API route (MUST be after all API routes)
 app.use((req, res, next) => {
   console.log(`Incoming request: ${req.method} ${req.url}`);
   if (req.url.startsWith('/api') || req.url.startsWith('/public') || req.url.startsWith('/uploads')) {
@@ -69,22 +91,6 @@ app.use((req, res, next) => {
 
   res.sendFile(path.join(buildPath, 'index.html'));
 });
-
-mongoose.connect('mongodb://127.0.0.1:27017/bizManager')
-  .then(() => console.log('✅ Connected to MongoDB (bizManager)'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
-
-app.use('/api/products', productRoutes);
-app.use('/api/vendors', vendorRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/catalogues', catalogueRoutes);
-app.use('/api/properties', propertyRoutes);
-app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
-//app.use('/api/invoices', invoiceRoutes.router);
-app.use('/api/orders', orderInquiry);
-app.use('/api/challans', SamplesProvided);
-app.use('/api/inquiries', SourcingHub);
-app.use('/api/payment-tracker', paymentTracker);
 /**
  * 5. AUTOMATED TASKS (CRON)
  * Runs daily at 10:00 AM (IST) to sync Outlook invoices and 
@@ -132,7 +138,7 @@ cron.schedule('0 10 * * *', async () => {
  * Listening on '0.0.0.0' makes the server accessible via your IP address
  * on the local office network.
  */
-const PORT = 80;
+const PORT = 5000;
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {

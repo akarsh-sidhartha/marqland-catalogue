@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl'; // Import the central function
+import api from '../api'; // ← replaces: import axios from 'axios' + getBaseUrl
 import { Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil, RotateCcw, Info, CheckSquare, Square, MessageSquare } from 'lucide-react';
+import usePortalItems from '../hooks/usePortalItems';
+
 /**
  * Custom Creatable Select to replace 'react-select/creatable' 
  */
@@ -54,25 +55,18 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
               placeholder="Search or type new..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreate();
-              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
             />
           </div>
           {options.filter(o => o.label.toLowerCase().includes(inputValue.toLowerCase())).map((opt, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleSelect(opt.value)}
-              className="p-2 text-xs hover:bg-indigo-50 cursor-pointer"
-            >
+            <div key={idx} onClick={() => handleSelect(opt.value)}
+              className="p-2 text-xs hover:bg-indigo-50 cursor-pointer">
               {opt.label}
             </div>
           ))}
           {inputValue && !options.some(o => o.label.toLowerCase() === inputValue.toLowerCase()) && (
-            <div
-              onClick={handleCreate}
-              className="p-2 text-xs text-indigo-600 font-bold hover:bg-indigo-50 cursor-pointer border-t"
-            >
+            <div onClick={handleCreate}
+              className="p-2 text-xs text-indigo-600 font-bold hover:bg-indigo-50 cursor-pointer border-t">
               Create "{inputValue}"
             </div>
           )}
@@ -82,21 +76,9 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
   );
 };
 
-/*
-  const getBaseUrl = () => {
-    const { hostname } = window.location;
-    const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname;
-    return `http://${host}:5000/api`;
-  };
-*/
-const API_URL_PRODUCTS = `${getBaseUrl()}/products`;
-const API_URL_PRODUCTS_CATALOGUE = `${getBaseUrl()}/catalogues`;
-
+// ── All API calls now go through /api/... — proxy forwards to :5000 ──────────
 const ProductList = () => {
   const [products, setProducts] = useState([]);
-  // Fixed state structure: using 'subCategories' as per backend update
   const [meta, setMeta] = useState({ brands: [], categories: [], subCategories: {} });
   const [availableSubCats, setAvailableSubCats] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -105,32 +87,30 @@ const ProductList = () => {
   const [collapsedCategories, setCollapsedCategories] = useState({});
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [previewProduct, setPreviewProduct] = useState(null);
-
   const [showCatalogueModal, setShowCatalogueModal] = useState(false);
   const [savedCatalogues, setSavedCatalogues] = useState([]);
   const [isUpdatingCatalogue, setIsUpdatingCatalogue] = useState(false);
+  const { addToPortal, PortalModal } = usePortalItems('product');
 
   const [formData, setFormData] = useState({
-    brand: '', category: '', subCategory: '', name: '', description: '', purchasePrice: '', markupPercent: 30
+    brand: '', category: '', subCategory: '', name: '',
+    description: '', purchasePrice: '', markupPercent: 30
   });
   const [imageFile, setImageFile] = useState(null);
   const [filters, setFilters] = useState({
     brand: '', category: '', subCategory: '', minPrice: '', maxPrice: '', searchTerm: ''
   });
 
-  const getAssetUrl = (path) => {
-    const baseUrl = getBaseUrl().replace('/api', ''); // Remove /api suffix
-    return `${baseUrl}${path}`;
-  };
+  // Images are served from same origin (proxied in dev, same server in prod)
+  const getAssetUrl = (path) => path;
 
   const fetchData = async () => {
     try {
       const [pRes, mRes] = await Promise.all([
-        axios.get(API_URL_PRODUCTS),
-        axios.get(API_URL_PRODUCTS + `/meta`)
+        api.get('/products'),
+        api.get('/products/meta'),
       ]);
       setProducts(pRes.data || []);
-      // The backend uses 'subCategories', ensure we handle both keys for robustness
       const metaData = mRes.data || { brands: [], categories: [], subCategories: {} };
       if (metaData.subCategoryMap && !metaData.subCategories) {
         metaData.subCategories = metaData.subCategoryMap;
@@ -169,6 +149,8 @@ const ProductList = () => {
         name: product.name,
         imageUrl: product.imageUrl,
         description: product.description,
+        category: product.category || '',
+        subCategory: product.subCategory || '',
         price: calculateSellingPrice(product.purchasePrice, product.markupPercent)
       }]);
     }
@@ -176,7 +158,6 @@ const ProductList = () => {
 
   const selectAllInCategory = (categoryProducts) => {
     const allSelected = categoryProducts.every(p => selectedProducts.some(sp => sp._id === p._id));
-
     if (allSelected) {
       const categoryIds = categoryProducts.map(p => p._id);
       setSelectedProducts(selectedProducts.filter(sp => !categoryIds.includes(sp._id)));
@@ -185,10 +166,10 @@ const ProductList = () => {
       categoryProducts.forEach(p => {
         if (!newSelections.some(sp => sp._id === p._id)) {
           newSelections.push({
-            _id: p._id,
-            name: p.name,
-            imageUrl: p.imageUrl,
+            _id: p._id, name: p.name, imageUrl: p.imageUrl,
             description: p.description,
+            category: p.category || '',
+            subCategory: p.subCategory || '',
             price: calculateSellingPrice(p.purchasePrice, p.markupPercent)
           });
         }
@@ -199,7 +180,8 @@ const ProductList = () => {
 
   const handleOpenBuilder = () => {
     const dataToSave = selectedProducts.map(p => ({
-      _id: p._id, name: p.name, imageUrl: p.imageUrl, description: p.description, price: p.price
+      _id: p._id, name: p.name, imageUrl: p.imageUrl,
+      description: p.description, price: p.price
     }));
     localStorage.setItem('catalogue_selection', JSON.stringify(dataToSave));
     window.open('/builder', '_blank');
@@ -208,7 +190,7 @@ const ProductList = () => {
   const openAddToExistingModal = async () => {
     setShowCatalogueModal(true);
     try {
-      const res = await axios.get(API_URL_PRODUCTS_CATALOGUE);
+      const res = await api.get('/catalogues');
       setSavedCatalogues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch catalogues", err);
@@ -227,27 +209,24 @@ const ProductList = () => {
         imageUrl: p.imageUrl || ''
       }));
       const updatedPayload = {
-        id: targetCat._id,
-        name: targetCat.name,
-        subtitle: targetCat.subtitle,
+        id: targetCat._id, name: targetCat.name, subtitle: targetCat.subtitle,
         items: [...(targetCat.items || []), ...newItemsMapped]
       };
-      await axios.post(API_URL_PRODUCTS_CATALOGUE, updatedPayload);
+      await api.post('/catalogues', updatedPayload);
       setSelectedProducts([]);
       setShowCatalogueModal(false);
     } catch (err) {
-      console.error("Error updating catalogue: ", err);
+      console.error("Error updating catalogue:", err);
     } finally {
       setIsUpdatingCatalogue(false);
     }
   };
 
-  // Fixed handleCategoryChange for Modal
   const handleCategoryChange = (v) => {
     const selectedCat = v ? v.value : '';
     setFormData({ ...formData, category: selectedCat, subCategory: '' });
-    // Check both potential keys for subcategories
-    const subCats = (meta.subCategories && meta.subCategories[selectedCat]) || (meta.subCategoryMap && meta.subCategoryMap[selectedCat]) || [];
+    const subCats = (meta.subCategories && meta.subCategories[selectedCat]) ||
+      (meta.subCategoryMap && meta.subCategoryMap[selectedCat]) || [];
     setAvailableSubCats(subCats.map(s => ({ label: s, value: s })));
   };
 
@@ -269,12 +248,12 @@ const ProductList = () => {
       data.append('markupPercent', formData.markupPercent);
       if (imageFile) data.append('image', imageFile);
 
-      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
-
+      // For multipart/form-data, don't set Content-Type manually —
+      // axios sets it automatically with the correct boundary
       if (isEditing) {
-        await axios.put(`${API_URL_PRODUCTS}/${currentId}`, data, config);
+        await api.put(`/products/${currentId}`, data);
       } else {
-        await axios.post(API_URL_PRODUCTS, data, config);
+        await api.post('/products', data);
       }
 
       setShowModal(false);
@@ -288,7 +267,7 @@ const ProductList = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
       try {
-        await axios.delete(API_URL_PRODUCTS + `/${id}`);
+        await api.delete(`/products/${id}`);
         fetchData();
         setSelectedProducts(prev => prev.filter(p => p._id !== id));
       } catch (err) {
@@ -301,15 +280,11 @@ const ProductList = () => {
     setIsEditing(true);
     setCurrentId(p._id);
     setFormData({
-      brand: p.brand || '',
-      category: p.category || '',
-      subCategory: p.subCategory || '',
-      name: p.name || '',
-      description: p.description || '',
-      purchasePrice: p.purchasePrice || '',
+      brand: p.brand || '', category: p.category || '',
+      subCategory: p.subCategory || '', name: p.name || '',
+      description: p.description || '', purchasePrice: p.purchasePrice || '',
       markupPercent: p.markupPercent || 30
     });
-
     const subCats = (meta.subCategories && p.category && meta.subCategories[p.category]) ||
       (meta.subCategoryMap && p.category && meta.subCategoryMap[p.category]) || [];
     setAvailableSubCats(subCats.map(s => ({ label: s, value: s })));
@@ -321,8 +296,9 @@ const ProductList = () => {
     const min = filters.minPrice === '' ? 0 : parseFloat(filters.minPrice);
     const max = filters.maxPrice === '' ? Infinity : parseFloat(filters.maxPrice);
     const s = filters.searchTerm.toLowerCase();
-    const matchesSearch = p.name?.toLowerCase().includes(s) || p.brand?.toLowerCase().includes(s) || p.category?.toLowerCase().includes(s);
-
+    const matchesSearch = p.name?.toLowerCase().includes(s) ||
+      p.brand?.toLowerCase().includes(s) ||
+      p.category?.toLowerCase().includes(s);
     return (
       matchesSearch &&
       (filters.brand === '' || p.brand === filters.brand) &&
@@ -345,68 +321,62 @@ const ProductList = () => {
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-3 border-r pr-3 border-gray-100 flex-shrink-0">
             <h1 className="text-xs font-black text-indigo-600 uppercase tracking-tighter">Catalogue</h1>
-            <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white w-8 h-8 rounded-lg shadow-sm flex items-center justify-center transition flex-shrink-0">
+            <button onClick={() => { resetForm(); setShowModal(true); }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white w-8 h-8 rounded-lg shadow-sm flex items-center justify-center transition flex-shrink-0">
               <Plus size={18} />
             </button>
           </div>
 
           <div className="relative flex-shrink-0 w-32 md:w-40 lg:w-48">
-            <input
-              type="text"
-              placeholder="Search..."
+            <input type="text" placeholder="Search..."
               className="w-full pl-8 pr-8 py-2 rounded-lg border border-gray-100 focus:border-indigo-300 outline-none text-xs bg-gray-50/50"
               value={filters.searchTerm}
-              onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
-            />
+              onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })} />
             <Search size={12} className="absolute left-2.5 top-2.5 text-gray-300" />
             {filters.searchTerm && (
-              <button
-                onClick={() => setFilters({ ...filters, searchTerm: '' })}
-                className="absolute right-2 top-2.5 text-gray-300 hover:text-indigo-600"
-              >
+              <button onClick={() => setFilters({ ...filters, searchTerm: '' })}
+                className="absolute right-2 top-2.5 text-gray-300 hover:text-indigo-600">
                 <X size={12} />
               </button>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-grow min-w-max">
-            <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[90px]" value={filters.brand} onChange={e => setFilters({ ...filters, brand: e.target.value })}>
+            <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[90px]"
+              value={filters.brand} onChange={e => setFilters({ ...filters, brand: e.target.value })}>
               <option value="">All Brands</option>
               {meta.brands.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
 
-            <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[100px]" value={filters.category} onChange={e => setFilters({ ...filters, category: e.target.value, subCategory: '' })}>
+            <select className="border border-gray-100 p-2 rounded-lg text-[10px] font-bold bg-white outline-none min-w-[100px]"
+              value={filters.category} onChange={e => setFilters({ ...filters, category: e.target.value, subCategory: '' })}>
               <option value="">All Categories</option>
               {meta.categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
 
-            <select
-              disabled={!filters.category}
+            <select disabled={!filters.category}
               className={`border border-gray-100 p-2 rounded-lg text-[10px] font-bold outline-none min-w-[100px] transition-opacity ${!filters.category ? 'bg-gray-50 opacity-50 cursor-not-allowed' : 'bg-white'}`}
               value={filters.subCategory}
-              onChange={e => setFilters({ ...filters, subCategory: e.target.value })}
-            >
+              onChange={e => setFilters({ ...filters, subCategory: e.target.value })}>
               <option value="">All Sub Cats</option>
-              {/* Added safety check to prevent crash on undefined category key */}
               {filters.category && (meta.subCategories?.[filters.category] || meta.subCategoryMap?.[filters.category])?.map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
 
-            <button
-              onClick={resetFilters}
-              className="p-2 text-gray-300 hover:text-indigo-600 transition-colors flex-shrink-0"
-              title="Reset Filters"
-            >
+            <button onClick={resetFilters}
+              className="p-2 text-gray-300 hover:text-indigo-600 transition-colors flex-shrink-0" title="Reset Filters">
               <RotateCcw size={14} />
             </button>
           </div>
 
           <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 flex-shrink-0 ml-auto">
             <span className="text-[9px] font-black text-gray-400 uppercase">₹</span>
-            <input type="number" placeholder="Min" className="w-10 bg-transparent text-[10px] font-bold outline-none" value={filters.minPrice} onChange={e => setFilters({ ...filters, minPrice: e.target.value })} />
+            <input type="number" placeholder="Min" className="w-10 bg-transparent text-[10px] font-bold outline-none"
+              value={filters.minPrice} onChange={e => setFilters({ ...filters, minPrice: e.target.value })} />
             <span className="text-gray-300">-</span>
-            <input type="number" placeholder="Max" className="w-10 bg-transparent text-[10px] font-bold outline-none" value={filters.maxPrice} onChange={e => setFilters({ ...filters, maxPrice: e.target.value })} />
+            <input type="number" placeholder="Max" className="w-10 bg-transparent text-[10px] font-bold outline-none"
+              value={filters.maxPrice} onChange={e => setFilters({ ...filters, maxPrice: e.target.value })} />
           </div>
         </div>
       </div>
@@ -418,15 +388,20 @@ const ProductList = () => {
             <span className="text-lg font-bold leading-none">{selectedProducts.length} Items</span>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={() => setSelectedProducts([])} className="text-[10px] font-black text-gray-400 hover:text-red-400 uppercase tracking-wider transition-colors">Deselect All</button>
-            <button onClick={openAddToExistingModal} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider border border-gray-600 transition flex items-center gap-2">
+            <button onClick={() => setSelectedProducts([])}
+              className="text-[10px] font-black text-gray-400 hover:text-red-400 uppercase tracking-wider transition-colors">
+              Deselect All
+            </button>
+            <button onClick={openAddToExistingModal}
+              className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider border border-gray-600 transition flex items-center gap-2">
               <FolderPlus size={14} className="text-indigo-400" />
               Add to Existing
             </button>
-            <button onClick={handleOpenBuilder} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider shadow-lg transition transform active:scale-95 flex items-center gap-2">
-              Build New
-              <Plus size={14} />
+            <button onClick={handleOpenBuilder}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-wider shadow-lg transition transform active:scale-95 flex items-center gap-2">
+              Build New <Plus size={14} />
             </button>
+            <button onClick={() => addToPortal(selectedProducts)}>Add to Portal</button>
           </div>
         </div>
       )}
@@ -438,7 +413,6 @@ const ProductList = () => {
           const isCollapsed = collapsedCategories[category];
           const categoryProducts = groupedProducts[category];
           const isAllInCategorySelected = categoryProducts.every(p => selectedProducts.some(sp => sp._id === p._id));
-
           return (
             <div key={category} className="mb-10">
               <div className="flex items-center gap-4 mb-4 group">
@@ -448,18 +422,11 @@ const ProductList = () => {
                     {category} ({categoryProducts.length})
                   </h2>
                 </div>
-
-                <button
-                  onClick={() => selectAllInCategory(categoryProducts)}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${isAllInCategorySelected
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-500'
-                    }`}
-                >
+                <button onClick={() => selectAllInCategory(categoryProducts)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${isAllInCategorySelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-500'}`}>
                   {isAllInCategorySelected ? <CheckSquare size={12} /> : <Square size={12} />}
                   {isAllInCategorySelected ? 'All Selected' : 'Select All'}
                 </button>
-
                 <div className="h-[1px] w-full bg-gray-100 flex-grow"></div>
               </div>
 
@@ -468,18 +435,17 @@ const ProductList = () => {
                   {categoryProducts.map(p => {
                     const isSelected = selectedProducts.some(sp => sp._id === p._id);
                     return (
-                      <div key={p._id} className={`bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col relative transition-all duration-200 ${isSelected ? 'ring-2 ring-indigo-500' : ''}`}>
+                      <div key={p._id}
+                        className={`bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col relative transition-all duration-200 ${isSelected ? 'ring-2 ring-indigo-500' : ''}`}>
                         <div
                           className={`absolute top-2 right-2 z-20 cursor-pointer w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/80 border-gray-300 text-transparent'}`}
-                          onClick={() => toggleProductSelection(p)}
-                        >
+                          onClick={() => toggleProductSelection(p)}>
                           <Check size={14} strokeWidth={4} />
                         </div>
-                        <div
-                          className="h-32 bg-gray-50 flex items-center justify-center relative overflow-hidden cursor-zoom-in group/img"
-                          onClick={() => setPreviewProduct(p)}
-                        >
-                          {p.imageUrl && <img src={getAssetUrl(p.imageUrl)} alt={p.name} className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" />}
+                        <div className="h-32 bg-gray-50 flex items-center justify-center relative overflow-hidden cursor-zoom-in group/img"
+                          onClick={() => setPreviewProduct(p)}>
+                          {p.imageUrl && <img src={getAssetUrl(p.imageUrl)} alt={p.name}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" />}
                           <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
                             <Info size={20} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />
                           </div>
@@ -504,7 +470,7 @@ const ProductList = () => {
                           </div>
                         </div>
                       </div>
-                    )
+                    );
                   })}
                 </div>
               )}
@@ -513,7 +479,7 @@ const ProductList = () => {
         })
       )}
 
-      {/* Catalogue Modals and Popups */}
+      {/* ── Catalogue Modal ── */}
       {showCatalogueModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up">
@@ -531,7 +497,8 @@ const ProductList = () => {
                 <div className="text-center py-10"><p className="text-gray-400 text-sm italic">No saved catalogues found.</p></div>
               ) : (
                 savedCatalogues.map(cat => (
-                  <button key={cat._id} disabled={isUpdatingCatalogue} onClick={() => appendToCatalogue(cat)} className="w-full text-left p-5 rounded-3xl hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-all flex justify-between items-center group disabled:opacity-50">
+                  <button key={cat._id} disabled={isUpdatingCatalogue} onClick={() => appendToCatalogue(cat)}
+                    className="w-full text-left p-5 rounded-3xl hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-all flex justify-between items-center group disabled:opacity-50">
                     <div>
                       <h4 className="font-black text-gray-800 uppercase group-hover:text-indigo-600 transition-colors">{cat.name}</h4>
                       <p className="text-[10px] text-gray-400 font-bold uppercase">{(cat.items || []).length} current items</p>
@@ -541,11 +508,15 @@ const ProductList = () => {
                 ))
               )}
             </div>
-            <div className="p-4 bg-gray-50"><button onClick={() => setShowCatalogueModal(false)} className="w-full py-4 text-xs font-black uppercase text-gray-400 tracking-widest">Cancel</button></div>
+            <div className="p-4 bg-gray-50">
+              <button onClick={() => setShowCatalogueModal(false)}
+                className="w-full py-4 text-xs font-black uppercase text-gray-400 tracking-widest">Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* ── Add / Edit Product Modal ── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -555,24 +526,36 @@ const ProductList = () => {
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <CustomCreatableSelect label="Brand" isDisabled={isEditing} options={meta.brands.map(b => ({ label: b, value: b }))} value={formData.brand ? { label: formData.brand, value: formData.brand } : null} onChange={(v) => setFormData({ ...formData, brand: v?.value })} />
-                <CustomCreatableSelect label="Category" isDisabled={isEditing} options={meta.categories.map(c => ({ label: c, value: c }))} value={formData.category ? { label: formData.category, value: formData.category } : null} onChange={handleCategoryChange} />
+                <CustomCreatableSelect label="Brand" isDisabled={isEditing}
+                  options={meta.brands.map(b => ({ label: b, value: b }))}
+                  value={formData.brand ? { label: formData.brand, value: formData.brand } : null}
+                  onChange={(v) => setFormData({ ...formData, brand: v?.value })} />
+                <CustomCreatableSelect label="Category" isDisabled={isEditing}
+                  options={meta.categories.map(c => ({ label: c, value: c }))}
+                  value={formData.category ? { label: formData.category, value: formData.category } : null}
+                  onChange={handleCategoryChange} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <CustomCreatableSelect label="Sub Category" isDisabled={isEditing || !formData.category} value={formData.subCategory ? { label: formData.subCategory, value: formData.subCategory } : null} options={availableSubCats} onChange={(v) => setFormData({ ...formData, subCategory: v?.value })} />
+                <CustomCreatableSelect label="Sub Category" isDisabled={isEditing || !formData.category}
+                  value={formData.subCategory ? { label: formData.subCategory, value: formData.subCategory } : null}
+                  options={availableSubCats}
+                  onChange={(v) => setFormData({ ...formData, subCategory: v?.value })} />
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Name</label>
-                  <input className="w-full border rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                  <input className="w-full border rounded-lg p-2 text-sm"
+                    value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Description</label>
-                <textarea className="w-full border rounded-lg p-2 h-20 text-sm" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                <textarea className="w-full border rounded-lg p-2 h-20 text-sm"
+                  value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Cost Price (₹)</label>
-                  <input type="number" className="w-full border rounded-lg p-2 text-sm" value={formData.purchasePrice} onChange={e => setFormData({ ...formData, purchasePrice: e.target.value })} />
+                  <input type="number" className="w-full border rounded-lg p-2 text-sm"
+                    value={formData.purchasePrice} onChange={e => setFormData({ ...formData, purchasePrice: e.target.value })} />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Image</label>
@@ -584,7 +567,9 @@ const ProductList = () => {
                 <div className="grid grid-cols-2 items-center gap-4">
                   <div>
                     <label className="block text-[11px] font-black text-indigo-900 uppercase mb-1">Margin (%)</label>
-                    <select className="w-full border rounded-lg p-2 bg-white font-black" value={formData.markupPercent} onChange={e => setFormData({ ...formData, markupPercent: parseInt(e.target.value) })}>
+                    <select className="w-full border rounded-lg p-2 bg-white font-black"
+                      value={formData.markupPercent}
+                      onChange={e => setFormData({ ...formData, markupPercent: parseInt(e.target.value) })}>
                       {[10, 15, 20, 25, 30, 35, 40, 45, 50].map(m => <option key={m} value={m}>{m}%</option>)}
                     </select>
                   </div>
@@ -597,28 +582,28 @@ const ProductList = () => {
             </div>
             <div className="p-6 border-t flex justify-end gap-3">
               <button onClick={() => setShowModal(false)} className="px-6 py-2 text-gray-400 font-bold uppercase text-xs">Cancel</button>
-              <button onClick={handleSave} className="px-10 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-xs hover:bg-indigo-700 shadow-lg">{isEditing ? 'Update Settings' : 'Save Product'}</button>
+              <button onClick={handleSave} className="px-10 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-xs hover:bg-indigo-700 shadow-lg">
+                {isEditing ? 'Update Settings' : 'Save Product'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Preview Modal ── */}
       {previewProduct && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4" onClick={() => setPreviewProduct(null)}>
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up" onClick={e => e.stopPropagation()}>
-            <div className="relative w-full h-[45vh] md:h-full  bg-gray-50 flex items-center justify-center overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4"
+          onClick={() => setPreviewProduct(null)}>
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-modal-up"
+            onClick={e => e.stopPropagation()}>
+            <div className="relative w-full h-[45vh] md:h-full bg-gray-50 flex items-center justify-center overflow-hidden">
               {previewProduct.imageUrl && (
-                <img
-                  src={getAssetUrl(previewProduct.imageUrl)}
-                  alt={previewProduct.name}
+                <img src={getAssetUrl(previewProduct.imageUrl)} alt={previewProduct.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'https://via.placeholder.com/400?text=No+Image';
-                  }}
-                />
+                  onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/400?text=No+Image'; }} />
               )}
-              <button onClick={() => setPreviewProduct(null)} className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-full text-gray-800 shadow-sm hover:bg-white transition-colors">
+              <button onClick={() => setPreviewProduct(null)}
+                className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-full text-gray-800 shadow-sm hover:bg-white transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -633,7 +618,9 @@ const ProductList = () => {
                   <span className="text-gray-400 block font-bold uppercase text-[10px]">Selling Price</span>
                   <span className="text-3xl font-black text-green-600">₹{calculateSellingPrice(previewProduct.purchasePrice, previewProduct.markupPercent)}</span>
                 </div>
-                <button onClick={() => { toggleProductSelection(previewProduct); setPreviewProduct(null); }} className={`px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${selectedProducts.some(p => p._id === previewProduct._id) ? 'bg-red-50 text-red-500' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'}`}>
+                <button
+                  onClick={() => { toggleProductSelection(previewProduct); setPreviewProduct(null); }}
+                  className={`px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${selectedProducts.some(p => p._id === previewProduct._id) ? 'bg-red-50 text-red-500' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'}`}>
                   {selectedProducts.some(p => p._id === previewProduct._id) ? 'Remove Selection' : 'Select Item'}
                 </button>
               </div>
@@ -647,12 +634,11 @@ const ProductList = () => {
           0% { transform: translateY(20px); opacity: 0; }
           100% { transform: translateY(0); opacity: 1; }
         }
-        .animate-modal-up {
-          animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
+        .animate-modal-up { animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
+      <PortalModal />
     </div>
   );
 };

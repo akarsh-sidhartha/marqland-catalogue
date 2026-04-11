@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl';
+import api from '../api';
 import { Download, Plus, Search, ChevronDown, ChevronRight, Edit2, Trash2, MapPin, Tag, Mail, Phone, Building2 } from 'lucide-react';
 
 const VendorList = () => {
@@ -29,11 +28,10 @@ const VendorList = () => {
   });
 
   useEffect(() => { fetchVendors(); }, []);
-  const API_URL_VENDORS = `${getBaseUrl()}/vendors`;
 
   const fetchVendors = async () => {
     try {
-      const res = await axios.get(API_URL_VENDORS);
+      const res = await api.get('/vendors');
       setVendors(res.data);
     } catch (err) { console.error("Fetch error:", err); }
   };
@@ -77,9 +75,9 @@ const VendorList = () => {
   const handleSave = async () => {
     try {
       if (isEditing) {
-        await axios.put(`${API_URL_VENDORS}/${currentId}`, formData);
+        await api.put(`/vendors/${currentId}`, formData);
       } else {
-        await axios.post(API_URL_VENDORS, formData);
+        await api.post('/vendors', formData);
       }
       setShowModal(false);
       resetForm();
@@ -91,7 +89,7 @@ const VendorList = () => {
     e.stopPropagation();
     if (window.confirm(`Delete ${name}?`)) {
       try {
-        await axios.delete(`${API_URL_VENDORS}/${id}`);
+        await api.delete(`/vendors/${id}`);
         fetchVendors();
       } catch (err) { alert("Delete failed"); }
     }
@@ -160,12 +158,10 @@ const VendorList = () => {
   const handleScanCard = async () => {
     setIsScanning(true);
     try {
-      const imagesToScan = [cardImages.front];
-      if (cardImages.back) imagesToScan.push(cardImages.back);
-      const res = await axios.post(`${getBaseUrl()}/invoices/process`, {
+      // Uses dedicated /api/vendors/scan-card endpoint
+      // AI waterfall: Gemini → Mistral → Tesseract (auto-fallback when quota exceeded)
+      const res = await api.post('/vendors/scan-card', {
         image: cardImages.front,
-        secondImage: cardImages.back,
-        isBusinessCard: true,
         mimeType: "image/jpeg"
       });
       const data = res.data;
@@ -174,7 +170,16 @@ const VendorList = () => {
         companyName: data.company_name || data.vendor_name || prev.companyName,
         contacts: [{ name: data.name || '', phone: data.phone || '', email: data.email || '' }]
       }));
-    } catch (err) { alert("AI extraction failed."); } finally { setIsScanning(false); }
+      // Show which AI provider was used (useful for debugging quota issues)
+      if (data._provider && data._provider !== 'gemini') {
+        console.info(`Business card scanned via fallback provider: ${data._provider}`);
+      }
+    } catch (err) {
+      alert("Card scan failed. Please fill in the details manually.");
+      console.error("Scan error:", err);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   return (

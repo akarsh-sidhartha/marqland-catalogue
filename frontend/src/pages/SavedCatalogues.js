@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl'; // Import the central function
+import api from '../api';
 import { Search, X, RefreshCw, Trash2, Edit3 } from 'lucide-react';
 
 const SavedCatalogues = () => {
@@ -20,7 +19,6 @@ const SavedCatalogues = () => {
     return `http://${host}:5000/api`;
   };
 */
-  const API_URL_PRODUCT_CATALOGUES = `${getBaseUrl()}/catalogues`;
 
   /* const getApiUrl = () => {
     const hostname = window.location.hostname || 'localhost';
@@ -33,18 +31,18 @@ const SavedCatalogues = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get(API_URL_PRODUCT_CATALOGUES);
+      const res = await api.get('/catalogues');
       setCatalogues(res.data || []);
     } catch (err) {
       if (retries > 0) {
         setTimeout(() => fetchCatalogues(retries - 1, delay * 2), delay);
       } else {
-        setError(`Connection Failed: Server not reachable at ${API_URL_PRODUCT_CATALOGUES}`);
+        setError('Connection Failed: Server not reachable. Please check your connection.');
       }
     } finally {
       setLoading(false);
     }
-  }, [API_URL_PRODUCT_CATALOGUES]);
+  }, []);
 
   useEffect(() => {
     fetchCatalogues();
@@ -66,7 +64,7 @@ const SavedCatalogues = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this saved state?")) {
       try {
-        await axios.delete(`${API_URL_PRODUCT_CATALOGUES}/${id}`);
+        await api.delete(`/catalogues/${id}`);
         fetchCatalogues();
       } catch (err) {
         alert("Delete failed. Check server connection.");

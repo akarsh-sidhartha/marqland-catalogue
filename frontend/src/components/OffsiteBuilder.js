@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trash2, Printer, ChevronLeft, Save, Globe, MapPin, Sun, Loader2, FileText, XCircle, CheckCircle } from 'lucide-react';
-import axios from 'axios';
-import { getBaseUrl } from '../baseurl'; // Import the central function
+import api from '../api';
 
 const OffsiteBuilder = () => {
   const [clientName, setClientName] = useState('');
@@ -170,14 +169,13 @@ const OffsiteBuilder = () => {
       
       const hostname = window.location.hostname || 'localhost';
       //const baseUrl = `http://${hostname}:5000/api/offsitecatalogues`;
-      const baseUrl = `${getBaseUrl()}/offsitecatalogues`;
       
       let response;
 
       if (currentCatalogueId) {
-        response = await axios.put(`${baseUrl}/${currentCatalogueId}`, payload);
+        response = await api.put(`/offsitecatalogues/${currentCatalogueId}`, payload);
       } else {
-        response = await axios.post(baseUrl, payload);
+        response = await api.post('/offsitecatalogues', payload);
         const newId = response.data?.data?._id || response.data?._id;
         if (newId) setCurrentCatalogueId(newId);
       }

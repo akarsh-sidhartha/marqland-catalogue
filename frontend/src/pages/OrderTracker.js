@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getBaseUrl } from '../baseurl'; // Import the central function
+import api from '../api';
+import PortalChatPanel from './PortalChatPanel';
 import CreatableSelect from 'react-select/creatable';
 import {
   Plus,
@@ -20,11 +21,16 @@ import {
   Hash,
   Receipt,
   Table as TableIcon,
-  Search, // Added for the search icon
-  Loader2 // Added for the loading buffer
+  Search,
+  Loader2,
+  Link2,
+  Copy,
+  Send,
+  Package,
+  MapPin,
 } from 'lucide-react';
 
-const API_BASE_URL = `${getBaseUrl()}/orders`;
+
 
 export default function App() {
   const [orders, setOrders] = useState([]);
@@ -52,8 +58,12 @@ export default function App() {
     clientName: '',
     orderPlacedBy: '',
     description: '',
-    attachments: []
+    attachments: [],
+    orderType: 'product'  // 'product' | 'offsite'
   });
+  const [sentLinks, setSentLinks] = useState({}); // { orderId: portalSlug } — tracks sent links
+  const [copiedId, setCopiedId] = useState(null); // order whose link was just copied
+  const [chatOrder, setChatOrder] = useState(null); // order to open chat panel for
 
   useEffect(() => {
     fetchOrders();
@@ -111,8 +121,8 @@ export default function App() {
   const fetchOrders = async () => {
     setFetchLoading(true);
     try {
-      const res = await fetch(API_BASE_URL);
-      const data = await res.json();
+      const res = await api.get('/orders');
+      const data = res.data;
 
       if (Array.isArray(data)) {
         // 1. Calculate meta data directly from the FRESH 'data' array, not 'orders' state
@@ -284,13 +294,8 @@ export default function App() {
     };
 
     try {
-      const res = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-        //body: JSON.stringify({ ...formData, refNumber: generatedRef, description: richDescription, status: 'inquiry' })
-      });
-      if (res.ok) {
+      const res = await api.post('/orders', payload);
+      if (res.status === 201 || res.status === 200) {
         setIsModalOpen(false);
         // Reset form to original state
         setFormData({
@@ -298,7 +303,8 @@ export default function App() {
           clientName: '',
           orderPlacedBy: '',
           description: '',
-          attachments: []
+          attachments: [],
+          orderType: 'product'
         });
 
         /* this is the workign code for mongo DB directly. 
@@ -320,11 +326,7 @@ export default function App() {
     }
 
     try {
-      await fetch(`${API_BASE_URL}/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(finalPayload)
-      });
+      await api.patch(`/orders/${id}`, finalPayload);
       setEditOrder(null);
       fetchOrders();
     } catch (err) { console.error(err); } finally {
@@ -418,10 +420,19 @@ export default function App() {
         </div>
       </td>
       <td className="px-6 py-4">
-        <div className="font-bold text-sm text-slate-800">{order.title}</div>
-        <div className="flex flex-col">
-          <span className="text-[11px] text-slate-500 font-bold">{order.clientName}</span>
-          <span className="text-[10px] text-slate-400 font-medium leading-tight">Attn: {order.orderPlacedBy || 'N/A'}</span>
+        <div className="flex items-start gap-2">
+          {/* Type icon badge — shows what kind of inquiry this is */}
+          <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${order.orderType === 'offsite' ? 'bg-orange-50 text-orange-500' : 'bg-indigo-50 text-indigo-500'}`}
+            title={order.orderType === 'offsite' ? 'Offsite / Property' : 'Product Gifting'}>
+            {order.orderType === 'offsite' ? <MapPin size={12} /> : <Package size={12} />}
+          </div>
+          <div>
+            <div className="font-bold text-sm text-slate-800 leading-tight">{order.title}</div>
+            <div className="flex flex-col mt-0.5">
+              <span className="text-[11px] text-slate-500 font-bold">{order.clientName}</span>
+              <span className="text-[10px] text-slate-400 font-medium leading-tight">Attn: {order.orderPlacedBy || 'N/A'}</span>
+            </div>
+          </div>
         </div>
       </td>
       <td className="px-6 py-4 max-w-xs">
@@ -471,14 +482,14 @@ export default function App() {
         </div>
       </td>
       <td className="px-6 py-4 text-right">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1.5">
           {order.status === 'inquiry' && (
             <button
               disabled={loading}
               onClick={(e) => { e.stopPropagation(); setQuotePrompt(order); }}
               className={`px-3 py-1.5 rounded-lg font-black text-[10px] transition-colors uppercase ${loading
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
                 }`}
             >
               {loading ? '...' : 'Start Project'}
@@ -489,55 +500,91 @@ export default function App() {
             <button
               disabled={loading}
               onClick={(e) => { e.stopPropagation(); setCompletionPrompt(order); }}
-              className={`p-2 rounded-lg transition-colors ${loading ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-500 hover:bg-emerald-50'
-                }`}
+              className={`p-2 rounded-lg transition-colors ${loading ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-500 hover:bg-emerald-50'}`}
+              title="Mark complete"
             >
               <CheckCircle size={18} className={loading ? 'animate-pulse' : ''} />
             </button>
           )}
 
+          {/* Portal Chat button — opens team chat panel */}
+          {(order.status === 'inquiry' || order.status === 'ongoing') && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setChatOrder(order); }}
+              className="p-2 text-violet-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+              title="Open portal chat"
+            >
+              <Link2 size={16} />
+            </button>
+          )}
+
+          {/* ── Send Link button ── */}
+          {(order.status === 'inquiry' || order.status === 'ongoing') && (() => {
+            const slug = order.refNumber?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const portalUrl = `${window.location.origin}/p/${slug}`;
+            const alreadySent = sentLinks[order._id];
+            const justCopied = copiedId === order._id;
+
+            if (alreadySent) {
+              return (
+                <div className="relative group">
+                  <button
+                    disabled
+                    className="p-2 text-slate-300 cursor-not-allowed rounded-lg"
+                    title="Link already sent"
+                  >
+                    <Send size={16} />
+                  </button>
+                  {/* Tooltip on hover with copy option */}
+                  <div className="absolute right-0 top-8 hidden group-hover:flex flex-col gap-1.5 bg-slate-900 text-white rounded-xl p-3 shadow-xl z-50 min-w-[180px]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Link sent</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(portalUrl);
+                        setCopiedId(order._id);
+                        setTimeout(() => setCopiedId(null), 2000);
+                      }}
+                      className="flex items-center gap-2 text-[11px] font-bold text-indigo-300 hover:text-white transition-colors"
+                    >
+                      {justCopied ? <CheckCircle size={12} /> : <Copy size={12} />}
+                      {justCopied ? 'Copied!' : 'Copy link again'}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  // Mark as sent and copy to clipboard
+                  navigator.clipboard.writeText(portalUrl);
+                  setSentLinks(prev => ({ ...prev, [order._id]: slug }));
+                  setCopiedId(order._id);
+                  setTimeout(() => setCopiedId(null), 2000);
+                }}
+                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="Copy & send client link"
+              >
+                {justCopied ? <CheckCircle size={16} className="text-emerald-500" /> : <Send size={16} />}
+              </button>
+            );
+          })()}
+
           {order.status !== 'completed' && (
             <button
               disabled={loading}
               onClick={(e) => { e.stopPropagation(); setDeleteId(order._id); }}
-              className={`p-2 transition-colors ${loading ? 'text-slate-200 cursor-not-allowed' : 'text-slate-300 hover:text-red-500'
-                }`}
+              className={`p-2 transition-colors ${loading ? 'text-slate-200 cursor-not-allowed' : 'text-slate-300 hover:text-red-500'}`}
             >
               <Trash2 size={18} />
             </button>
           )}
         </div>
       </td>
-      {/*
-      <td className="px-6 py-4 text-right">
-        <div className="flex items-center justify-end gap-2">
-          {order.status === 'inquiry' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setQuotePrompt(order); }}
-              className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-black text-[10px] hover:bg-indigo-100 transition-colors uppercase"
-            >
-              Start Project
-            </button>
-          )}
-          {order.status === 'ongoing' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setCompletionPrompt(order); }}
-              className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-            >
-              <CheckCircle size={18} />
-            </button>
-          )}
-          {order.status !== 'completed' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setDeleteId(order._id); }}
-              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-            >
-              <Trash2 size={18} />
-            </button>
-          )}
-        </div>
-      </td>
-      */}
+
     </tr>
   );
 
@@ -917,6 +964,18 @@ export default function App() {
               /* FORM: Hidden when loading is true */
               <form onSubmit={saveOrder} className="p-8 space-y-5 overflow-y-auto custom-scrollbar">
                 <input required placeholder="Project Title" className="w-full bg-slate-50 p-4 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-indigo-100 transition-all" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+
+                {/* Order Type Selector */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[{v:'product',label:'🎁 Product Gifting'},{v:'offsite',label:'🏨 Offsite'}].map(({v,label}) => (
+                    <button type="button" key={v}
+                      onClick={() => setFormData({ ...formData, orderType: v })}
+                      className={`py-3 rounded-xl font-black text-xs uppercase tracking-widest border-2 transition-all ${formData.orderType === v ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-300'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <CustomCreatableSelect
                     label="Client Company"
@@ -1053,12 +1112,22 @@ export default function App() {
               <h3 className="text-xl font-black uppercase">Confirm Delete</h3>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-3 text-slate-400 font-black uppercase text-[10px]">Cancel</button>
-                <button onClick={async () => { await fetch(`${API_BASE_URL}/${deleteId}`, { method: 'DELETE' }); setDeleteId(null); fetchOrders(); }} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-[10px]">Delete</button>
+                <button onClick={async () => { await api.delete(`/orders/${deleteId}`); setDeleteId(null); fetchOrders(); }} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-[10px]">Delete</button>
               </div>
             </div>
           </div>
         )
       }
+
+
+
+      {/* ── Portal Chat Panel ── */}
+      {chatOrder && (
+        <PortalChatPanel
+          order={chatOrder}
+          onClose={() => setChatOrder(null)}
+        />
+      )}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }

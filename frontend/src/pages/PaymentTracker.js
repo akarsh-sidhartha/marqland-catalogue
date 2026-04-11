@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { getBaseUrl } from "../baseurl";
+import api from "../api";
 import {
   Trash2, ArrowRight, Link2, FolderOpen, Folder, ChevronDown, ChevronRight,
   Download, Archive, Search, X, Eye, FileText, Image as ImageIcon,
@@ -7,8 +7,7 @@ import {
   FileUp, Plus, ClipboardList
 } from "lucide-react";
 
-const API  = `${getBaseUrl()}/payment-tracker`;
-const VAPI = `${getBaseUrl()}/vendors`;
+
 
 // ─── Load JSZip + FileSaver ───────────────────────────────────────────────────
 const loadScript = (src) => new Promise((res) => {
@@ -223,8 +222,8 @@ let _geminiAvailable = null;   // null = not yet checked
 async function checkGeminiQuota() {
   if (_geminiAvailable !== null) return _geminiAvailable;
   try {
-    const res = await fetch(`${API}/gemini-status`);
-    const d   = await res.json();
+    const res = await api.get(`/payment-tracker/gemini-status`);
+    const d = res.data;
     _geminiAvailable = d.available !== false;
   } catch {
     _geminiAvailable = true;   // if the check itself fails, attempt the scan anyway
@@ -237,12 +236,9 @@ async function extractViaGemini(file) {
   const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
   const optimized  = file.type.startsWith("image/") ? await compressImage(b64) : b64;
   const base64data = optimized.includes(",") ? optimized : b64;
-  const res = await fetch(`${API}/invoices/process`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: base64data, mimeType: file.type }),
-  });
-  if (!res.ok) throw new Error("Gemini extraction failed");
-  return res.json();
+  const res = await api.post(`/payment-tracker/invoices/process`, { image: base64data, mimeType: file.type });
+  if (res.status >= 400) throw new Error("Gemini extraction failed");
+  return res.data;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -295,13 +291,13 @@ function UploadPIModal({ vendors, onSave, onClose }) {
     try {
       const payload = { ...form, totalAmount: parseFloat(form.totalAmount), attachment: fileBase64 || undefined, attachmentMime: fileMime || undefined };
       if (!payload.dueDate) delete payload.dueDate;
-      const res = await fetch(`${API}/pi`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const resData = await res.json();
+      const res = await api.post(`/payment-tracker/pi`, payload);
+      const resData = res.data;
       if (res.status === 409 && resData.duplicate) {
         setDupInfo({ piNumber: resData.piNumber });
         setSaving(false); return;
       }
-      if (!res.ok) throw new Error(resData.error);
+      if (res.status >= 400) throw new Error(resData.error);
       onSave(resData);
     } catch (e) { setErr(e.message); } setSaving(false);
   }
@@ -447,7 +443,7 @@ function UploadInvoiceModal({ vendors, proformaInvoices, linkedPiId, onSave, onC
   const saveGstToVendor = async () => {
     if (!selectedVendorId || !form.vendor_gst) return;
     try {
-      await fetch(`${API}/vendor-gst/${selectedVendorId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gstNumber: form.vendor_gst }) });
+      await api.patch(`/payment-tracker/vendor-gst/${selectedVendorId}`, { gstNumber: form.vendor_gst });
       setGstSaved(true);
       // Refresh vendors list in parent so next time this vendor shows its GST
       refreshVendors && refreshVendors();
@@ -464,14 +460,14 @@ function UploadInvoiceModal({ vendors, proformaInvoices, linkedPiId, onSave, onC
     try {
       const { month, fy } = getFinancialDetails(form.date);
       const payload = { ...form, total_amount: parseFloat(form.total_amount), cgst: parseFloat(form.cgst)||0, sgst: parseFloat(form.sgst)||0, igst: parseFloat(form.igst)||0, image: fileBase64 || undefined, mimeType: fileMime || "image/jpeg", receivedVia: "manual_upload", financialYear: form.financialYear || fy, month: form.month || month, notes: form.notes || "Uploaded via Payment Tracker" };
-      const res = await fetch(`${API}/invoices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const resData = await res.json();
+      const res = await api.post(`/payment-tracker/invoices`, payload);
+      const resData = res.data;
       if (res.status === 409 && resData.duplicate) {
         setDupInfo({ invoice_number: resData.invoice_number, vendor_name: resData.vendor_name });
         setSaving(false); return;
       }
-      if (!res.ok) throw new Error(resData.error || resData.message || "Save failed");
-      if (form.linkedPi) await fetch(`${API}/pi/${form.linkedPi}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "invoiced" }) }).catch(() => {});
+      if (res.status >= 400) throw new Error(resData.error || resData.message || "Save failed");
+      if (form.linkedPi) await api.patch(`/payment-tracker/pi/${form.linkedPi}`, { status: "invoiced" }).catch(() => {});
       onSave(resData);
     } catch (e) { setErr(e.message); } setSaving(false);
   }
@@ -675,9 +671,9 @@ function RecordPaymentModal({ vendors, proformaInvoices, vendorInvoices, payment
       if (payload.mappedTo !== "proforma_invoice") delete payload.proformaInvoice;
       if (payload.mappedTo !== "vendor_invoice")   delete payload.vendorInvoice;
       if (!payload.vendor) delete payload.vendor;
-      const res = await fetch(`${API}/payments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
-      onSave(await res.json());
+      const res = await api.post(`/payment-tracker/payments`, payload);
+      if (res.status >= 400) { const e = res.data; throw new Error(e.error); }
+      onSave(res.data);
     } catch (e) { setErr(e.message); } setSaving(false);
   }
 
@@ -869,9 +865,9 @@ function MapAdvanceModal({ payment, proformaInvoices, vendorInvoices, onSave, on
     if (mt === "vendor_invoice"   && !viId) { setErr("Select an Invoice."); return; }
     setSaving(true);
     try {
-      const res = await fetch(`${API}/payments/${payment._id}/map`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mappedTo: mt, proformaInvoice: piId || undefined, vendorInvoice: viId || undefined }) });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
-      onSave(await res.json());
+      const res = await api.patch(`/payment-tracker/payments/${payment._id}/map`, { mappedTo: mt, proformaInvoice: piId || undefined, vendorInvoice: viId || undefined });
+      if (res.status >= 400) { const e = res.data; throw new Error(e.error); }
+      onSave(res.data);
     } catch (e) { setErr(e.message); } setSaving(false);
   }
 
@@ -1034,13 +1030,13 @@ function PIFlowModal({ pi: piProp, payments, invoices, onMapPayment, onUploadInv
                           onClick={async () => {
                             setLinkingId(inv._id); setLinkErr("");
                             try {
-                              const res = await fetch(`${API}/payments/link-to-invoice`, {
+                              const res = await api.post(`/payment-tracker/payments/link-to-invoice`, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ piId: pi._id, invoiceId: inv._id }),
                               });
-                              const d = await res.json();
-                              if (!res.ok) throw new Error(d.error || "Link failed");
+                              const d = res.data;
+                              if (res.status >= 400) throw new Error(d.error || "Link failed");
                               onClose();
                               onRefresh && onRefresh();
                             } catch(e) { setLinkErr(e.message); setLinkingId(null); }
@@ -1594,7 +1590,7 @@ function MobileInvoicePage({ vendors, proformaInvoices, onSaved }) {
 
   const saveGstToVendor = async () => {
     if (!selectedVendorId || !form.vendor_gst) return;
-    try { await fetch(`${API}/vendor-gst/${selectedVendorId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gstNumber: form.vendor_gst }) }); setGstSaved(true); } catch {}
+    try { await api.patch(`/payment-tracker/vendor-gst/${selectedVendorId}`, { gstNumber: form.vendor_gst }); setGstSaved(true); } catch {}
   };
 
   const submit = async () => {
@@ -1604,10 +1600,10 @@ function MobileInvoicePage({ vendors, proformaInvoices, onSaved }) {
     try {
       const { month, fy } = getFinancialDetails(form.date);
       const payload = { ...form, total_amount: parseFloat(form.total_amount), cgst: parseFloat(form.cgst)||0, sgst: parseFloat(form.sgst)||0, igst: parseFloat(form.igst)||0, image: fileBase64 || undefined, mimeType: fileMime || "image/jpeg", receivedVia: "manual_upload", financialYear: form.financialYear || fy, month: form.month || month };
-      const res = await fetch(`${API}/invoices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const d = await res.json();
+      const res = await api.post(`/payment-tracker/invoices`, payload);
+      const d = res.data;
       if (res.status === 409 && d.duplicate) { setDupInfo({ invoice_number: d.invoice_number, vendor_name: d.vendor_name }); setSaving(false); return; }
-      if (!res.ok) throw new Error(d.error || "Save failed");
+      if (res.status >= 400) throw new Error(d.error || "Save failed");
       setDone(d); onSaved && onSaved();
     } catch (e) { setErr(e.message); } setSaving(false);
   };
@@ -1786,15 +1782,15 @@ export default function PaymentTracker() {
     try {
       const params = new URLSearchParams(); if (filterVendor) params.set("vendorId", filterVendor);
       const qs = params.toString() ? "?" + params.toString() : "";
-      const [piR, payR, invR] = await Promise.all([fetch(`${API}/pi${qs}`), fetch(`${API}/payments${qs}`), fetch(`${API}/invoices`)]);
-      const [piD, payD, invD] = await Promise.all([piR.json(), payR.json(), invR.json()]);
+      const [piR, payR, invR] = await Promise.all([api.get(`/payment-tracker/pi${qs}`), api.get(`/payment-tracker/payments${qs}`), api.get(`/payment-tracker/invoices`)]);
+      const [piD, payD, invD] = [piR.data, payR.data, invR.data];
       setData({ pi: piD.data || [], payments: payD.data || [], invoices: Array.isArray(invD) ? invD : (invD.data || []) });
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [filterVendor]);
 
   const loadVendors = useCallback(() => {
-    fetch(VAPI).then((r) => r.json()).then((d) => setVendors(Array.isArray(d) ? d : (d.data || []))).catch(() => {});
+    api.get(`/vendors`).then((r) => setVendors(Array.isArray(r.data) ? r.data : (r.data?.data || []))).catch(() => {});
   }, []);
   useEffect(() => { loadVendors(); }, [loadVendors]);
 
@@ -1955,7 +1951,7 @@ export default function PaymentTracker() {
                             onClick={async (e) => {
                               e.stopPropagation();
                               if (!window.confirm(`Delete PI ${pi.piNumber}? This will also delete ${(pi.payments||[]).length} linked payment(s).`)) return;
-                              await fetch(`${API}/pi/${pi._id}`, { method: "DELETE" });
+                              await api.delete(`/payment-tracker/pi/${pi._id}`);
                               showToast("PI deleted"); load();
                             }}
                             style={{ display:"flex", alignItems:"center", justifyContent:"center", width:34, height:34, borderRadius:8, border:"1px solid #fecaca", background:"#fef2f2", color:"#ef4444", cursor:"pointer", flexShrink:0, marginTop:2 }}
@@ -2033,7 +2029,7 @@ export default function PaymentTracker() {
                       </button>
                       <button onClick={async () => {
                         if (!window.confirm(`Delete payment ${pay.paymentRef} of ${fmt(pay.amount)}? This will reverse any balance updates.`)) return;
-                        await fetch(`${API}/payments/${pay._id}`, { method: "DELETE" });
+                        await api.delete(`/payment-tracker/payments/${pay._id}`);
                         showToast("Payment deleted"); load();
                       }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 8, border: "1px solid #fecaca", background: "#fef2f2", color: "#ef4444", cursor: "pointer" }}>
                         <Trash2 size={14} />
@@ -2051,7 +2047,7 @@ export default function PaymentTracker() {
                 payments={data.payments}
                 proformaInvoices={data.pi}
                 vendors={vendors}
-                onDelete={async (id) => { await fetch(`${API}/invoices/${id}`, { method: "DELETE" }); load(); showToast("Invoice deleted"); }}
+                onDelete={async (id) => { await api.delete(`/payment-tracker/invoices/${id}`); load(); showToast("Invoice deleted"); }}
                 onViewInvoice={(inv) => { setSelected(inv); setModal("invoice_view"); }}
                 onUpload={() => { setLinkedPiId(null); setModal("upload_invoice"); }}
               />

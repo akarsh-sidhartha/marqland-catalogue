@@ -1,77 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { getBaseUrl } from '../baseurl'; // Import the central function
+import api from '../api';
+import { FileText, Search, Trash2, Calendar, Loader2, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 
-import { 
-  FileText, Search, Trash2, Calendar, 
-  Loader2, ChevronRight, AlertCircle, RefreshCw
-} from 'lucide-react';
-import axios from 'axios';
-
-/**
- * OffsiteCatalogues Component
- * Displays and manages property proposals (catalogues) fetched from the backend.
- * Handles Network Errors with improved endpoint detection and retry logic.
- */
 const App = () => {
   const [catalogues, setCatalogues] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  /*
-  const getBaseUrl = () => {
-    const { hostname } = window.location;
-    // If we are on localhost, use localhost. 
-    // Otherwise, use the IP address currently in the browser's address bar.
-    const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname;
-    return `http://${host}:5000/api`;
-  };
-*/
-  const API_URL_OFFISTE_CATALOUGE = `${getBaseUrl()}/offsitecatalogues`;
-
-  // Determine the API Base URL based on the current environment
-  /* const getApiUrl = () => {
-    const hostname = window.location.hostname;
-    // If running in a cloud/preview environment, we might need a relative path or specific proxy
-    // For local development, it defaults to localhost:5000
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `http://localhost:5000/api/offsitecatalogues`;
-    }
-    // Fallback for custom local network IPs or production
-    return `http://${hostname}:5000/api/offsitecatalogues`;
-  }; */
-
-  // Fetch data from the API on mount
   const fetchCatalogues = async () => {
     setLoading(true);
     setError(null);
     try {
-      //const url = getApiUrl();
-      const url = API_URL_OFFISTE_CATALOUGE;
-      const response = await axios.get(url, {
-        timeout: 5000 // Add timeout to catch network hangs early
-      });
-      
-      if (Array.isArray(response.data.data)) {
-        //console.log("inside if",response.data.data)
+      const response = await api.get('/offsitecatalogues');
+      // Handle both response shapes from backend
+      if (Array.isArray(response.data?.data)) {
         setCatalogues(response.data.data);
-      } else if (response.data && Array.isArray(response.data.catalogues)) {
-        //console.log("inside else if",response.data.catalogues)
+      } else if (Array.isArray(response.data?.catalogues)) {
         setCatalogues(response.data.catalogues);
+      } else if (Array.isArray(response.data)) {
+        setCatalogues(response.data);
       } else {
-        console.log("inside else");
         setCatalogues([]);
       }
     } catch (err) {
-      console.error("Fetch error details:", err);
-      
-      // Customize error message based on Axios error type
+      console.error("Fetch error:", err);
       if (err.code === 'ERR_NETWORK') {
-        setError("Network Error: Unable to connect to the backend server at " + API_URL_OFFISTE_CATALOUGE + ". Please ensure your backend is running on port 5000 and CORS is enabled.");
+        setError("Cannot connect to server. Please ensure the backend is running.");
       } else if (err.code === 'ECONNABORTED') {
-        setError("Connection Timed Out: The server took too long to respond.");
+        setError("Connection timed out. The server took too long to respond.");
       } else {
         setError("Failed to load catalogues: " + (err.response?.data?.message || err.message));
       }
@@ -81,37 +38,30 @@ const App = () => {
     }
   };
 
-  useEffect(() => {
-    fetchCatalogues();
-  }, []);
+  useEffect(() => { fetchCatalogues(); }, []);
 
   const deleteCatalogue = async (id, e) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this catalogue?")) return;
-
     try {
-      const url = API_URL_OFFISTE_CATALOUGE.replace('/api/offsitecatalogues', `/api/offsitecatalogues/${id}`);
-      await axios.delete(url);
+      await api.delete(`/offsitecatalogues/${id}`); // ← fixed: was using string replace hack
       setCatalogues(prev => prev.filter(c => c._id !== id));
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete. Check if the backend server is reachable.");
+      alert("Failed to delete. Please try again.");
     }
   };
 
   const handleEdit = (cat) => {
-    const mappedCat = {
-      ...cat,
-      name: cat.title || cat.name || "Untitled Proposal"
-    };
+    const mappedCat = { ...cat, name: cat.title || cat.name || "Untitled Proposal" };
     localStorage.setItem('edit_offsite_catalogue', JSON.stringify(mappedCat));
     window.open('/offsite-builder', '_blank');
   };
 
   const filtered = (Array.isArray(catalogues) ? catalogues : []).filter(cat => {
-    const nameStr = (cat.name || cat.title || "").toLowerCase();
+    const nameStr     = (cat.name || cat.title || "").toLowerCase();
     const subtitleStr = (cat.subtitle || "").toLowerCase();
-    const searchStr = searchTerm.toLowerCase();
+    const searchStr   = searchTerm.toLowerCase();
     return nameStr.includes(searchStr) || subtitleStr.includes(searchStr);
   });
 
@@ -124,15 +74,11 @@ const App = () => {
 
   if (error) return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-red-500 bg-[#f8fafc] p-6 text-center">
-      <div className="bg-red-50 p-4 rounded-full mb-4">
-        <AlertCircle size={48} />
-      </div>
+      <div className="bg-red-50 p-4 rounded-full mb-4"><AlertCircle size={48} /></div>
       <h3 className="text-xl font-bold mb-2 text-slate-900">Connection Failed</h3>
       <p className="text-slate-500 mb-8 max-w-md text-sm leading-relaxed">{error}</p>
-      <button 
-        onClick={fetchCatalogues}
-        className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-full text-sm font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95"
-      >
+      <button onClick={fetchCatalogues}
+        className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-full text-sm font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95">
         <RefreshCw size={16} /> Try Reconnecting
       </button>
     </div>
@@ -145,26 +91,17 @@ const App = () => {
           <h1 className="text-3xl font-bold tracking-tight">Offsite Catalogues</h1>
           <p className="text-slate-500 text-sm mt-1">Manage and edit your saved property proposals.</p>
         </div>
-        
         <div className="flex items-center gap-3 w-full md:w-auto">
-                    {/* Refresh Button */}
-          <button 
-            onClick={fetchCatalogues}
-            disabled={loading}
+          <button onClick={fetchCatalogues} disabled={loading}
             className="p-3 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Refresh Catalogues"
-          >
+            title="Refresh Catalogues">
             <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
           </button>
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search proposals..." 
+            <input type="text" placeholder="Search proposals..."
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 ring-indigo-500/20 outline-none transition-all shadow-sm"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
         </div>
       </div>
@@ -184,11 +121,8 @@ const App = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((cat) => (
-            <div 
-              key={cat._id}
-              onClick={() => handleEdit(cat)}
-              className="group bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all cursor-pointer overflow-hidden flex flex-col"
-            >
+            <div key={cat._id} onClick={() => handleEdit(cat)}
+              className="group bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all cursor-pointer overflow-hidden flex flex-col">
               <div className="p-7 flex-1">
                 <h3 className="text-xl font-bold leading-snug group-hover:text-indigo-600 transition-colors">
                   {cat.title || cat.name || "Untitled Proposal"}
@@ -196,7 +130,6 @@ const App = () => {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 mb-4">
                   {cat.description || 'General Proposal'}
                 </p>
-                
                 <div className="flex items-center gap-4 mt-6">
                   <div className="flex -space-x-2 overflow-hidden">
                     {cat.items?.slice(0, 3).map((item, i) => (
@@ -219,7 +152,6 @@ const App = () => {
                   </span>
                 </div>
               </div>
-
               <div className="px-7 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-slate-400">
                   <Calendar size={12} />
@@ -231,12 +163,10 @@ const App = () => {
                   Edit <ChevronRight size={12} />
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={(e) => deleteCatalogue(cat._id, e)}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  <button onClick={(e) => deleteCatalogue(cat._id, e)}
+                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
             </div>

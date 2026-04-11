@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api';
 import { Download, Plus, Search, ChevronDown, ChevronRight, Edit2, Trash2, Mail, Phone, Building2 } from 'lucide-react';
-import { getBaseUrl } from '../baseurl'; // Import the central function
 
 const ClientList = () => {
-  const [clients, setClients] = useState([]);
+  const [clients, setClients]       = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRows, setExpandedRows] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentId, setCurrentId] = useState(null);
-
-  // Sorting State
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
+  const [showModal, setShowModal]   = useState(false);
+  const [isEditing, setIsEditing]   = useState(false);
+  const [currentId, setCurrentId]   = useState(null);
+  const [sortOrder, setSortOrder]   = useState('asc');
 
   const [formData, setFormData] = useState({
     companyName: '',
@@ -21,43 +18,16 @@ const ClientList = () => {
 
   useEffect(() => { fetchClients(); }, []);
 
-  /*
-  const getBaseUrl = () => {
-    const { hostname } = window.location;
-    // If we are on localhost, use localhost. 
-    // Otherwise, use the IP address currently in the browser's address bar.
-    const host = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname;
-    return `http://${host}:5000/api`;
-  };
-*/
-  const API_URL_CLIENTS = `${getBaseUrl()}/clients`;
-
-  /* const getApiUrlForClients = () => {
-    const hostname = window.location.hostname;
-    // If running in a cloud/preview environment, we might need a relative path or specific proxy
-    // For local development, it defaults to localhost:5000
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `http://localhost:5000/api/clients`;
-    }
-    // Fallback for custom local network IPs or production
-    return `http://${hostname}:5000/api/clients`;
-  }; */
-
   const fetchClients = async () => {
     try {
-      //const res = await axios.get('http://localhost:5000/api/clients');
-      const res = await axios.get(API_URL_CLIENTS);
+      const res = await api.get('/clients'); // ← added await (was missing before)
       setClients(res.data);
     } catch (err) {
       console.error("Error fetching clients", err);
     }
   };
 
-  // --- Search & Sort Logic ---
   const processClients = () => {
-    // 1. Filter
     let result = clients.filter(c => {
       const searchStr = searchTerm.toLowerCase();
       const contactMatch = c.contacts?.some(contact =>
@@ -65,23 +35,18 @@ const ClientList = () => {
       );
       return c.companyName?.toLowerCase().includes(searchStr) || contactMatch;
     });
-
-    // 2. Sort
     result.sort((a, b) => {
       const nameA = a.companyName.toLowerCase();
       const nameB = b.companyName.toLowerCase();
       if (sortOrder === 'asc') return nameA < nameB ? -1 : 1;
       return nameA > nameB ? -1 : 1;
     });
-
     return result;
   };
 
   const filteredClients = processClients();
 
-  const toggleSort = () => {
-    setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  };
+  const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
   const toggleRow = (id) => {
     setExpandedRows(prev =>
@@ -111,8 +76,7 @@ const ClientList = () => {
     e.stopPropagation();
     if (window.confirm(`Are you sure you want to delete client "${name}"?`)) {
       try {
-        //await axios.delete(`http://localhost:5000/api/clients/${id}`);
-        await axios.delete(API_URL_CLIENTS + `${id}`);
+        await api.delete(`/clients/${id}`); // ← added await
         fetchClients();
       } catch (err) {
         alert("Failed to delete client.");
@@ -134,11 +98,9 @@ const ClientList = () => {
   const handleSave = async () => {
     try {
       if (isEditing) {
-        //await axios.put(`http://localhost:5000/api/clients/${currentId}`, formData);
-        await axios.put(API_URL_CLIENTS + `/${currentId}`, formData);
+        await api.put(`/clients/${currentId}`, formData); // ← fixed: was /clients/${id} (id undefined)
       } else {
-        //await axios.post('http://localhost:5000/api/clients', formData);
-        await axios.post(API_URL_CLIENTS, formData);
+        await api.post('/clients', formData); // ← added await
       }
       setShowModal(false);
       resetForm();
@@ -148,8 +110,6 @@ const ClientList = () => {
     }
   };
 
-
-  // Export to Excel (CSV format)
   const exportToExcel = () => {
     const headers = ["Company Name", "Contact Person", "Phone", "Email"];
     const rows = filteredClientsforExcel.flatMap(client =>
@@ -160,10 +120,8 @@ const ClientList = () => {
         contact.email
       ])
     );
-
     const csvContent = "data:text/csv;charset=utf-8,"
       + [headers, ...rows].map(e => e.map(val => `"${val || ''}"`).join(",")).join("\n");
-
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -194,7 +152,6 @@ const ClientList = () => {
           Client Management
         </h1>
 
-        {/* Search Bar with Clear Button */}
         <div className="flex-grow max-w-2xl relative group">
           <span className="absolute left-3 top-3 text-gray-400">🔍</span>
           <input
@@ -208,9 +165,7 @@ const ClientList = () => {
             <button
               onClick={() => setSearchTerm('')}
               className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-full w-6 h-6 flex items-center justify-center transition"
-            >
-              ✕
-            </button>
+            >✕</button>
           )}
         </div>
 
@@ -228,7 +183,6 @@ const ClientList = () => {
           <Download size={16} />
           Export
         </button>
-
       </div>
 
       {/* TABLE */}
@@ -237,10 +191,7 @@ const ClientList = () => {
           <thead className="bg-gray-100 border-b border-gray-200 uppercase text-[11px] font-black text-gray-500">
             <tr>
               <th className="p-3 w-10"></th>
-              <th
-                className="p-3 cursor-pointer hover:text-indigo-600 transition flex items-center gap-1"
-                onClick={toggleSort}
-              >
+              <th className="p-3 cursor-pointer hover:text-indigo-600 transition flex items-center gap-1" onClick={toggleSort}>
                 Client Company {sortOrder === 'asc' ? '↑' : '↓'}
               </th>
               <th className="p-3">Primary Contact</th>
@@ -262,7 +213,11 @@ const ClientList = () => {
                     <td className="p-3 font-bold text-gray-700 uppercase text-sm">{c.companyName}</td>
                     <td className="p-3 text-sm text-gray-500">
                       {c.contacts[0]?.name || '---'}
-                      {c.contacts.length > 1 && <span className="ml-2 text-[10px] bg-gray-200 px-1.5 py-0.5 rounded-full">+{c.contacts.length - 1} more</span>}
+                      {c.contacts.length > 1 && (
+                        <span className="ml-2 text-[10px] bg-gray-200 px-1.5 py-0.5 rounded-full">
+                          +{c.contacts.length - 1} more
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-right">
                       <button onClick={(e) => handleEdit(c, e)} className="text-indigo-600 font-bold text-[11px] hover:underline mr-4 uppercase">Edit</button>
@@ -295,7 +250,7 @@ const ClientList = () => {
         </table>
       </div>
 
-      {/* MODAL POPUP (Same as before) */}
+      {/* MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -319,9 +274,10 @@ const ClientList = () => {
               <div className="pt-4 border-t">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-black text-indigo-600 text-[11px] uppercase tracking-widest">Points of Contact</h3>
-                  <button onClick={handleAddContactRow} className="bg-indigo-50 text-indigo-700 px-4 py-1 rounded-full text-[10px] font-bold hover:bg-indigo-100">+ ADD PERSON</button>
+                  <button onClick={handleAddContactRow} className="bg-indigo-50 text-indigo-700 px-4 py-1 rounded-full text-[10px] font-bold hover:bg-indigo-100">
+                    + ADD PERSON
+                  </button>
                 </div>
-
                 <div className="space-y-3">
                   {formData.contacts.map((contact, index) => (
                     <div key={index} className="flex gap-3 items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -339,10 +295,7 @@ const ClientList = () => {
 
             <div className="flex justify-end gap-4 border-t mt-8 pt-6">
               <button onClick={() => setShowModal(false)} className="px-6 py-2 text-gray-400 font-bold">Cancel</button>
-              <button
-                onClick={handleSave}
-                className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg"
-              >
+              <button onClick={handleSave} className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg">
                 Confirm
               </button>
             </div>
