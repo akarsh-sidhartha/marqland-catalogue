@@ -28,8 +28,24 @@ const usePortalItems = (type) => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get(`/portal?type=${type}&status=active`);
-      setPortals(res.data || []);
+      // Fetch portals and active orders in parallel
+      const [portalRes, orderRes] = await Promise.all([
+        api.get(`/portal?type=${type}&status=active`),
+        api.get('/orders').catch(() => ({ data: [] })),
+      ]);
+
+      const allPortals = portalRes.data || [];
+      const activeOrderIds = new Set(
+        (orderRes.data || []).map(o => o._id?.toString())
+      );
+
+      // Only show portals whose parent order still exists
+      // If orderId is missing (legacy) allow it through
+      const valid = allPortals.filter(p =>
+        !p.orderId || activeOrderIds.has(p.orderId?.toString())
+      );
+
+      setPortals(valid);
     } catch {
       setError(`Could not load portals. Make sure the backend is running.`);
       setPortals([]);
@@ -61,29 +77,8 @@ const usePortalItems = (type) => {
       const mapped = pending
         .filter(p => !existingIds.has(p._id))
         .map(p => type === 'product'
-          ? { productId: p._id, name: p.name || '', description: p.description || '', imageUrl: p.imageUrl || '', price: Number(p.price || 0), category: p.category || '', subCategory: p.subCategory || '' }
-          : {
-              propertyId:   p._id,
-              name:         p.propertyName || p.name || '',
-              location:     p.place ? `${p.place}, ${p.state}` : '',
-              imageUrl:     p.imageUrl  || '',
-              website:      p.website   || '',
-              details:      p.details   || '',
-              type:         p.type      || 'Night Stay',
-              singlePrice:  Number(p.singlePrice  || 0),
-              doublePrice:  Number(p.doublePrice  || 0),
-              triplePrice:  Number(p.triplePrice  || 0),
-              packagePrice: Number(p.packagePrice || 0),
-              djCost:       Number(p.djCost       || 0),
-              licenseFeeDJ: Number(p.licenseFeeDJ || 0),
-              cocktailSnacks: Number(p.cocktailSnacks || 0),
-              banquetHall:  Number(p.banquetHall  || 0),
-              dayPackages:  (p.dayPackages || []).map(pkg => ({
-                name:          pkg.name          || '',
-                activities:    pkg.activities    || '',
-                sellingPrice:  Number(pkg.sellingPrice || 0),
-              })),
-            }
+          ? { productId: p._id, name: p.name || '', description: p.description || '', imageUrl: p.imageUrl || '', price: Number(p.price || 0), category: p.category || '' }
+          : { propertyId: p._id, name: p.propertyName || p.name || '', location: p.place ? `${p.place}, ${p.state}` : '', imageUrl: p.imageUrl || '', website: p.website || '', details: p.details || '', type: p.type || 'Night Stay', doublePrice: Number(p.doublePrice || 0), triplePrice: Number(p.triplePrice || 0), packagePrice: Number(p.packagePrice || 0), djCost: Number(p.djCost || 0), licenseFeeDJ: Number(p.licenseFeeDJ || 0), cocktailSnacks: Number(p.cocktailSnacks || 0), banquetHall: Number(p.banquetHall || 0) }
         );
 
       if (mapped.length === 0) {

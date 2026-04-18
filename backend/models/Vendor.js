@@ -1,37 +1,28 @@
 const mongoose = require('mongoose');
 
+const vendorMediaSchema = new mongoose.Schema({
+  name:       { type: String, required: true },   // original filename
+  url:        { type: String, required: true },   // /uploads/vendors/...
+  mimeType:   { type: String, default: 'application/octet-stream' },
+  size:       { type: Number, default: 0 },
+  label:      { type: String, default: '' },      // optional note e.g. "Product Catalogue 2024"
+  uploadedAt: { type: Date,   default: Date.now },
+}, { _id: true });
+
 const vendorSchema = new mongoose.Schema({
-  companyName: { type: String, required: true },
-  state: { type: String, required: true },
+  companyName:      { type: String, required: true },
+  state:            { type: String },
   suppliedProducts: { type: String },
-  category: { type: String }, // New Field Added
-  description: String,
-   gstNumber: { type: String, default: "" },
+  category:         { type: String },
+  description:      String,
+  gstNumber:        { type: String, default: "" },
   contacts: [{
-    name: String,
+    name:  String,
     phone: String,
-    email: String
-  }]
+    email: String,
+  }],
+  // Images, PDFs, documents, video recordings about this vendor
+  media: [vendorMediaSchema],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Vendor', vendorSchema);
-/*
-const mongoose = require('mongoose');
-
-const vendorSchema = new mongoose.Schema({
-  // Changed from 'name' to 'companyName' to match frontend
-  companyName: { type: String, required: true },
-  state: { type: String, required: true },
-  // Added the new field for products
-  suppliedProducts: { type: String },
-  // Kept existing description in case you use it elsewhere
-  description: String,
-  contacts: [{
-    name: String,
-    phone: String,
-    email: String
-  }]
-}, { timestamps: true });
-
-module.exports = mongoose.model('Vendor', vendorSchema);
-*/

@@ -1,25 +1,59 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
-// ── Inline icons ───────────────────────────────────────────────────────────────
-const Ic = {
-  send:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
-  attach: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>,
-  dl:     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  ext:    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>,
-  pin:    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
-  star:   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
-  file:   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
-  close:  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  share:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
-  zoom:   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>,
+// ─────────────────────────────────────────────────────────────────────────────
+// DESIGN SYSTEM — "The Digital Concierge" (DESIGN.md)
+//
+// Surfaces:   #0a1422 base | #17202f container | #2c3545 elevated
+// Accent:     #e6c273 → #c5a357  (Champagne Gold gradient)
+// On-primary: #3f2e00
+// Typography: "Noto Serif" for display/headlines | "Manrope" for body
+// Rules:      No 1px borders for sections — use tonal shifts + negative space
+//             Ghost borders: rgba(white, 0.15) only when containment is needed
+//             Shadows: blur 40px, rgba(0,0,0,0.4)
+//             Roundedness: xl = 12px
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DS = {
+  base:    '#0a1422',
+  cont:    '#17202f',
+  contHi:  '#1f2d40',
+  contTop: '#2c3545',
+  bright:  '#374155',
+  gold:    '#c5a357',
+  goldHi:  '#e6c273',
+  onGold:  '#3f2e00',
+  outline: 'rgba(255,255,255,0.15)',
+  muted:   'rgba(255,255,255,0.35)',
+  text:    '#f0e8d6',
+  sub:     'rgba(240,232,214,0.55)',
 };
 
-const toINR  = v => `₹${Number(v||0).toLocaleString('en-IN')}`;
-const fmtSz  = b => b>1048576 ? `${(b/1048576).toFixed(1)} MB` : `${Math.round(b/1024)} KB`;
-const fmtT   = d => new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+const GOLD_GRAD = `linear-gradient(45deg, ${DS.goldHi}, ${DS.gold})`;
+const GLASS_BG  = 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)';
 
-// ── Lightbox — fix 6 ───────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const toINR = v => `₹${Number(v||0).toLocaleString('en-IN')}`;
+const fmtSz = b => b>1048576 ? `${(b/1048576).toFixed(1)} MB` : `${Math.round(b/1024)} KB`;
+const fmtT  = d => new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+
+// ── Inline feather-weight icons ───────────────────────────────────────────────
+const Ic = {
+  send:   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+  attach: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>,
+  dl:     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  ext:    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>,
+  pin:    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  star:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  file:   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+  close:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  share:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
+  zoom:   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>,
+  heart:  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
+  heartO: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
+};
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
 const Lightbox = ({ src, alt, onClose }) => {
   useEffect(()=>{
     const fn = e => { if(e.key==='Escape') onClose(); };
@@ -27,174 +61,283 @@ const Lightbox = ({ src, alt, onClose }) => {
     return ()=>window.removeEventListener('keydown',fn);
   },[onClose]);
   return (
-    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:24,backdropFilter:'blur(10px)'}}>
-      <button onClick={onClose} style={{position:'fixed',top:18,right:18,background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:'50%',width:42,height:42,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#fff',zIndex:10000}}>
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(5,8,16,0.96)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:24,backdropFilter:'blur(24px)'}}>
+      <button onClick={onClose} style={{position:'fixed',top:20,right:20,background:GLASS_BG,border:'1px solid rgba(255,255,255,0.12)',borderRadius:'50%',width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
         {Ic.close}
       </button>
       <img src={src} alt={alt} onClick={e=>e.stopPropagation()}
-        style={{maxWidth:'90vw',maxHeight:'85vh',borderRadius:12,objectFit:'contain',boxShadow:'0 40px 80px rgba(0,0,0,0.7)'}}/>
+        style={{maxWidth:'90vw',maxHeight:'86vh',borderRadius:16,objectFit:'contain',boxShadow:'0 40px 80px rgba(0,0,0,0.4)'}}/>
     </div>
   );
 };
 
-// ── Attachment download chip ───────────────────────────────────────────────────
-const AttachChip = ({ att, isTeam }) => (
-  <a href={att.url} target="_blank" rel="noreferrer" download={att.name}
-    style={{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 10px',background:isTeam?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)',borderRadius:8,textDecoration:'none',marginTop:4}}>
-    <span style={{color:isTeam?'#e2e8f0':'#475569'}}>{Ic.file}</span>
-    <span style={{fontSize:12,fontWeight:600,color:isTeam?'#e2e8f0':'#475569',maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
-    {att.size>0&&<span style={{fontSize:10,color:'#94a3b8'}}>{fmtSz(att.size)}</span>}
-    <span style={{color:isTeam?'#94a3b8':'#64748b'}}>{Ic.dl}</span>
-  </a>
-);
+// ── Attachment chip ────────────────────────────────────────────────────────────
+const AttachChip = ({ att, isTeam }) => {
+  const handleDownload = async (e) => {
+    e.preventDefault();
+    try {
+      // Fetch the file as a blob so download works cross-origin
+      const res = await fetch(att.url);
+      if (!res.ok) throw new Error('File not found');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = att.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // Fallback: open in new tab
+      window.open(att.url, '_blank');
+    }
+  };
+  return (
+    <a href={att.url} target="_blank" rel="noreferrer"
+      onClick={handleDownload}
+      style={{display:'inline-flex',alignItems:'center',gap:7,padding:'6px 11px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,textDecoration:'none',marginTop:5,cursor:'pointer'}}>
+      <span style={{color:DS.gold}}>{Ic.file}</span>
+      <span style={{fontSize:11,fontWeight:600,color:DS.muted,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
+      {att.size>0&&<span style={{fontSize:10,color:'rgba(255,255,255,0.25)'}}>{fmtSz(att.size)}</span>}
+      <span style={{color:'rgba(255,255,255,0.3)'}}>{Ic.dl}</span>
+    </a>
+  );
+};
 
 // ── Pending file strip ─────────────────────────────────────────────────────────
 const FileStrip = ({ files, onRemove }) => {
   if(!files.length) return null;
   return (
-    <div style={{display:'flex',flexWrap:'wrap',gap:6,padding:'8px 16px 0'}}>
+    <div style={{display:'flex',flexWrap:'wrap',gap:6,padding:'8px 18px 0'}}>
       {files.map((f,i)=>(
-        <div key={i} style={{display:'flex',alignItems:'center',gap:5,background:'#1e293b',border:'1px solid #334155',borderRadius:8,padding:'4px 8px'}}>
-          <span style={{color:'#94a3b8'}}>{Ic.file}</span>
-          <span style={{fontSize:11,color:'#94a3b8',maxWidth:90,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
-          <button onClick={()=>onRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b',padding:0,display:'flex',marginLeft:2}}>{Ic.close}</button>
+        <div key={i} style={{display:'flex',alignItems:'center',gap:6,background:DS.contHi,border:'1px solid rgba(255,255,255,0.08)',borderRadius:8,padding:'4px 10px'}}>
+          <span style={{color:DS.gold,display:'flex'}}>{Ic.file}</span>
+          <span style={{fontSize:11,color:DS.muted,maxWidth:90,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+          <button onClick={()=>onRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.3)',padding:0,display:'flex',marginLeft:2}}>{Ic.close}</button>
         </div>
       ))}
     </div>
   );
 };
 
-// ── 3D Glassmorphism card — fix 7 ─────────────────────────────────────────────
-const GlassCard = ({ children, style={}, delay=0 }) => (
-  <div style={{
-    background:'linear-gradient(135deg,rgba(255,255,255,0.08) 0%,rgba(255,255,255,0.02) 60%,rgba(255,255,255,0.05) 100%)',
-    border:'1px solid rgba(255,255,255,0.13)',
-    borderRadius:20,
-    backdropFilter:'blur(20px)',
-    WebkitBackdropFilter:'blur(20px)',
-    boxShadow:'0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.2)',
-    position:'relative',
-    overflow:'hidden',
-    transition:'transform 0.3s cubic-bezier(.34,1.56,.64,1), box-shadow 0.3s ease, border-color 0.3s ease',
-    animation:`fadeIn .45s ease ${delay}s both`,
-    ...style,
-  }}
-    onMouseEnter={e=>{
-      e.currentTarget.style.transform='translateY(-6px) scale(1.015)';
-      e.currentTarget.style.boxShadow='0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14), 0 0 0 1px rgba(249,115,22,0.15)';
-      e.currentTarget.style.borderColor='rgba(249,115,22,0.4)';
+// ── Refined Glass Card ─────────────────────────────────────────────────────────
+// Follows DESIGN.md "Glass & Gradient Rule": semi-transparent surface-variant + backdrop-blur
+const GlassCard = ({ children, style={}, delay=0, onHover }) => {
+  const ref = useRef(null);
+  return (
+    <div ref={ref} style={{
+      background: GLASS_BG,
+      border: `1px solid ${DS.outline}`,
+      borderRadius: 12,                    // xl per DESIGN.md
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.32)',
+      position: 'relative',
+      overflow: 'hidden',
+      transition: 'transform 0.28s cubic-bezier(.34,1.56,.64,1), box-shadow 0.28s ease, border-color 0.28s ease',
+      animation: `obsidianFadeIn .5s ease ${delay}s both`,
+      ...style,
     }}
-    onMouseLeave={e=>{
-      e.currentTarget.style.transform='none';
-      e.currentTarget.style.boxShadow='0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.2)';
-      e.currentTarget.style.borderColor='rgba(255,255,255,0.13)';
-    }}>
-    {/* Top shimmer line */}
-    <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.18) 50%,transparent 100%)',pointerEvents:'none'}}/>
-    {/* Corner depth accent */}
-    <div style={{position:'absolute',top:0,right:0,width:60,height:60,background:'radial-gradient(circle at top right,rgba(255,255,255,0.06),transparent 70%)',pointerEvents:'none'}}/>
-    {children}
-  </div>
-);
+      onMouseEnter={e=>{
+        e.currentTarget.style.transform='translateY(-4px)';
+        e.currentTarget.style.boxShadow='0 24px 48px rgba(0,0,0,0.4)';
+        e.currentTarget.style.borderColor='rgba(197,163,87,0.35)';
+        onHover?.('enter');
+      }}
+      onMouseLeave={e=>{
+        e.currentTarget.style.transform='none';
+        e.currentTarget.style.boxShadow='0 8px 32px rgba(0,0,0,0.32)';
+        e.currentTarget.style.borderColor=DS.outline;
+        onHover?.('leave');
+      }}>
+      {/* Shimmer line — signature texture from DESIGN.md */}
+      <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,rgba(230,194,115,0.18) 50%,transparent)',pointerEvents:'none'}}/>
+      {children}
+    </div>
+  );
+};
 
-// ── Price box ─────────────────────────────────────────────────────────────────
+// ── Price Box — uses tonal layering per DESIGN.md ─────────────────────────────
 const PBox = ({ label, value, sub, amber }) => (
   <div style={{
-    background:amber?'rgba(251,191,36,0.07)':'rgba(255,255,255,0.05)',
-    border:`1px solid ${amber?'rgba(251,191,36,0.18)':'rgba(255,255,255,0.1)'}`,
-    borderRadius:10,padding:'10px 14px',textAlign:'center',
-    backdropFilter:'blur(8px)',
-    boxShadow:'inset 0 1px 0 rgba(255,255,255,0.06)',
+    background: amber ? 'rgba(197,163,87,0.08)' : DS.contTop,
+    border: `1px solid ${amber ? 'rgba(197,163,87,0.2)' : 'rgba(255,255,255,0.06)'}`,
+    borderRadius: 10, padding: '10px 14px', textAlign: 'center',
   }}>
-    <div style={{fontSize:9,color:amber?'#f59e0b':'#64748b',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:2}}>{label}</div>
-    <div style={{fontSize:17,fontWeight:800,color:amber?'#fbbf24':'#f1f5f9'}}>{toINR(value)}</div>
-    {sub&&<div style={{fontSize:9,color:'#475569',marginTop:1}}>{sub}</div>}
+    <div style={{fontSize:9,color:amber?DS.gold:'rgba(255,255,255,0.4)',fontWeight:700,fontFamily:'Manrope,sans-serif',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>{label}</div>
+    <div style={{fontSize:16,fontWeight:700,color:amber?DS.goldHi:DS.text,fontFamily:'Manrope,sans-serif'}}>{toINR(value)}</div>
+    {sub&&<div style={{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:1}}>{sub}</div>}
   </div>
 );
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Toast — Obsidian surface per DESIGN.md ────────────────────────────────────
+const Toast = ({ toasts }) => (
+  <div style={{position:'fixed',bottom:28,right:28,zIndex:9998,display:'flex',flexDirection:'column',gap:10,pointerEvents:'none'}}>
+    {toasts.map(t => (
+      <div key={t.id} style={{
+        display:'flex',alignItems:'flex-start',gap:12,
+        background:DS.contHi,
+        border:`1px solid rgba(197,163,87,0.3)`,
+        borderRadius:12, padding:'14px 18px',
+        boxShadow:'0 16px 40px rgba(0,0,0,0.4)',
+        animation:'toastSlide .35s cubic-bezier(.34,1.56,.64,1)',
+        minWidth:260,maxWidth:340,pointerEvents:'all',
+        backdropFilter:'blur(20px)',
+      }}>
+        <div style={{width:32,height:32,background:'rgba(197,163,87,0.12)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:15}}>{t.icon||'💬'}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:10,fontWeight:700,color:DS.gold,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.08em',fontFamily:'Manrope,sans-serif'}}>{t.title}</div>
+          <div style={{fontSize:13,color:DS.text,lineHeight:1.4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>{t.body}</div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
 const ClientPortalView = () => {
-  const { slug }              = useParams();
-  const [portal, setPortal]   = useState(null);
+  const { slug }            = useParams();
+  const [portal, setPortal] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
-  const [tab, setTab]         = useState('catalogue');
-  const [msg, setMsg]         = useState('');
-  const [files, setFiles]     = useState([]);
+  const [error, setError]   = useState(null);
+  const [tab, setTab]       = useState('catalogue');
+  const [msg, setMsg]       = useState('');
+  const [files, setFiles]   = useState([]);
   const [sending, setSending] = useState(false);
   const [clientName, setClientName] = useState('');
   const [nameSet, setNameSet] = useState(false);
   const [lightbox, setLightbox] = useState(null);
-  const chatEnd = useRef(null);
-  const fileRef = useRef(null);
+  const [wishlisted, setWishlisted] = useState(new Set());
+  const [toasts, setToasts] = useState([]);
+  const chatEnd         = useRef(null);
+  const fileRef         = useRef(null);
+  const prevMsgCount    = useRef(0);
+  const pollTimer       = useRef(null);
 
-  useEffect(()=>{ load(); fetch(`/api/portal/public/${slug}/view`,{method:'POST'}).catch(()=>{}); },[slug]);
+  const showToast = (title, body, icon) => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, title, body, icon }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4500);
+  };
+
+  const toggleWish = id => setWishlisted(prev => {
+    const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s;
+  });
+
+  useEffect(()=>{
+    load();
+    fetch(`/api/portal/public/${slug}/view`,{method:'POST'}).catch(()=>{});
+    if(window.Notification?.permission==='default') window.Notification.requestPermission();
+    pollTimer.current = setInterval(()=>load(true), 15000);
+    return ()=>clearInterval(pollTimer.current);
+  },[slug]);
+
   useEffect(()=>{ if(tab==='chat') chatEnd.current?.scrollIntoView({behavior:'smooth'}); },[portal?.messages,tab]);
 
-  const load = async () => {
+  const load = async (silent=false) => {
     try{
-      const res  = await fetch(`/api/portal/public/${slug}`);
+      const res = await fetch(`/api/portal/public/${slug}`);
       if(!res.ok) throw new Error((await res.json()).message);
       const data = await res.json();
+      if(silent && prevMsgCount.current>0){
+        const teamMsgs=(data.messages||[]).filter(m=>m.sender==='team');
+        if(teamMsgs.length>prevMsgCount.current){
+          const newest=teamMsgs[teamMsgs.length-1];
+          const preview=newest.text?newest.text.slice(0,55)+(newest.text.length>55?'…':''):newest.attachments?.length?`📎 ${newest.attachments[0].name}`:'New message';
+          showToast('Marqland Team',preview,'💬');
+          if(window.Notification?.permission==='granted') new window.Notification('Marqland Studios',{body:preview,icon:'/favicon.ico',tag:'portal-msg'});
+        }
+        prevMsgCount.current=(data.messages||[]).filter(m=>m.sender==='team').length;
+      } else {
+        prevMsgCount.current=(data.messages||[]).filter(m=>m.sender==='team').length;
+      }
       setPortal(data);
-      // Fix 4: use orderPlacedBy (contact person) as chat sender name
-      const name = data.orderPlacedBy || data.clientName || '';
-      setClientName(name);
-      if(name) setNameSet(true);
-    }catch(e){ setError(e.message||'Link invalid or expired.'); }
-    finally   { setLoading(false); }
+      const name=data.orderPlacedBy||data.clientName||'';
+      setClientName(name); if(name) setNameSet(true);
+    }catch(e){ if(!silent) setError(e.message||'Link invalid or expired.'); }
+    finally  { if(!silent) setLoading(false); }
   };
 
   const send = async () => {
     if((!msg.trim()&&files.length===0)||sending) return;
+    const sender=clientName?.trim()||portal?.orderPlacedBy||portal?.clientName||'Client';
     setSending(true);
     try{
-      const fd = new FormData();
-      fd.append('text', msg.trim());
-      fd.append('senderName', clientName||'Client');
+      const fd=new FormData();
+      fd.append('text',msg.trim()); fd.append('senderName',sender);
       files.forEach(f=>fd.append('files',f));
-      const r = await fetch(`/api/portal/public/${slug}/message`,{method:'POST',body:fd});
-      if(!r.ok) throw new Error();
+      const r=await fetch(`/api/portal/public/${slug}/message`,{method:'POST',body:fd});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.message||'Send failed'); }
       setMsg(''); setFiles([]);
+      showToast('Delivered','Your message has been sent to the team.','✓');
       await load();
-    }finally{ setSending(false); }
+    }catch(e){ alert('Could not send: '+e.message); }
+    finally{ setSending(false); }
   };
 
+  // ── Global CSS injected once ──────────────────────────────────────────────
+  const globalStyles = `
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Manrope:wght@400;500;600;700;800&display=swap');
+    @keyframes obsidianFadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes toastSlide{from{opacity:0;transform:translateX(20px) scale(0.95)}to{opacity:1;transform:none}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+    *{box-sizing:border-box;margin:0}
+    ::-webkit-scrollbar{width:3px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(197,163,87,0.35);border-radius:10px}
+    .desc-scroll::-webkit-scrollbar{width:4px}
+    .desc-scroll::-webkit-scrollbar-track{background:rgba(255,255,255,0.04)}
+    .desc-scroll::-webkit-scrollbar-thumb{background:rgba(197,163,87,0.5);border-radius:10px}
+    .desc-scroll{scrollbar-width:thin;scrollbar-color:rgba(197,163,87,0.5) rgba(255,255,255,0.04)}
+    textarea{resize:none}
+    .img-hover:hover{transform:scale(1.04)!important}
+    .ghost-btn:hover{background:rgba(255,255,255,0.06)!important}
+  `;
+
+  // ── Loading ───────────────────────────────────────────────────────────────
   if(loading) return (
-    <div style={{minHeight:'100vh',background:'#0a0f1e',display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{textAlign:'center',color:'#64748b',fontFamily:'system-ui'}}>
-        <div style={{width:36,height:36,border:'3px solid #1e293b',borderTopColor:'#f97316',borderRadius:'50%',animation:'spin .8s linear infinite',margin:'0 auto 14px'}}/>
-        <p style={{fontSize:13}}>Loading your portal...</p>
-      </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-
-  if(error) return (
-    <div style={{minHeight:'100vh',background:'#0a0f1e',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'system-ui',padding:24}}>
+    <div style={{minHeight:'100vh',background:DS.base,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Manrope,sans-serif'}}>
+      <style>{globalStyles}</style>
       <div style={{textAlign:'center'}}>
-        <div style={{fontSize:48,marginBottom:16}}>🔗</div>
-        <h1 style={{color:'#f1f5f9',fontSize:20,marginBottom:8,fontWeight:800}}>Link not found</h1>
-        <p style={{color:'#64748b',fontSize:14}}>{error}</p>
+        <div style={{width:38,height:38,border:`2px solid ${DS.contTop}`,borderTopColor:DS.gold,borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 16px'}}/>
+        <div style={{fontSize:12,color:DS.sub,letterSpacing:'0.12em',textTransform:'uppercase'}}>Loading your portal</div>
       </div>
     </div>
   );
 
+  // ── Error ─────────────────────────────────────────────────────────────────
+  if(error) return (
+    <div style={{minHeight:'100vh',background:DS.base,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Manrope,sans-serif',padding:24}}>
+      <style>{globalStyles}</style>
+      <div style={{textAlign:'center',maxWidth:400}}>
+        <div style={{fontSize:48,marginBottom:20}}>⛓</div>
+        <h1 style={{fontFamily:'Noto Serif,serif',color:DS.text,fontSize:22,fontWeight:700,marginBottom:10}}>Link unavailable</h1>
+        <p style={{color:DS.sub,fontSize:14,lineHeight:1.7}}>{error}</p>
+      </div>
+    </div>
+  );
+
+  // ── Completed ─────────────────────────────────────────────────────────────
   if(portal.status==='completed') return (
-    <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#0a0f1e,#0f172a 60%,#1a0a2e)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'DM Sans',system-ui",padding:24}}>
+    <div style={{minHeight:'100vh',background:DS.base,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Manrope,sans-serif',padding:24}}>
+      <style>{globalStyles}</style>
       <div style={{textAlign:'center',maxWidth:520}}>
-        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(249,115,22,0.1)',border:'1px solid rgba(249,115,22,0.25)',borderRadius:10,padding:'8px 16px',marginBottom:36}}>
-          <div style={{width:22,height:22,background:'#f97316',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:900,fontSize:11}}>M</div>
-          <span style={{color:'#f1f5f9',fontWeight:700,fontSize:13,letterSpacing:'0.05em',textTransform:'uppercase'}}>Marqland Studios</span>
+        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,padding:'7px 16px',marginBottom:40}}>
+          <div style={{width:20,height:20,background:GOLD_GRAD,borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:10}}>M</div>
+          <span style={{color:DS.gold,fontWeight:700,fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>Marqland Studios</span>
         </div>
-        <div style={{fontSize:72,marginBottom:20}}>🎉</div>
-        <h1 style={{color:'#f1f5f9',fontWeight:800,fontSize:28,marginBottom:12,lineHeight:1.2}}>Thank you, {portal.clientName}!</h1>
-        <p style={{color:'#64748b',fontSize:16,lineHeight:1.8,marginBottom:40}}>It was our pleasure working with you. We hope the experience exceeded expectations.</p>
+        <div style={{fontSize:64,marginBottom:24}}>🎉</div>
+        <h1 style={{fontFamily:'Noto Serif,serif',color:DS.text,fontWeight:700,fontSize:30,marginBottom:14,lineHeight:1.2}}>Thank you, {portal.clientName}!</h1>
+        <p style={{color:DS.sub,fontSize:15,lineHeight:1.8,marginBottom:40}}>It was our pleasure working with you. We hope the experience exceeded expectations.</p>
         {portal.reviewLink&&<a href={portal.reviewLink} target="_blank" rel="noreferrer"
-          style={{display:'inline-flex',alignItems:'center',gap:10,background:'#f97316',color:'#fff',padding:'14px 28px',borderRadius:12,textDecoration:'none',fontWeight:700,fontSize:15}}>
+          style={{display:'inline-flex',alignItems:'center',gap:10,background:GOLD_GRAD,color:DS.onGold,padding:'14px 30px',borderRadius:10,textDecoration:'none',fontWeight:700,fontSize:14,fontFamily:'Manrope,sans-serif'}}>
           {Ic.star} Share your experience
         </a>}
-        <p style={{color:'#334155',fontSize:11,marginTop:40}}>Order {portal.orderRef}</p>
+        <p style={{color:'rgba(255,255,255,0.2)',fontSize:11,marginTop:44,fontFamily:'Manrope,sans-serif',letterSpacing:'0.06em'}}>REF · {portal.orderRef}</p>
       </div>
     </div>
   );
@@ -203,120 +346,218 @@ const ClientPortalView = () => {
   const newMsgs = portal.messages?.filter(m=>m.sender==='team').length||0;
 
   return (
-    <div style={{minHeight:'100vh',background:'#0a0f1e',fontFamily:"'DM Sans',system-ui,sans-serif",color:'#f1f5f9'}}>
-      <style>{`
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-        *{box-sizing:border-box}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0f172a}::-webkit-scrollbar-thumb{background:#334155;border-radius:10px}
-        textarea{resize:none}
-        .img-zoom:hover{transform:scale(1.05)!important}
-      `}</style>
+    <div style={{minHeight:'100vh',background:DS.base,fontFamily:'Manrope,sans-serif',color:DS.text}}>
+      <style>{globalStyles}</style>
 
       {lightbox&&<Lightbox src={lightbox.src} alt={lightbox.alt} onClose={()=>setLightbox(null)}/>}
+      <Toast toasts={toasts}/>
 
-      {/* NAV — fix 2: removed OBSIDIAN */}
-      <div style={{position:'sticky',top:0,zIndex:50,background:'rgba(10,15,30,0.88)',backdropFilter:'blur(14px)',borderBottom:'1px solid rgba(255,255,255,0.06)',padding:'0 24px'}}>
-        <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:56}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <div style={{width:26,height:26,background:'#f97316',borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:900,fontSize:11}}>M</div>
-            <span style={{color:'#f97316',fontWeight:800,fontSize:13,letterSpacing:'0.02em'}}>MARQLAND STUDIOS</span>
+      {/* ── Navigation Rail — Refined Glassmorphism ── */}
+      <nav style={{
+        position:'sticky',top:0,zIndex:50,
+        background:'rgba(10,20,34,0.82)',
+        backdropFilter:'blur(20px)',
+        WebkitBackdropFilter:'blur(20px)',
+        borderBottom:`1px solid rgba(255,255,255,0.06)`,
+        padding:'0 32px',
+      }}>
+        <div style={{maxWidth:1160,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:60}}>
+          {/* Brand mark */}
+          <div style={{display:'flex',alignItems:'center',gap:11}}>
+            <div style={{width:28,height:28,background:GOLD_GRAD,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:11,letterSpacing:'-0.02em',flexShrink:0}}>M</div>
+            <span style={{fontFamily:'Noto Serif,serif',color:DS.text,fontWeight:700,fontSize:14,letterSpacing:'0.04em'}}>Marqland Studios</span>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:14}}>
-            <span style={{background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.25)',color:'#4ade80',fontSize:10,fontWeight:700,padding:'4px 10px',borderRadius:20,letterSpacing:'0.06em',textTransform:'uppercase'}}>
-              ● {portal.status==='active'?'Active':portal.status}
-            </span>
-            <span style={{color:'#475569',fontSize:12,fontFamily:'monospace'}}>ID: {portal.orderRef}</span>
+
+          {/* Status + ref */}
+          <div style={{display:'flex',alignItems:'center',gap:16}}>
+            {/* Status Pillar — DESIGN.md "Featured Component" */}
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{width:2,height:20,background:GOLD_GRAD,borderRadius:2}}/>
+              <span style={{fontSize:11,fontWeight:700,color:DS.gold,letterSpacing:'0.06em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>
+                {portal.status==='active'?'Active':'Completed'}
+              </span>
+            </div>
+            <span style={{color:'rgba(255,255,255,0.2)',fontSize:12,fontFamily:'monospace',letterSpacing:'0.04em'}}>{portal.orderRef}</span>
             <button onClick={()=>navigator.clipboard.writeText(window.location.href)}
-              style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:8,padding:'6px 8px',cursor:'pointer',color:'#64748b',display:'flex',alignItems:'center'}}
-              title="Copy link">{Ic.share}</button>
+              className="ghost-btn"
+              style={{background:'transparent',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'6px 9px',cursor:'pointer',color:DS.sub,display:'flex',alignItems:'center',transition:'background .15s'}}
+              title="Copy link">{Ic.share}
+            </button>
           </div>
         </div>
-      </div>
+      </nav>
 
-      {/* TABS */}
-      <div style={{background:'rgba(10,15,30,0.6)',borderBottom:'1px solid rgba(255,255,255,0.06)',padding:'0 24px'}}>
-        <div style={{maxWidth:1100,margin:'0 auto',display:'flex'}}>
-          {[{k:'catalogue',l:'Catalogue Options',b:items.length},{k:'chat',l:'Message Board',b:newMsgs||null}].map(t=>(
+      {/* ── Tab Bar — tonal shift from nav ── */}
+      <div style={{background:DS.cont,borderBottom:`1px solid rgba(255,255,255,0.05)`,padding:'0 32px'}}>
+        <div style={{maxWidth:1160,margin:'0 auto',display:'flex',gap:4}}>
+          {[
+            {k:'catalogue',l:'Catalogue Options', b:items.length},
+            ...(portal.type==='product' ? [{k:'selected', l:'Selected Items', b:wishlisted.size||null}] : []),
+            {k:'chat',     l:'Message Board',     b:newMsgs||null},
+          ].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)}
-              style={{padding:'14px 20px',background:'none',border:'none',borderBottom:tab===t.k?'2px solid #f97316':'2px solid transparent',color:tab===t.k?'#f97316':'#64748b',fontSize:13,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .15s'}}>
+              style={{
+                padding:'16px 22px',background:'none',border:'none',
+                borderBottom: tab===t.k ? `2px solid ${DS.gold}` : '2px solid transparent',
+                color: tab===t.k ? DS.gold : DS.sub,
+                fontSize:13,fontWeight:600,cursor:'pointer',
+                display:'flex',alignItems:'center',gap:8,
+                transition:'color .15s, border-color .15s',
+                fontFamily:'Manrope,sans-serif',
+                letterSpacing:'0.01em',
+              }}>
               {t.l}
-              {t.b?<span style={{background:tab===t.k?'rgba(249,115,22,0.2)':'rgba(255,255,255,0.06)',color:tab===t.k?'#f97316':'#64748b',fontSize:10,fontWeight:800,padding:'2px 7px',borderRadius:10}}>{t.b}</span>:null}
+              {t.b!=null&&<span style={{
+                background: tab===t.k ? 'rgba(197,163,87,0.18)' : 'rgba(255,255,255,0.05)',
+                color: tab===t.k ? DS.gold : DS.sub,
+                fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:20,
+                letterSpacing:'0.04em',
+              }}>{t.b}</span>}
             </button>
           ))}
         </div>
       </div>
 
-      {/* HERO */}
+      {/* ── Hero — catalogue tab only ── */}
       {tab==='catalogue'&&(
-        <div style={{background:'linear-gradient(180deg,rgba(249,115,22,0.06) 0%,transparent 100%)',padding:'32px 24px 20px',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
-          <div style={{maxWidth:1100,margin:'0 auto'}}>
-            <div style={{display:'inline-block',background:'rgba(249,115,22,0.1)',border:'1px solid rgba(249,115,22,0.2)',borderRadius:6,padding:'3px 10px',fontSize:10,color:'#f97316',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>
-              {portal.type==='product'?'🎁 Product Gifting':'🏨 Exclusive Offsite'} · {portal.orderRef}
+        <div style={{background:`linear-gradient(180deg, rgba(197,163,87,0.05) 0%, transparent 100%)`,padding:'40px 32px 24px',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+          <div style={{maxWidth:1160,margin:'0 auto'}}>
+            {/* Label chip */}
+            <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:6,padding:'4px 12px',marginBottom:14}}>
+              <span style={{fontSize:9,color:DS.gold,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.1em',fontFamily:'Manrope,sans-serif'}}>
+                {portal.type==='product'?'Product Gifting':'Exclusive Offsite'} · {portal.orderRef}
+              </span>
             </div>
-            <h1 style={{fontSize:24,fontWeight:800,color:'#f1f5f9',margin:'0 0 8px',letterSpacing:'-0.02em',lineHeight:1.2}}>
-              {portal.title||`Curated options for ${portal.clientName}`}
+            {/* Headline — Noto Serif display */}
+            <h1 style={{fontFamily:'Noto Serif,serif',fontSize:28,fontWeight:700,color:DS.text,marginBottom:10,letterSpacing:'-0.02em',lineHeight:1.2}}>
+              {portal.title||`Curated for ${portal.clientName}`}
             </h1>
-            {portal.teamNote&&<p style={{color:'#64748b',fontSize:14,lineHeight:1.7,maxWidth:600,margin:0}}>{portal.teamNote}</p>}
+            {portal.teamNote&&<p style={{color:DS.sub,fontSize:14,lineHeight:1.75,maxWidth:580,fontFamily:'Manrope,sans-serif'}}>{portal.teamNote}</p>}
           </div>
         </div>
       )}
 
-      {/* CONTENT */}
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'28px 24px 60px'}}>
+      {/* ── Content ── */}
+      <div style={{maxWidth:1160,margin:'0 auto',padding:'32px 32px 80px'}}>
 
         {/* CATALOGUE */}
         {tab==='catalogue'&&(
           items.length===0
-          ? <div style={{textAlign:'center',padding:'80px 0',color:'#334155'}}>
-              <div style={{fontSize:40,marginBottom:12}}>📋</div>
-              <p style={{fontSize:15,fontWeight:600,color:'#475569'}}>Options are being curated</p>
-              <p style={{fontSize:13,marginTop:6,color:'#334155'}}>The Marqland team will update this shortly.</p>
-            </div>
-          : portal.type==='product'
-            ? <ProductBento items={items} onZoom={setLightbox}/>
-            : <OffsiteCards items={items} onZoom={setLightbox}/>
+            ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly."/>
+            : portal.type==='product'
+              ? <ProductBento items={items} onZoom={setLightbox} wishlisted={wishlisted} onToggleWish={toggleWish}/>
+              : <OffsiteCards items={items} onZoom={setLightbox}/>
         )}
 
-        {/* CHAT */}
-        {tab==='chat'&&(
-          <div style={{display:'grid',gridTemplateColumns:'240px 1fr',gap:20,alignItems:'start'}}>
+        {/* SELECTED ITEMS */}
+        {tab==='selected'&&(()=>{
+          const allItems = portal.type==='product' ? portal.productItems : portal.offsiteItems;
+          const sel = allItems.filter(i => wishlisted.has(String(i._id)));
+          if(!sel.length) return (
+            <EmptyState icon="🤍" title="No items shortlisted yet"
+              sub="Tap ♡ on any product in Catalogue Options to add it here.">
+              <button onClick={()=>setTab('catalogue')} style={{marginTop:24,background:GOLD_GRAD,color:DS.onGold,border:'none',borderRadius:10,padding:'11px 28px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'Manrope,sans-serif',letterSpacing:'0.02em'}}>
+                Browse Catalogue
+              </button>
+            </EmptyState>
+          );
+          return (
+            <div>
+              {/* Summary bar — Status Pillar style */}
+              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:32,padding:'16px 20px',background:DS.cont,borderRadius:12}}>
+                <div style={{width:2,height:24,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:16,fontWeight:700,color:DS.gold,fontFamily:'Noto Serif,serif'}}>
+                    {sel.length} item{sel.length!==1?'s':''} shortlisted
+                  </div>
+                  <div style={{fontSize:12,color:DS.sub,marginTop:2}}>Mention these in the message board to share your preferences.</div>
+                </div>
+              </div>
+              {/* Selected items — 3-col bento grid with image + description + price */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+                {sel.map((item,idx)=>(
+                  <GlassCard key={item._id} delay={idx*0.04} style={{display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                    {/* Image */}
+                    <div style={{position:'relative',height:200,flexShrink:0,overflow:'hidden',borderRadius:'12px 12px 0 0',cursor:item.imageUrl?'zoom-in':'default'}}
+                      onClick={()=>{ if(item.imageUrl) setLightbox({src:item.imageUrl,alt:item.name}); }}>
+                      {item.imageUrl
+                        ?<img src={item.imageUrl} alt={item.name} className="img-hover" style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .4s ease'}}/>
+                        :<div style={{width:'100%',height:'100%',background:DS.contHi,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.2)',fontSize:11}}>No image</div>
+                      }
+                      <div style={{position:'absolute',inset:0,background:'linear-gradient(0deg,rgba(10,20,34,0.82) 0%,transparent 48%)',pointerEvents:'none'}}/>
+                      {/* Badges */}
+                      <div style={{position:'absolute',bottom:10,left:10,display:'flex',gap:5,flexWrap:'wrap'}}>
+                        {item.category&&<span style={{background:'rgba(197,163,87,0.88)',color:DS.onGold,fontSize:8,fontWeight:800,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.06em',fontFamily:'Manrope,sans-serif'}}>{item.category}</span>}
+                        {item.subCategory&&<span style={{background:'rgba(255,255,255,0.14)',color:'rgba(255,255,255,0.85)',fontSize:8,fontWeight:700,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>{item.subCategory}</span>}
+                      </div>
+                      {/* Remove heart */}
+                      <button onClick={e=>{e.stopPropagation();toggleWish(String(item._id));}}
+                        style={{position:'absolute',top:10,right:10,background:'rgba(220,53,69,0.82)',border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',backdropFilter:'blur(6px)'}}>
+                        {Ic.heart}
+                      </button>
+                    </div>
+                    {/* Info — same layout as catalogue bento card */}
+                    <div style={{padding:'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
+                      <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
+                        <div style={{fontSize:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>{item.name}</div>
+                        <div style={{fontSize:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>{toINR(item.price)}</div>
+                      </div>
+                      {item.description&&(
+                        <p style={{fontSize:12,color:DS.sub,lineHeight:1.6,margin:0,fontFamily:'Manrope,sans-serif',display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.description}</p>
+                      )}
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
-            {/* Sidebar */}
-            <div style={{display:'flex',flexDirection:'column',gap:12}}>
-              <div style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:18}}>
-                <div style={{fontSize:9,fontWeight:800,color:'#475569',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10}}>Current Project</div>
-                <div style={{fontWeight:800,fontSize:15,color:'#f1f5f9',lineHeight:1.3,marginBottom:4}}>{portal.title||portal.orderRef}</div>
-                <div style={{fontSize:12,color:'#64748b',marginBottom:16}}>{portal.clientName}</div>
-                {['Message Board','Catalogue Options'].map(it=>(
-                  <button key={it} onClick={()=>{if(it==='Catalogue Options')setTab('catalogue');}}
-                    style={{display:'flex',alignItems:'center',gap:8,padding:'9px 12px',background:it==='Message Board'?'rgba(249,115,22,0.1)':'none',border:'none',borderRadius:9,cursor:'pointer',color:it==='Message Board'?'#f97316':'#64748b',fontSize:13,fontWeight:600,textAlign:'left',width:'100%',marginBottom:2}}>
-                    <span>{it==='Message Board'?'💬':'🗂'}</span>{it}
+        {/* MESSAGE BOARD */}
+        {tab==='chat'&&(
+          <div style={{display:'grid',gridTemplateColumns:'220px 1fr',gap:24,alignItems:'start'}}>
+
+            {/* Left sidebar — tonal container per DESIGN.md */}
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              {/* Project info */}
+              <div style={{background:DS.cont,borderRadius:12,padding:20}}>
+                <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:'Manrope,sans-serif'}}>Current Project</div>
+                <div style={{fontFamily:'Noto Serif,serif',fontWeight:700,fontSize:15,color:DS.text,lineHeight:1.3,marginBottom:4}}>{portal.title||portal.orderRef}</div>
+                <div style={{fontSize:12,color:DS.sub,marginBottom:16,fontFamily:'Manrope,sans-serif'}}>{portal.clientName}</div>
+                {/* Nav items */}
+                {[{l:'Message Board',k:'chat',icon:'💬'},{l:'Catalogue Options',k:'catalogue',icon:'🗂'}].map(it=>(
+                  <button key={it.k} onClick={()=>setTab(it.k)}
+                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 12px',background:tab===it.k?'rgba(197,163,87,0.1)':'transparent',border:'none',borderRadius:8,cursor:'pointer',color:tab===it.k?DS.gold:DS.sub,fontSize:12,fontWeight:600,textAlign:'left',width:'100%',marginBottom:3,fontFamily:'Manrope,sans-serif',transition:'background .15s'}}>
+                    <span>{it.icon}</span>{it.l}
                   </button>
                 ))}
               </div>
-              <div style={{background:'linear-gradient(135deg,rgba(249,115,22,0.12),rgba(234,88,12,0.06))',border:'1px solid rgba(249,115,22,0.2)',borderRadius:14,padding:18}}>
-                <div style={{fontSize:9,fontWeight:800,color:'#f97316',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10}}>Your Marqland Contact</div>
+
+              {/* Concierge card — metallic gradient CTA per DESIGN.md */}
+              <div style={{background:`linear-gradient(135deg, rgba(197,163,87,0.1) 0%, rgba(230,194,115,0.05) 100%)`,border:'1px solid rgba(197,163,87,0.18)',borderRadius:12,padding:18}}>
+                <div style={{fontSize:9,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:'Manrope,sans-serif'}}>Your Concierge</div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <div style={{width:36,height:36,background:'rgba(249,115,22,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>M</div>
+                  <div style={{width:36,height:36,background:GOLD_GRAD,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:14,flexShrink:0}}>M</div>
                   <div>
-                    <div style={{fontWeight:700,fontSize:13,color:'#f1f5f9'}}>Marqland Team</div>
-                    <div style={{fontSize:11,color:'#64748b'}}>Response · under 1 hour</div>
+                    <div style={{fontWeight:700,fontSize:13,color:DS.text,fontFamily:'Manrope,sans-serif'}}>Marqland Team</div>
+                    <div style={{fontSize:11,color:'#4ade80',marginTop:1,fontFamily:'Manrope,sans-serif'}}>● Online · &lt;1 hour response</div>
                   </div>
                 </div>
               </div>
+
+              {/* Quick reference items */}
               {items.length>0&&(
                 <div>
-                  <div style={{fontSize:9,fontWeight:800,color:'#475569',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>Quick Reference</div>
+                  <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>Quick Reference</div>
                   {items.slice(0,3).map((it,i)=>(
                     <div key={i} onClick={()=>setTab('catalogue')}
-                      style={{display:'flex',alignItems:'center',gap:8,background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.05)',borderRadius:10,padding:'8px 10px',marginBottom:6,cursor:'pointer'}}>
-                      <div style={{width:30,height:30,borderRadius:7,background:'#1e293b',overflow:'hidden',flexShrink:0}}>
+                      style={{display:'flex',alignItems:'center',gap:9,background:DS.cont,borderRadius:10,padding:'8px 10px',marginBottom:6,cursor:'pointer'}}>
+                      <div style={{width:32,height:32,borderRadius:7,background:DS.contHi,overflow:'hidden',flexShrink:0}}>
                         {it.imageUrl&&<img src={it.imageUrl} alt={it.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>}
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:11,fontWeight:700,color:'#e2e8f0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.name}</div>
-                        <div style={{fontSize:10,color:'#475569'}}>{portal.type==='product'?toINR(it.price):it.location||'—'}</div>
+                        <div style={{fontSize:11,fontWeight:600,color:DS.text,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:'Manrope,sans-serif'}}>{it.name}</div>
+                        <div style={{fontSize:10,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>{portal.type==='product'?toINR(it.price):it.location||'—'}</div>
                       </div>
                     </div>
                   ))}
@@ -324,51 +565,58 @@ const ClientPortalView = () => {
               )}
             </div>
 
-            {/* Chat window */}
-            <div style={{background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:16,display:'flex',flexDirection:'column',minHeight:560}}>
-              <div style={{padding:'14px 20px',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',gap:12}}>
-                <div style={{width:34,height:34,background:'rgba(249,115,22,0.15)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>🏢</div>
+            {/* Chat window — elevated surface */}
+            <div style={{background:DS.cont,borderRadius:12,display:'flex',flexDirection:'column',minHeight:580}}>
+              {/* Chat header */}
+              <div style={{padding:'16px 20px',borderBottom:`1px solid rgba(255,255,255,0.05)`,display:'flex',alignItems:'center',gap:12}}>
+                <div style={{width:36,height:36,background:'rgba(197,163,87,0.12)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🏢</div>
                 <div>
-                  <div style={{fontWeight:700,fontSize:14,color:'#f1f5f9'}}>Chatting with: Marqland Team</div>
-                  <div style={{fontSize:11,color:'#4ade80'}}>● Online · Response time under 1 hour</div>
+                  <div style={{fontWeight:700,fontSize:14,color:DS.text,fontFamily:'Manrope,sans-serif'}}>Marqland Team</div>
+                  <div style={{fontSize:11,color:'#4ade80',fontFamily:'Manrope,sans-serif'}}>● Typically responds in under an hour</div>
                 </div>
               </div>
 
+              {/* Name input if not set */}
               {!nameSet&&(
-                <div style={{padding:'10px 18px',background:'rgba(59,130,246,0.05)',borderBottom:'1px solid rgba(59,130,246,0.1)'}}>
+                <div style={{padding:'10px 18px',background:DS.contHi,borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
                   <div style={{display:'flex',gap:8,alignItems:'center'}}>
                     <input value={clientName} onChange={e=>setClientName(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter'&&clientName.trim())setNameSet(true);}}
                       placeholder="Your name so we know who's messaging"
-                      style={{flex:1,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'7px 12px',color:'#f1f5f9',fontSize:13,outline:'none'}}/>
+                      style={{flex:1,background:DS.contTop,border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,padding:'8px 13px',color:DS.text,fontSize:13,outline:'none',fontFamily:'Manrope,sans-serif'}}/>
                     <button onClick={()=>{if(clientName.trim())setNameSet(true);}} disabled={!clientName.trim()}
-                      style={{background:'#3b82f6',border:'none',borderRadius:8,padding:'7px 13px',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',opacity:clientName.trim()?1:0.4}}>
+                      style={{background:GOLD_GRAD,border:'none',borderRadius:8,padding:'8px 16px',color:DS.onGold,fontSize:12,fontWeight:700,cursor:'pointer',opacity:clientName.trim()?1:0.4,fontFamily:'Manrope,sans-serif'}}>
                       Set
                     </button>
                   </div>
                 </div>
               )}
 
-              <div style={{flex:1,overflowY:'auto',padding:'16px 18px',display:'flex',flexDirection:'column',gap:14}}>
+              {/* Messages */}
+              <div style={{flex:1,overflowY:'auto',padding:'18px 20px',display:'flex',flexDirection:'column',gap:14}}>
                 {portal.messages.length===0&&(
-                  <div style={{textAlign:'center',padding:'40px 0',color:'#334155'}}>
-                    <div style={{fontSize:32,marginBottom:10}}>💬</div>
-                    <p style={{fontSize:13}}>No messages yet. Ask us anything!</p>
+                  <div style={{textAlign:'center',padding:'48px 0',color:DS.sub}}>
+                    <div style={{fontSize:32,marginBottom:12}}>💬</div>
+                    <p style={{fontSize:13,fontFamily:'Manrope,sans-serif'}}>No messages yet. Ask us anything!</p>
                   </div>
                 )}
                 {portal.messages.map(m=>{
                   const isT=m.sender==='team';
                   return(
-                    <div key={m._id} style={{display:'flex',justifyContent:isT?'flex-start':'flex-end'}}>
-                      {isT&&<div style={{width:26,height:26,background:'rgba(249,115,22,0.2)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,marginRight:8,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>M</div>}
+                    <div key={m._id} style={{display:'flex',justifyContent:isT?'flex-start':'flex-end',gap:8}}>
+                      {isT&&<div style={{width:28,height:28,background:GOLD_GRAD,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontSize:11,fontWeight:800,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>M</div>}
                       <div style={{maxWidth:'72%'}}>
-                        <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:3,textAlign:isT?'left':'right'}}>{m.senderName} · {fmtT(m.createdAt)}</div>
-                        <div style={{background:isT?'rgba(255,255,255,0.06)':'#f97316',border:isT?'1px solid rgba(255,255,255,0.08)':'none',borderRadius:isT?'4px 14px 14px 14px':'14px 14px 4px 14px',padding:'10px 14px'}}>
-                          {m.text&&<div style={{fontSize:14,lineHeight:1.6,color:isT?'#e2e8f0':'#fff'}}>{m.text}</div>}
+                        <div style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.3)',marginBottom:4,textAlign:isT?'left':'right',fontFamily:'Manrope,sans-serif',letterSpacing:'0.02em'}}>{m.senderName} · {fmtT(m.createdAt)}</div>
+                        <div style={{
+                          background: isT ? DS.contTop : GOLD_GRAD,
+                          borderRadius: isT ? '4px 14px 14px 14px' : '14px 14px 4px 14px',
+                          padding:'11px 15px',
+                        }}>
+                          {m.text&&<div style={{fontSize:14,lineHeight:1.65,color: isT ? DS.text : DS.onGold,fontFamily:'Manrope,sans-serif'}}>{m.text}</div>}
                           {(m.attachments||[]).map((a,i)=><AttachChip key={i} att={a} isTeam={isT}/>)}
                         </div>
                       </div>
-                      {!isT&&<div style={{width:26,height:26,background:'rgba(249,115,22,0.3)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#f97316',marginLeft:8,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>
+                      {!isT&&<div style={{width:28,height:28,background:DS.contTop,border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:DS.gold,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>
                         {(clientName||'C').slice(0,2).toUpperCase()}
                       </div>}
                     </div>
@@ -377,34 +625,43 @@ const ClientPortalView = () => {
                 <div ref={chatEnd}/>
               </div>
 
-              {/* Fix 5: no attach in catalogue, only in chat. Fix 3: attach is wired */}
+              {/* File strip */}
               <FileStrip files={files} onRemove={i=>setFiles(files.filter((_,idx)=>idx!==i))}/>
 
-              <div style={{padding:'12px 16px',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+              {/* Input — surface-container-lowest per DESIGN.md layering */}
+              <div style={{padding:'14px 18px',borderTop:`1px solid rgba(255,255,255,0.05)`}}>
                 <div style={{display:'flex',gap:10,alignItems:'flex-end'}}>
-                  <div style={{flex:1,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:12,padding:'10px 14px'}}>
+                  <div style={{flex:1,background:DS.contTop,borderRadius:12,padding:'10px 14px',border:`1px solid rgba(197,163,87,0.15)`}}>
                     <textarea value={msg} onChange={e=>setMsg(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}
-                      placeholder="Type your message... (Enter to send)"
+                      placeholder="Message the team… (Enter to send)"
                       rows={2}
-                      style={{background:'none',border:'none',outline:'none',color:'#f1f5f9',fontSize:14,fontFamily:'inherit',lineHeight:1.5,width:'100%'}}/>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:5,paddingTop:5,borderTop:'1px solid rgba(255,255,255,0.05)'}}>
-                      <button onClick={()=>fileRef.current?.click()}
-                        style={{background:'none',border:'none',cursor:'pointer',color:'#64748b',padding:2,display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,transition:'color .15s'}}
-                        onMouseEnter={e=>e.currentTarget.style.color='#f97316'}
-                        onMouseLeave={e=>e.currentTarget.style.color='#64748b'}
-                        title="Attach files">
-                        {Ic.attach} <span>Attach file</span>
+                      style={{background:'none',border:'none',outline:'none',color:DS.text,fontSize:14,fontFamily:'Manrope,sans-serif',lineHeight:1.55,width:'100%'}}/>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:6,paddingTop:6,borderTop:`1px solid rgba(255,255,255,0.05)`}}>
+                      <button type="button" onClick={()=>fileRef.current?.click()}
+                        style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.3)',padding:2,display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,fontFamily:'Manrope,sans-serif',transition:'color .15s'}}
+                        onMouseEnter={e=>e.currentTarget.style.color=DS.gold}
+                        onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.3)'}>
+                        {Ic.attach} <span>Attach</span>
                       </button>
-                      <span style={{fontSize:10,color:'#334155'}}>Max 5 files · 10MB each</span>
-                      <input ref={fileRef} type="file" multiple
-                        onChange={e=>{setFiles(p=>[...p,...Array.from(e.target.files||[])].slice(0,5));e.target.value='';}}
-                        style={{display:'none'}}/>
+                      <span style={{fontSize:10,color:'rgba(255,255,255,0.18)',fontFamily:'Manrope,sans-serif'}}>Max 5 files · 10MB each</span>
+{/* input moved outside — see root-level input below */}
                     </div>
                   </div>
+                  {/* Send — Primary button: metallic gradient CTA per DESIGN.md */}
                   <button onClick={send} disabled={sending||(!msg.trim()&&files.length===0)}
-                    style={{width:44,height:44,background:'#f97316',border:'none',borderRadius:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',opacity:(sending||(!msg.trim()&&files.length===0))?0.4:1,transition:'opacity .2s',flexShrink:0}}>
-                    {sending?<div style={{width:16,height:16,border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spin .7s linear infinite'}}/>:Ic.send}
+                    style={{
+                      width:44,height:44,
+                      background: (sending||(!msg.trim()&&files.length===0)) ? DS.contTop : GOLD_GRAD,
+                      border:'none',borderRadius:10,cursor:'pointer',
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      color: (sending||(!msg.trim()&&files.length===0)) ? 'rgba(255,255,255,0.25)' : DS.onGold,
+                      transition:'all .2s',flexShrink:0,
+                    }}>
+                    {sending
+                      ? <div style={{width:15,height:15,border:'2px solid rgba(255,255,255,0.2)',borderTopColor:'rgba(255,255,255,0.7)',borderRadius:'50%',animation:'spin .7s linear infinite'}}/>
+                      : Ic.send
+                    }
                   </button>
                 </div>
               </div>
@@ -413,238 +670,267 @@ const ClientPortalView = () => {
         )}
       </div>
 
-      <div style={{borderTop:'1px solid rgba(255,255,255,0.04)',padding:'18px 24px',textAlign:'center'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:5}}>
-          <div style={{width:16,height:16,background:'#f97316',borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:900,fontSize:9}}>M</div>
-          <span style={{color:'#334155',fontSize:11,fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Marqland Studios</span>
+      {/* File input at root — avoids display:none breaking programmatic .click() */}
+      {/* Root-level file input — opacity:0 keeps it invisible but events still fire */}
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        style={{position:'fixed',top:-200,left:-200,width:1,height:1,opacity:0}}
+        onChange={e=>{
+          const picked=Array.from(e.target.files||[]);
+          if(picked.length>0) setFiles(prev=>[...prev,...picked].slice(0,5));
+          e.target.value='';
+        }}
+      />
+
+      {/* ── Footer — tonal shift ── */}
+      <div style={{background:DS.cont,borderTop:`1px solid rgba(255,255,255,0.04)`,padding:'20px 32px',textAlign:'center'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:9,marginBottom:5}}>
+          <div style={{width:16,height:16,background:GOLD_GRAD,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:9}}>M</div>
+          <span style={{color:DS.sub,fontSize:11,fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>Marqland Studios</span>
         </div>
-        <p style={{color:'#1e293b',fontSize:10}}>This is a private proposal. Please do not share this link.</p>
+        <p style={{color:'rgba(255,255,255,0.18)',fontSize:10,fontFamily:'Manrope,sans-serif'}}>This is a private proposal. Please do not share this link.</p>
       </div>
     </div>
   );
 };
 
-// ── Single product card with orientation-aware Bento sizing ──────────────────
-const BentoCard = ({ item, idx, onZoom, span }) => (
-  <GlassCard delay={idx*0.05} style={{
-    gridColumn: span==='wide' ? 'span 2' : 'span 1',
-    gridRow:    span==='tall' ? 'span 2' : 'span 1',
-  }}>
-    {/* Image — natural aspect ratio via padding trick */}
-    <div style={{
-      position:'relative',
-      paddingBottom: span==='wide' ? '42%' : span==='tall' ? '120%' : '75%',
-      background:'#0a0f1e',
-      overflow:'hidden',
-      borderRadius:'20px 20px 0 0',
-      cursor:item.imageUrl?'zoom-in':'default',
-    }}
-      onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}>
-      {item.imageUrl
-        ? <img src={item.imageUrl} alt={item.name} className="img-zoom"
-            style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',transition:'transform .45s ease'}}/>
-        : <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#1e293b',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
-      }
-      {/* bottom gradient for text legibility */}
-      <div style={{position:'absolute',inset:0,background:'linear-gradient(0deg,rgba(0,0,0,0.65) 0%,transparent 55%)',pointerEvents:'none'}}/>
-      {/* category/sub badge bottom-left over image */}
-      <div style={{position:'absolute',bottom:10,left:10,display:'flex',gap:5,flexWrap:'wrap'}}>
-        {item.category&&<span style={{background:'rgba(249,115,22,0.85)',color:'#fff',fontSize:9,fontWeight:800,padding:'3px 8px',borderRadius:5,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.06em'}}>{item.category}</span>}
-        {item.subCategory&&<span style={{background:'rgba(255,255,255,0.15)',color:'#e2e8f0',fontSize:9,fontWeight:700,padding:'3px 8px',borderRadius:5,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.04em'}}>{item.subCategory}</span>}
-      </div>
-      {item.imageUrl&&<div style={{position:'absolute',top:10,right:10,background:'rgba(0,0,0,0.5)',color:'#94a3b8',borderRadius:6,padding:'3px 6px',display:'flex',alignItems:'center',gap:3,fontSize:9,backdropFilter:'blur(4px)'}}>{Ic.zoom}</div>}
-    </div>
-    <div style={{padding:'14px 16px 18px'}}>
-      <h3 style={{fontSize:15,fontWeight:800,color:'#f1f5f9',marginBottom:5,lineHeight:1.3}}>{item.name}</h3>
-      {item.description&&<p style={{fontSize:11,color:'#64748b',lineHeight:1.6,marginBottom:12,display:'-webkit-box',WebkitLineClamp:span==='wide'?3:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.description}</p>}
-      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
-        <div>
-          <div style={{fontSize:8,color:'#475569',fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Price per unit</div>
-          <div style={{fontSize:20,fontWeight:800,color:'#f97316',lineHeight:1}}>{toINR(item.price)}</div>
-        </div>
-      </div>
-    </div>
-  </GlassCard>
+// ── Empty State helper ─────────────────────────────────────────────────────────
+const EmptyState = ({ icon, title, sub, children }) => (
+  <div style={{textAlign:'center',padding:'80px 0'}}>
+    <div style={{fontSize:48,marginBottom:18}}>{icon}</div>
+    <h3 style={{fontFamily:'Noto Serif,serif',fontSize:18,fontWeight:700,color:'rgba(240,232,214,0.7)',marginBottom:8}}>{title}</h3>
+    <p style={{fontSize:13,color:'rgba(255,255,255,0.3)',fontFamily:'Manrope,sans-serif'}}>{sub}</p>
+    {children}
+  </div>
 );
 
-// ── Product Bento — grouped by category, filter bar, orientation-aware grid ───
-const ProductBento = ({ items, onZoom }) => {
-  // null = show all categories; string = spotlight one category
+// ─────────────────────────────────────────────────────────────────────────────
+// BENTO GRID — Product catalogue
+// DESIGN.md: dense grid with xl (12px) radii, tonal surface cards, no dividers
+// ─────────────────────────────────────────────────────────────────────────────
+const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{} }) => {
   const [activeCategory, setActiveCategory] = React.useState(null);
   const [activeSubCat,   setActiveSubCat]   = React.useState(null);
-  const [imgSpans, setImgSpans] = React.useState({});
+  const [imgSpans,  setImgSpans]  = React.useState({});
+  const [hoveredId, setHoveredId] = React.useState(null);
 
   const handleImgLoad = (id, e) => {
-    const { naturalWidth: w, naturalHeight: h } = e.target;
-    const ratio = w / h;
-    setImgSpans(prev => ({ ...prev, [id]: ratio >= 1.6 ? 'wide' : ratio <= 0.7 ? 'tall' : 'square' }));
+    const {naturalWidth:w, naturalHeight:h} = e.target;
+    const r = w/h;
+    setImgSpans(prev=>({...prev,[id]: r>=1.6?'wide': r<=0.68?'tall':'square'}));
   };
 
-  // Only categories that actually have items
-  const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
-
-  // Subcategories within the selected category only
-  const subCatsInActive = activeCategory
-    ? [...new Set(items.filter(i => i.category === activeCategory).map(i => i.subCategory).filter(Boolean))]
+  const categories = [...new Set(items.map(i=>i.category).filter(Boolean))];
+  const subCats = activeCategory
+    ? [...new Set(items.filter(i=>i.category===activeCategory).map(i=>i.subCategory).filter(Boolean))]
     : [];
 
-  // Items after filter
-  const filtered = items.filter(i => {
-    const catOk = !activeCategory || i.category === activeCategory;
-    const subOk = !activeSubCat   || i.subCategory === activeSubCat;
-    return catOk && subOk;
+  const filtered = items.filter(i=>{
+    const cOk = !activeCategory || i.category===activeCategory;
+    const sOk = !activeSubCat   || i.subCategory===activeSubCat;
+    return cOk&&sOk;
   });
 
-  // Build ordered groups — preserving category order from items array
   const groupMap = new Map();
-  filtered.forEach(item => {
-    const cat = item.category || 'Other';
-    if (!groupMap.has(cat)) groupMap.set(cat, []);
-    groupMap.get(cat).push(item);
-  });
-  const groups = Array.from(groupMap.entries()).map(([cat, its]) => ({ cat, items: its }));
+  filtered.forEach(item=>{ const c=item.category||'Other'; if(!groupMap.has(c)) groupMap.set(c,[]); groupMap.get(c).push(item); });
+  const groups = Array.from(groupMap.entries()).map(([cat,its])=>({cat,items:its}));
 
-  const chipBase = {
-    padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
-    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
-    transition: 'all .18s',
-  };
-  const chip = (active) => ({
-    ...chipBase,
-    background: active ? '#f97316'              : 'rgba(255,255,255,0.06)',
-    color:      active ? '#fff'                 : '#64748b',
-    boxShadow:  active ? '0 4px 14px rgba(249,115,22,0.4)' : 'none',
+  // Chip styles — secondary button style from DESIGN.md (ghost border)
+  const chip = active => ({
+    padding:'5px 16px', borderRadius:20, border:'none', cursor:'pointer',
+    fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+    fontFamily:'Manrope,sans-serif', transition:'all .18s',
+    background: active ? GOLD_GRAD : 'transparent',
+    color:      active ? DS.onGold  : DS.sub,
+    boxShadow:  active ? '0 4px 16px rgba(197,163,87,0.35)' : 'none',
+    outline:    active ? 'none' : `1px solid rgba(255,255,255,0.12)`,
   });
-  const subChip = (active) => ({
-    ...chipBase,
-    padding: '4px 12px', fontSize: 10,
-    background: active ? 'rgba(249,115,22,0.18)' : 'rgba(255,255,255,0.04)',
-    color:      active ? '#f97316'               : '#475569',
-    border:     active ? '1px solid rgba(249,115,22,0.45)' : '1px solid rgba(255,255,255,0.08)',
+  const subChip = active => ({
+    ...chip(active), padding:'4px 12px', fontSize:10,
+    background: active ? 'rgba(197,163,87,0.15)' : 'transparent',
+    color:      active ? DS.gold : DS.sub,
+    outline:    `1px solid ${active?'rgba(197,163,87,0.4)':'rgba(255,255,255,0.08)'}`,
   });
 
   return (
     <div>
-      {/* ── Filter bar ── */}
-      <div style={{marginBottom:28,padding:'16px 20px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:16,backdropFilter:'blur(12px)'}}>
-        {/* Category chips — no "All"; clicking active one deselects (shows all) */}
+      {/* Filter bar — surface-container tonal panel */}
+      <div style={{marginBottom:32,padding:'18px 22px',background:DS.cont,borderRadius:12}}>
         <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>
-          <span style={{fontSize:9,fontWeight:800,color:'#475569',textTransform:'uppercase',letterSpacing:'0.1em',marginRight:4}}>Category</span>
-          {categories.map(cat => (
+          <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:'Manrope,sans-serif'}}>Category</span>
+          {categories.map(cat=>(
             <button key={cat} style={chip(activeCategory===cat)}
-              onClick={() => {
-                if (activeCategory === cat) { setActiveCategory(null); setActiveSubCat(null); }
-                else { setActiveCategory(cat); setActiveSubCat(null); }
-              }}>
+              onClick={()=>{ if(activeCategory===cat){setActiveCategory(null);setActiveSubCat(null);}else{setActiveCategory(cat);setActiveSubCat(null);} }}>
               {cat}
             </button>
           ))}
         </div>
-
-        {/* Subcategory chips — only when a category is active AND it has subcats */}
-        {activeCategory && subCatsInActive.length > 0 && (
-          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:12,paddingTop:12,borderTop:'1px solid rgba(255,255,255,0.06)',alignItems:'center'}}>
-            <span style={{fontSize:9,fontWeight:800,color:'#475569',textTransform:'uppercase',letterSpacing:'0.1em',marginRight:4}}>Type</span>
-            {subCatsInActive.map(sc => (
-              <button key={sc} style={subChip(activeSubCat===sc)}
-                onClick={() => setActiveSubCat(activeSubCat===sc ? null : sc)}>
-                {sc}
-              </button>
+        {activeCategory&&subCats.length>0&&(
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:12,paddingTop:12,borderTop:`1px solid rgba(255,255,255,0.05)`,alignItems:'center'}}>
+            <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:'Manrope,sans-serif'}}>Type</span>
+            {subCats.map(sc=>(
+              <button key={sc} style={subChip(activeSubCat===sc)} onClick={()=>setActiveSubCat(activeSubCat===sc?null:sc)}>{sc}</button>
             ))}
           </div>
         )}
-
-        <div style={{marginTop:10,fontSize:11,color:'#475569'}}>
-          <span style={{fontWeight:700,color:'#f97316'}}>{filtered.length}</span>
+        <div style={{marginTop:10,fontSize:12,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>
+          <span style={{fontWeight:700,color:DS.gold}}>{filtered.length}</span>
           {' '}option{filtered.length!==1?'s':''} curated for you
-          {activeCategory && <span style={{color:'#334155'}}> in <span style={{color:'#f97316'}}>{activeCategory}</span>{activeSubCat ? ` › ${activeSubCat}` : ''}</span>}
+          {activeCategory&&<span style={{color:'rgba(255,255,255,0.25)'}}> in <span style={{color:DS.gold}}>{activeCategory}</span>{activeSubCat?` › ${activeSubCat}`:''}</span>}
         </div>
       </div>
 
-      {/* ── Category groups — always shown, never collapsed ── */}
-      {groups.map((group, gi) => (
-        <div key={group.cat} style={{marginBottom:48}}>
-          {/* Category section header */}
-          <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:20}}>
-            <div style={{
-              fontSize:10, fontWeight:800, color:'#f97316',
-              textTransform:'uppercase', letterSpacing:'0.12em', whiteSpace:'nowrap',
-              padding:'5px 14px', background:'rgba(249,115,22,0.1)',
-              border:'1px solid rgba(249,115,22,0.25)', borderRadius:20,
-            }}>
-              {group.cat}
-            </div>
-            <div style={{flex:1,height:1,background:'linear-gradient(90deg,rgba(249,115,22,0.25),transparent)'}}/>
-            <div style={{fontSize:10,color:'#334155',fontWeight:600,flexShrink:0}}>
-              {group.items.length} item{group.items.length!==1?'s':''}
-            </div>
+      {/* Category groups */}
+      {groups.map((group,gi)=>(
+        <div key={group.cat} style={{marginBottom:56}}>
+          {/* Category header — Status Pillar style */}
+          <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:22}}>
+            <div style={{width:2,height:20,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
+            <span style={{fontSize:10,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.14em',fontFamily:'Manrope,sans-serif'}}>{group.cat}</span>
+            <div style={{flex:1,height:1,background:`linear-gradient(90deg, rgba(197,163,87,0.2), transparent)`}}/>
+            <span style={{fontSize:10,color:'rgba(255,255,255,0.2)',fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{group.items.length} item{group.items.length!==1?'s':''}</span>
           </div>
 
-          {/* Sub-group by subcategory within each category section */}
-          {(() => {
-            const subMap = new Map();
-            group.items.forEach(item => {
-              const sub = item.subCategory || '';
-              if (!subMap.has(sub)) subMap.set(sub, []);
-              subMap.get(sub).push(item);
-            });
-            const subGroups = Array.from(subMap.entries());
-            return subGroups.map(([sub, subItems]) => (
-              <div key={sub||'main'} style={{marginBottom:24}}>
-                {/* Subcategory label — only if there is one and if there are multiple subgroups */}
-                {sub && subGroups.length > 1 && (
-                  <div style={{fontSize:9,fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:12,paddingLeft:2}}>
-                    — {sub}
-                  </div>
+          {/* Sub-groups */}
+          {(()=>{
+            const subMap=new Map();
+            group.items.forEach(item=>{ const s=item.subCategory||''; if(!subMap.has(s)) subMap.set(s,[]); subMap.get(s).push(item); });
+            const subGroups=Array.from(subMap.entries());
+            return subGroups.map(([sub,subItems])=>(
+              <div key={sub||'main'} style={{marginBottom:28}}>
+                {sub&&subGroups.length>1&&(
+                  <div style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.2)',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:14,paddingLeft:4,fontFamily:'Manrope,sans-serif'}}>— {sub}</div>
                 )}
-                {/* Bento grid */}
+                {/* BENTO GRID
+                     Layout:  3 columns. No fixed row height — cards size to content.
+                     Wide images (ratio ≥ 1.6): span 2 cols. Others: 1 col.
+                     Every card = image (fills to natural ratio) + info panel below.
+                     Info panel: name + price on one line, then full description.
+                     Heart always top-left. No category/subcat badges on image. */}
                 <div style={{
                   display:'grid',
-                  gridTemplateColumns:'repeat(4,1fr)',
-                  gridAutoRows:'220px',
-                  gap:14,
-                  gridAutoFlow:'dense',
+                  gridTemplateColumns:'repeat(3,1fr)',
+                  gap:16,
                 }}>
-                  {subItems.map((item, idx) => {
-                    const span = imgSpans[item._id] || 'square';
+                  {subItems.map((item,idx)=>{
+                    const span  = imgSpans[item._id] || 'square';
+                    const loved = wishlisted.has(String(item._id));
                     return (
-                      <GlassCard key={item._id} delay={(gi*0.1)+(idx*0.04)} style={{
+                      <GlassCard key={item._id} delay={(gi*0.08)+(idx*0.04)} style={{
                         gridColumn: span==='wide' ? 'span 2' : 'span 1',
-                        gridRow:    span==='tall' ? 'span 2' : 'span 1',
                         display:'flex', flexDirection:'column',
+                        overflow:'hidden',
                       }}>
-                        {/* Image */}
-                        <div style={{
-                          flex:1, position:'relative', overflow:'hidden',
-                          borderRadius:'20px 20px 0 0',
-                          cursor:item.imageUrl?'zoom-in':'default',
-                          minHeight:0,
-                        }}
-                          onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}>
+
+                        {/* ── Image — fills to natural aspect ratio ── */}
+                        <div
+                          style={{position:'relative',overflow:'hidden',borderRadius:'12px 12px 0 0',cursor:item.imageUrl?'zoom-in':'default'}}
+                          onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}
+                          onMouseEnter={()=>setHoveredId(item._id)}
+                          onMouseLeave={()=>setHoveredId(null)}
+                        >
                           {item.imageUrl
-                            ? <img src={item.imageUrl} alt={item.name} className="img-zoom"
-                                style={{width:'100%',height:'100%',objectFit:'cover',position:'absolute',inset:0,transition:'transform .45s ease'}}
-                                onLoad={e=>handleImgLoad(item._id, e)}/>
-                            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'#1e293b',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',position:'absolute',inset:0}}>No image</div>
+                            ? <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                style={{width:'100%',display:'block',objectFit:'cover',transition:'transform .5s ease',maxHeight:span==='wide'?320:280,minHeight:180}}
+                                onLoad={e=>handleImgLoad(item._id,e)}
+                              />
+                            : <div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',background:DS.contHi,color:'rgba(255,255,255,0.15)',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
                           }
-                          <div style={{position:'absolute',inset:0,background:'linear-gradient(0deg,rgba(0,0,0,0.72) 0%,transparent 52%)',pointerEvents:'none'}}/>
-                          {/* Category + sub badges */}
-                          <div style={{position:'absolute',bottom:10,left:10,display:'flex',gap:5,flexWrap:'wrap'}}>
-                            {item.category&&<span style={{background:'rgba(249,115,22,0.9)',color:'#fff',fontSize:8,fontWeight:800,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.05em'}}>{item.category}</span>}
-                            {item.subCategory&&<span style={{background:'rgba(255,255,255,0.2)',color:'#f1f5f9',fontSize:8,fontWeight:700,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.04em'}}>{item.subCategory}</span>}
-                          </div>
-                          {item.imageUrl&&<div style={{position:'absolute',top:9,right:9,background:'rgba(0,0,0,0.5)',color:'#94a3b8',borderRadius:6,padding:'3px 6px',display:'flex',alignItems:'center',gap:3,fontSize:9,backdropFilter:'blur(4px)'}}>{Ic.zoom}</div>}
-                        </div>
-                        {/* Info */}
-                        <div style={{padding:'11px 13px 13px',flexShrink:0}}>
-                          <div style={{fontSize:13,fontWeight:800,color:'#f1f5f9',marginBottom:2,lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</div>
-                          {item.description && span!=='square' && (
-                            <p style={{fontSize:10,color:'#64748b',lineHeight:1.5,marginBottom:6,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.description}</p>
+
+                          {/* Permanent bottom gradient */}
+                          <div style={{position:'absolute',bottom:0,left:0,right:0,height:'50%',background:'linear-gradient(0deg,rgba(10,20,34,0.9) 0%,transparent 100%)',pointerEvents:'none',transition:'opacity .3s',opacity:hoveredId===item._id?0:1}}/>
+
+                          {/* ── Hover overlay — slides up, scrollable for long descriptions ── */}
+                          {item.description&&(
+                            <div
+                              onClick={e=>e.stopPropagation()}
+                              style={{
+                                position:'absolute',
+                                bottom:0,left:0,right:0,
+                                // Cap height at 75% of image so image is still partially visible
+                                maxHeight:'75%',
+                                background:'rgba(10,20,34,0.95)',
+                                backdropFilter:'blur(12px)',
+                                WebkitBackdropFilter:'blur(12px)',
+                                overflowY: hoveredId===item._id ? 'auto' : 'hidden',
+                                transform: hoveredId===item._id ? 'translateY(0)' : 'translateY(100%)',
+                                transition:'transform .32s cubic-bezier(.4,0,.2,1)',
+                                pointerEvents: hoveredId===item._id ? 'auto' : 'none',
+                                cursor:'default',
+                                // Subtle top fade so image peeks above
+                                borderTop:'1px solid rgba(197,163,87,0.2)',
+                              }}
+                              className="desc-scroll"
+                            >
+                              {/* Thin gold line at top — visual anchor */}
+                              <div style={{position:'sticky',top:0,left:0,right:0,height:2,background:GOLD_GRAD,flexShrink:0}}/>
+                              <div style={{padding:'12px 14px 16px'}}>
+                                <p style={{
+                                  fontSize:12.5,
+                                  color:'rgba(240,232,214,0.92)',
+                                  lineHeight:1.7,
+                                  margin:0,
+                                  fontFamily:'Manrope,sans-serif',
+                                  fontWeight:400,
+                                  whiteSpace:'pre-wrap',
+                                  wordBreak:'break-word',
+                                }}>{item.description}</p>
+                              </div>
+                            </div>
                           )}
-                          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingTop:7,borderTop:'1px solid rgba(255,255,255,0.07)'}}>
-                            <div style={{fontSize:16,fontWeight:800,color:'#f97316'}}>{toINR(item.price)}</div>
-                            <div style={{fontSize:8,color:'#475569',fontWeight:700,textTransform:'uppercase'}}>per unit</div>
+
+                          {/* Heart — top left */}
+                          <button
+                            onClick={e=>{e.stopPropagation();onToggleWish(String(item._id));}}
+                            title={loved?'Remove from shortlist':'Add to shortlist'}
+                            style={{
+                              position:'absolute',top:10,left:10,zIndex:3,
+                              background:loved?'rgba(220,53,69,0.9)':'rgba(10,20,34,0.6)',
+                              border:`1px solid ${loved?'rgba(220,53,69,0.5)':'rgba(255,255,255,0.2)'}`,
+                              borderRadius:8,width:32,height:32,
+                              cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+                              color:loved?'#fff':'rgba(255,255,255,0.6)',
+                              backdropFilter:'blur(8px)',transition:'all .2s',
+                            }}>
+                            {loved?Ic.heart:Ic.heartO}
+                          </button>
+
+                          {/* Zoom hint — top right, fades on hover */}
+                          {item.imageUrl&&(
+                            <div style={{position:'absolute',top:10,right:10,background:'rgba(10,20,34,0.6)',color:'rgba(255,255,255,0.45)',borderRadius:6,padding:'4px 7px',display:'flex',alignItems:'center',gap:3,fontSize:9,backdropFilter:'blur(4px)',pointerEvents:'none',transition:'opacity .2s',opacity:hoveredId===item._id?0:1}}>
+                              {Ic.zoom}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ── Info panel ── */}
+                        <div style={{padding:'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
+
+                          {/* Row 1: Name + Price side by side */}
+                          <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
+                            <div style={{fontSize:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>
+                              {item.name}
+                            </div>
+                            <div style={{fontSize:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>
+                              {toINR(item.price)}
+                            </div>
                           </div>
+
+                          {/* Row 2: Description — full, no clamp on tall; 3 lines otherwise */}
+                          {item.description&&(
+                            <p style={{
+                              fontSize:12,color:DS.sub,lineHeight:1.6,margin:0,
+                              fontFamily:'Manrope,sans-serif',
+                              display:'-webkit-box',
+                              WebkitLineClamp: span==='wide' ? 4 : 3,
+                              WebkitBoxOrient:'vertical',
+                              overflow:'hidden',
+                            }}>{item.description}</p>
+                          )}
                         </div>
                       </GlassCard>
                     );
@@ -656,62 +942,53 @@ const ProductBento = ({ items, onZoom }) => {
         </div>
       ))}
 
-      {filtered.length===0&&(
-        <div style={{textAlign:'center',padding:'60px 0',color:'#334155'}}>
-          <div style={{fontSize:32,marginBottom:10}}>🔍</div>
-          <p style={{fontSize:14,fontWeight:600,color:'#475569'}}>No items found</p>
-          <p style={{fontSize:12,color:'#334155',marginTop:6}}>Try selecting a different category</p>
-        </div>
-      )}
+      {filtered.length===0&&<EmptyState icon="🔍" title="No items found" sub="Try selecting a different category"/>}
     </div>
   );
 };
 
-
-// ── Offsite Cards — 3D Glass, fix 5, fix 6, fix 7 ─────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// OFFSITE CARDS — property options
+// ─────────────────────────────────────────────────────────────────────────────
 const OffsiteCards = ({ items, onZoom }) => (
   <div>
-    <p style={{fontSize:12,color:'#475569',marginBottom:20,fontWeight:600}}>{items.length} propert{items.length!==1?'ies':'y'} selected for you</p>
-    <div style={{display:'flex',flexDirection:'column',gap:24}}>
+    <p style={{fontSize:12,color:DS.sub,marginBottom:24,fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{items.length} propert{items.length!==1?'ies':'y'} selected for you</p>
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
       {items.map((item,idx)=>(
-        <GlassCard key={item._id} delay={idx*0.1} style={{borderRadius:22}}>
-          {/* Top section: fixed-height image + info — image never stretches */}
-          <div style={{display:'grid',gridTemplateColumns:'300px 1fr',height:260,borderRadius:'22px 22px 0 0',overflow:'hidden'}}>
-            {/* Image — locked to 260px height */}
+        <GlassCard key={item._id} delay={idx*0.08} style={{borderRadius:12}}>
+          <div style={{display:'grid',gridTemplateColumns:'280px 1fr',height:260,borderRadius:'12px 12px 0 0',overflow:'hidden'}}>
+            {/* Image */}
             <div style={{position:'relative',height:260,cursor:item.imageUrl?'zoom-in':'default',overflow:'hidden'}}
               onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}>
               {item.imageUrl
-                ? <img src={item.imageUrl} alt={item.name} className="img-zoom"
-                    style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .5s ease'}}/>
-                : <div style={{width:'100%',height:'100%',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',color:'#1e293b',fontSize:12}}>No image</div>
+                ?<img src={item.imageUrl} alt={item.name} className="img-hover" style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .5s ease'}}/>
+                :<div style={{width:'100%',height:'100%',background:DS.contHi,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.2)',fontSize:12}}>No image</div>
               }
-              <div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,rgba(0,0,0,0.25) 0%,transparent 60%)',pointerEvents:'none'}}/>
-              <div style={{position:'absolute',top:14,left:14,background:'rgba(10,15,30,0.72)',color:'#94a3b8',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(6px)'}}>Option {idx+1}</div>
-              <div style={{position:'absolute',bottom:14,left:14,background:item.type==='Night Stay'?'rgba(29,78,216,0.85)':'rgba(180,83,9,0.85)',color:'#fff',fontSize:9,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)'}}>
+              <div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,rgba(0,0,0,0.3) 0%,transparent 55%)',pointerEvents:'none'}}/>
+              <div style={{position:'absolute',top:14,left:14,background:'rgba(10,20,34,0.75)',color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(6px)',fontFamily:'Manrope,sans-serif',letterSpacing:'0.06em'}}>Option {idx+1}</div>
+              <div style={{position:'absolute',bottom:14,left:14,background:item.type==='Night Stay'?'rgba(29,78,216,0.82)':'rgba(180,83,9,0.82)',color:'#fff',fontSize:9,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)',fontFamily:'Manrope,sans-serif'}}>
                 {item.type==='Night Stay'?'🌙 Night Stay':'☀️ Day Outing'}
               </div>
-              {item.imageUrl&&<div style={{position:'absolute',bottom:14,right:14,background:'rgba(0,0,0,0.55)',color:'#94a3b8',borderRadius:6,padding:'4px 7px',display:'flex',alignItems:'center',gap:3,fontSize:10,backdropFilter:'blur(4px)'}}>{Ic.zoom} Expand</div>}
             </div>
-            {/* Property info — fits inside the 260px row */}
-            <div style={{padding:'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',overflow:'hidden'}}>
+            {/* Info panel — tonal surface shift */}
+            <div style={{padding:'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',overflow:'hidden',background:DS.contHi}}>
               <div>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:8}}>
                   <div>
-                    <h3 style={{fontSize:20,fontWeight:800,color:'#f1f5f9',marginBottom:4,lineHeight:1.2}}>{item.name}</h3>
-                    <div style={{display:'flex',alignItems:'center',gap:5,color:'#64748b',fontSize:13}}>
-                      <span style={{color:'#f97316'}}>{Ic.pin}</span>{item.location||'Location TBD'}
+                    <h3 style={{fontFamily:'Noto Serif,serif',fontSize:20,fontWeight:700,color:DS.text,marginBottom:5,lineHeight:1.2}}>{item.name}</h3>
+                    <div style={{display:'flex',alignItems:'center',gap:5,color:DS.sub,fontSize:13,fontFamily:'Manrope,sans-serif'}}>
+                      <span style={{color:DS.gold}}>{Ic.pin}</span>{item.location||'Location TBD'}
                     </div>
                   </div>
                   {item.website&&(
                     <a href={item.website.startsWith('http')?item.website:`https://${item.website}`} target="_blank" rel="noreferrer"
-                      style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'#f97316',fontWeight:600,textDecoration:'none',background:'rgba(249,115,22,0.1)',padding:'6px 12px',borderRadius:8,whiteSpace:'nowrap',border:'1px solid rgba(249,115,22,0.2)',flexShrink:0}}>
+                      style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:DS.gold,fontWeight:600,textDecoration:'none',background:'rgba(197,163,87,0.08)',padding:'6px 12px',borderRadius:8,whiteSpace:'nowrap',border:'1px solid rgba(197,163,87,0.2)',flexShrink:0,fontFamily:'Manrope,sans-serif'}}>
                       {Ic.ext} Visit
                     </a>
                   )}
                 </div>
-                {item.details&&<p style={{fontSize:12,color:'#64748b',lineHeight:1.6,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.details}</p>}
+                {item.details&&<p style={{fontSize:12,color:DS.sub,lineHeight:1.65,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden',fontFamily:'Manrope,sans-serif'}}>{item.details}</p>}
               </div>
-              {/* Night Stay: prices inside the top row */}
               {item.type==='Night Stay'&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {item.singlePrice>0&&<PBox label="Single" value={item.singlePrice} sub="per night"/>}
@@ -722,7 +999,6 @@ const OffsiteCards = ({ items, onZoom }) => (
                   {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
                 </div>
               )}
-              {/* Day Outing: add-ons in top row, packages expand below */}
               {item.type!=='Night Stay'&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {(!item.dayPackages||item.dayPackages.length===0)&&item.packagePrice>0&&<PBox label="Day package" value={item.packagePrice} sub="per person"/>}
@@ -732,65 +1008,37 @@ const OffsiteCards = ({ items, onZoom }) => (
               )}
             </div>
           </div>
-
-          {/* Day Packages — full-width section below the fixed image row */}
-          {item.type!=='Night Stay'&&item.dayPackages&&item.dayPackages.length>0&&(
-            <div style={{padding:'20px 24px 24px',borderTop:'1px solid rgba(255,255,255,0.07)'}}>
-              <div style={{fontSize:10,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:14}}>
-                ☀️ Day Packages — {item.dayPackages.length} option{item.dayPackages.length!==1?'s':''}
-              </div>
-              {/* Responsive grid: 1 col on narrow, 2 cols when wide enough, always consistent */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
+          {/* Day packages — full-width expansion below */}
+          {item.type!=='Night Stay'&&item.dayPackages?.length>0&&(
+            <div style={{padding:'20px 24px 24px',background:DS.cont}}>
+              <div style={{fontSize:9,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontFamily:'Manrope,sans-serif'}}>☀️ Day Packages — {item.dayPackages.length} option{item.dayPackages.length!==1?'s':''}</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:10}}>
                 {item.dayPackages.map((pkg,pi)=>(
-                  <div key={pi} style={{
-                    background:'linear-gradient(135deg,rgba(251,191,36,0.08),rgba(251,191,36,0.03))',
-                    border:'1px solid rgba(251,191,36,0.2)',
-                    borderRadius:14,
-                    padding:'14px 16px',
-                    display:'flex',
-                    flexDirection:'column',
-                    gap:10,
-                  }}>
-                    {/* Name + price on top */}
+                  <div key={pi} style={{background:DS.contTop,border:'1px solid rgba(245,158,11,0.15)',borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:10}}>
                     <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
-                      <div style={{fontWeight:800,fontSize:14,color:'#f1f5f9',lineHeight:1.2,flex:1}}>
-                        {pkg.name||`Package ${pi+1}`}
-                      </div>
-                      {pkg.sellingPrice>0&&(
-                        <div style={{textAlign:'right',flexShrink:0}}>
-                          <div style={{fontSize:19,fontWeight:800,color:'#fbbf24',lineHeight:1}}>
-                            ₹{Number(pkg.sellingPrice).toLocaleString('en-IN')}
-                          </div>
-                          <div style={{fontSize:9,color:'#f59e0b',fontWeight:600,marginTop:2}}>per person</div>
-                        </div>
-                      )}
+                      <div style={{fontWeight:700,fontSize:14,color:DS.text,lineHeight:1.2,flex:1,fontFamily:'Manrope,sans-serif'}}>{pkg.name||`Package ${pi+1}`}</div>
+                      {pkg.sellingPrice>0&&<div style={{textAlign:'right',flexShrink:0}}>
+                        <div style={{fontSize:17,fontWeight:700,color:'#fbbf24',fontFamily:'Noto Serif,serif'}}>₹{Number(pkg.sellingPrice).toLocaleString('en-IN')}</div>
+                        <div style={{fontSize:9,color:'#f59e0b',fontWeight:600,marginTop:2,fontFamily:'Manrope,sans-serif'}}>per person</div>
+                      </div>}
                     </div>
-                    {/* Activities — split by newline or comma */}
-                    {pkg.activities&&(
-                      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                        {pkg.activities
-                          .split(/[\n,]+/)
-                          .map(s=>s.trim())
-                          .filter(Boolean)
-                          .map((line,li)=>(
-                            <div key={li} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:'#94a3b8',lineHeight:1.4}}>
-                              <span style={{color:'#f59e0b',flexShrink:0,fontSize:11,marginTop:1}}>✓</span>
-                              <span>{line}</span>
-                            </div>
-                          ))
-                        }
-                      </div>
-                    )}
+                    {pkg.activities&&<div style={{display:'flex',flexDirection:'column',gap:4}}>
+                      {pkg.activities.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean).map((line,li)=>(
+                        <div key={li} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:DS.sub,lineHeight:1.4,fontFamily:'Manrope,sans-serif'}}>
+                          <span style={{color:'#f59e0b',flexShrink:0,fontSize:11,marginTop:1}}>✓</span>
+                          <span>{line}</span>
+                        </div>
+                      ))}
+                    </div>}
                   </div>
                 ))}
               </div>
-              {item.note&&<div style={{marginTop:14,background:'rgba(249,115,22,0.08)',border:'1px solid rgba(249,115,22,0.15)',borderRadius:8,padding:'8px 12px',fontSize:12,color:'#fb923c',fontStyle:'italic'}}>💡 {item.note}</div>}
+              {item.note&&<div style={{marginTop:14,background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'8px 12px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>}
             </div>
           )}
-          {/* Night stay note */}
           {item.type==='Night Stay'&&item.note&&(
-            <div style={{padding:'0 24px 18px'}}>
-              <div style={{background:'rgba(249,115,22,0.08)',border:'1px solid rgba(249,115,22,0.15)',borderRadius:8,padding:'8px 12px',fontSize:12,color:'#fb923c',fontStyle:'italic'}}>💡 {item.note}</div>
+            <div style={{padding:'0 24px 18px',background:DS.cont}}>
+              <div style={{background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'8px 12px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>
             </div>
           )}
         </GlassCard>

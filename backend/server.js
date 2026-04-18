@@ -52,8 +52,54 @@ app.use(express.static(buildPath));
 
 // [catch-all moved below API routes — see end of route registrations]
 
+// ── Seed initial admin from .env on first deploy ─────────────────────────────
+const seedInitialAdmin = async () => {
+  try {
+    const User = require('./models/User');
+    const bcrypt = require('bcryptjs');
+
+    const email    = (process.env.INITIAL_ADMIN_EMAIL    || '').toLowerCase().trim();
+    const password =  process.env.INITIAL_ADMIN_PASSWORD || '';
+
+    if (!email || !password) {
+      console.log('ℹ️  INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD not set — skipping seed.');
+      return;
+    }
+
+    // Check using raw collection so Mongoose middleware doesn't interfere
+    const col      = mongoose.connection.collection('users');
+    const existing = await col.findOne({ email });
+
+    if (existing) {
+      // User exists — make sure they are active admin (fixes stale status from past runs)
+      await col.updateOne({ email }, { $set: { role: 'admin', isActive: true, status: 'active' } });
+      console.log(`✅ Admin user verified: ${email}`);
+      return;
+    }
+
+    // First deploy — create the admin user with a fresh hash
+    const hash = await bcrypt.hash(password, 10);
+    await col.insertOne({
+      name:      'Admin',
+      email,
+      password:  hash,
+      role:      'admin',
+      isActive:  true,
+      status:    'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    console.log(`🌱 Initial admin created: ${email}`);
+  } catch (err) {
+    console.error('❌ Seed error:', err.message);
+  }
+};
+
 mongoose.connect('mongodb://127.0.0.1:27017/bizManager')
-  .then(() => console.log('✅ Connected to MongoDB (bizManager)'))
+  .then(async () => {
+    console.log('✅ Connected to MongoDB (bizManager)');
+    await seedInitialAdmin();
+  })
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 app.use('/api/products', productRoutes);

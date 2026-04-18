@@ -32,6 +32,247 @@ import {
 
 
 
+
+// ── ClientContactPicker ────────────────────────────────────────────────────────
+// Replaces the two CreatableSelects in the create-order modal.
+// Pulls client list from /api/clients, lets user search & pick.
+// Contact dropdown is enabled only after a client is chosen.
+// If client not found → type to create new (existing ClientCreateInlineForm handles it).
+// If client found but contact not found → inline "Add Contact" mini-form.
+function ClientContactPicker({ clientsData, clientName, contactName, onClientChange, onContactChange, onClientCreated, onContactAdded }) {
+  const [clientSearch, setClientSearch] = React.useState('');
+  const [contactSearch, setContactSearch] = React.useState('');
+  const [showClientDrop, setShowClientDrop] = React.useState(false);
+  const [showContactDrop, setShowContactDrop] = React.useState(false);
+  const [showAddContact, setShowAddContact] = React.useState(false);
+  const [newContact, setNewContact] = React.useState({ name: '', phone: '', email: '' });
+  const [savingContact, setSavingContact] = React.useState(false);
+  const clientRef = React.useRef(null);
+  const contactRef = React.useRef(null);
+
+  // Close dropdowns on outside click
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (clientRef.current && !clientRef.current.contains(e.target)) setShowClientDrop(false);
+      if (contactRef.current && !contactRef.current.contains(e.target)) setShowContactDrop(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectedClient = clientsData.find(cl => cl.companyName === clientName);
+  const contacts = selectedClient?.contacts || [];
+
+  const filteredClients = clientsData.filter(cl =>
+    cl.companyName.toLowerCase().includes(clientSearch.toLowerCase())
+  );
+  const filteredContacts = contacts.filter(ct =>
+    ct.name?.toLowerCase().includes(contactSearch.toLowerCase())
+  );
+
+  // Check if typed client name exactly matches a known client
+  const isNewClient = clientName && !clientsData.find(cl =>
+    cl.companyName.toLowerCase() === clientName.toLowerCase()
+  );
+
+  const saveNewContact = async () => {
+    if (!newContact.name.trim() || !selectedClient) return;
+    setSavingContact(true);
+    try {
+      const updatedContacts = [...contacts, newContact];
+      const res = await api.put(`/clients/${selectedClient._id}`, {
+        ...selectedClient,
+        contacts: updatedContacts,
+      });
+      onContactAdded(res.data);
+      onContactChange(newContact.name);
+      setNewContact({ name: '', phone: '', email: '' });
+      setShowAddContact(false);
+    } catch (e) { alert('Failed to add contact: ' + (e.response?.data?.message || e.message)); }
+    finally { setSavingContact(false); }
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {/* ── Client Company ── */}
+      <div className="space-y-1" ref={clientRef}>
+        <label className="text-[10px] font-black text-slate-400 uppercase px-1">Client Company</label>
+        <div className="relative">
+          <div className="flex items-center bg-slate-50 rounded-xl border-2 border-transparent focus-within:border-indigo-200 transition-all overflow-hidden">
+            <Search size={13} className="ml-3 text-slate-400 shrink-0" />
+            <input
+              className="flex-1 bg-transparent p-3 text-sm font-bold outline-none"
+              placeholder="Search or type new…"
+              value={clientSearch || clientName}
+              onFocus={() => { setClientSearch(''); setShowClientDrop(true); }}
+              onChange={e => { setClientSearch(e.target.value); onClientChange(e.target.value); setShowClientDrop(true); }}
+            />
+            {clientName && (
+              <button type="button" onClick={() => { onClientChange(''); setClientSearch(''); }} className="mr-2 text-slate-300 hover:text-slate-500">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          {showClientDrop && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+              {filteredClients.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-slate-400 font-semibold">
+                  {clientSearch ? `"${clientSearch}" — new client (will be created)` : 'No clients yet'}
+                </div>
+              ) : filteredClients.map(cl => (
+                <button key={cl._id} type="button"
+                  className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                  onMouseDown={() => { onClientChange(cl.companyName); setClientSearch(''); setShowClientDrop(false); }}>
+                  {cl.companyName}
+                  <span className="ml-2 text-[10px] text-slate-400 font-normal">{cl.contacts?.length || 0} contact{cl.contacts?.length !== 1 ? 's' : ''}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {isNewClient && (
+          <p className="text-[10px] text-amber-500 font-bold px-1">⚠ New client — will be created on submit</p>
+        )}
+      </div>
+
+      {/* ── Contact Person ── */}
+      <div className="space-y-1" ref={contactRef}>
+        <label className={`text-[10px] font-black uppercase px-1 ${clientName ? 'text-slate-400' : 'text-slate-200'}`}>Contact Person</label>
+        <div className={`relative ${!clientName ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className="flex items-center bg-slate-50 rounded-xl border-2 border-transparent focus-within:border-indigo-200 transition-all overflow-hidden">
+            <Search size={13} className="ml-3 text-slate-400 shrink-0" />
+            <input
+              className="flex-1 bg-transparent p-3 text-sm font-bold outline-none"
+              placeholder={clientName ? 'Search contacts…' : 'Select client first'}
+              disabled={!clientName}
+              value={contactSearch || contactName}
+              onFocus={() => { setContactSearch(''); setShowContactDrop(true); }}
+              onChange={e => { setContactSearch(e.target.value); onContactChange(e.target.value); setShowContactDrop(true); }}
+            />
+            {contactName && (
+              <button type="button" onClick={() => { onContactChange(''); setContactSearch(''); }} className="mr-2 text-slate-300 hover:text-slate-500">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          {showContactDrop && clientName && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+              {filteredContacts.length === 0 && !isNewClient ? (
+                <div className="px-4 py-3">
+                  <p className="text-xs text-slate-400 font-semibold mb-2">No contacts found for this client.</p>
+                  <button type="button" onMouseDown={() => { setShowContactDrop(false); setShowAddContact(true); }}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                    <Plus size={11} /> Add a contact to {clientName}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {filteredContacts.map((ct, i) => (
+                    <button key={i} type="button"
+                      className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors"
+                      onMouseDown={() => { onContactChange(ct.name); setContactSearch(''); setShowContactDrop(false); }}>
+                      <div className="text-sm font-bold text-slate-700">{ct.name}</div>
+                      <div className="text-[10px] text-slate-400">{ct.phone} {ct.email && `· ${ct.email}`}</div>
+                    </button>
+                  ))}
+                  {!isNewClient && selectedClient && (
+                    <button type="button" onMouseDown={() => { setShowContactDrop(false); setShowAddContact(true); }}
+                      className="w-full text-left px-4 py-2 text-xs font-bold text-indigo-500 hover:bg-indigo-50 border-t border-slate-100 flex items-center gap-1">
+                      <Plus size={11} /> Add new contact
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Inline Add Contact form ── */}
+        {showAddContact && selectedClient && (
+          <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+            <p className="text-[10px] font-black text-indigo-500 uppercase">Add contact to {clientName}</p>
+            <input className="w-full border border-indigo-200 rounded-lg p-2 text-xs bg-white focus:border-indigo-400 outline-none font-semibold"
+              placeholder="Name *" value={newContact.name} onChange={e => setNewContact(p => ({...p, name: e.target.value}))} />
+            <div className="grid grid-cols-2 gap-2">
+              <input className="border border-indigo-200 rounded-lg p-2 text-xs bg-white focus:border-indigo-400 outline-none"
+                placeholder="Phone" value={newContact.phone} onChange={e => setNewContact(p => ({...p, phone: e.target.value}))} />
+              <input className="border border-indigo-200 rounded-lg p-2 text-xs bg-white focus:border-indigo-400 outline-none"
+                placeholder="Email" value={newContact.email} onChange={e => setNewContact(p => ({...p, email: e.target.value}))} />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setShowAddContact(false)} className="text-xs text-slate-400 font-bold hover:text-slate-600">Cancel</button>
+              <button type="button" onClick={saveNewContact} disabled={!newContact.name.trim() || savingContact}
+                className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-xs font-black disabled:opacity-40 flex items-center justify-center gap-1">
+                {savingContact ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <Plus size={11}/>}
+                Save & Select
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Inline client creation form (used inside the modal above) ─────────────────
+function ClientCreateInlineForm({ clientName, onCreated, onSkip }) {
+  const [saving, setSaving] = React.useState(false);
+  const [form, setForm] = React.useState({
+    companyName: clientName || '',
+    contacts: [{ name: '', phone: '', email: '' }],
+  });
+  const sc = (i, f, v) => {
+    const c = [...form.contacts]; c[i] = {...c[i],[f]:v};
+    setForm(p => ({...p, contacts: c}));
+  };
+  const doSave = async () => {
+    if (!form.companyName.trim()) return alert('Company name required');
+    setSaving(true);
+    try {
+      const res = await api.post('/clients', form);
+      onCreated(res.data);
+    } catch(e) { alert('Failed: '+(e.response?.data?.message||e.message)); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="px-6 py-5 space-y-4">
+      <p className="text-sm text-slate-500">Fill in the client details so we can send the portal link by email.</p>
+      <div>
+        <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Company Name</label>
+        <input className="w-full border-2 border-slate-100 rounded-xl p-3 text-sm font-bold focus:border-indigo-400 outline-none"
+          value={form.companyName} onChange={e=>setForm(p=>({...p,companyName:e.target.value}))} />
+      </div>
+      <div>
+        <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Primary Contact</label>
+        <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+          <input className="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white focus:border-indigo-400 outline-none"
+            placeholder="Contact name" value={form.contacts[0].name} onChange={e=>sc(0,'name',e.target.value)} />
+          <div className="grid grid-cols-2 gap-2">
+            <input className="border border-slate-200 rounded-lg p-2 text-sm bg-white focus:border-indigo-400 outline-none"
+              placeholder="Phone" value={form.contacts[0].phone} onChange={e=>sc(0,'phone',e.target.value)} />
+            <input className="border border-slate-200 rounded-lg p-2 text-sm bg-white focus:border-indigo-400 outline-none"
+              placeholder="Email (for portal link)" value={form.contacts[0].email} onChange={e=>sc(0,'email',e.target.value)} />
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+        <button onClick={onSkip} className="text-slate-400 font-bold text-sm hover:text-slate-600">
+          Skip — save without email
+        </button>
+        <div className="flex gap-3">
+          <button onClick={doSave} disabled={saving||!form.companyName.trim()}
+            className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-sm hover:bg-indigo-700 disabled:opacity-40 transition flex items-center gap-2">
+            {saving
+              ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"/>
+              : null}
+            Create Client & Send Email
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [activeTab, setActiveTab] = useState('inquiry');
@@ -48,6 +289,8 @@ export default function App() {
   const [selectedContact, setSelectedContact] = useState('');
 
   const [meta, setMeta] = useState({ clients: [], clientContacts: {} });
+  const [clientsData, setClientsData] = useState([]); // full Client objects from /api/clients
+  const [clientsLoaded, setClientsLoaded] = useState(false);
 
   // Refs for Rich Text Editors
   const createEditorRef = useRef(null);
@@ -64,6 +307,20 @@ export default function App() {
   const [sentLinks, setSentLinks] = useState({}); // { orderId: portalSlug } — tracks sent links
   const [copiedId, setCopiedId] = useState(null); // order whose link was just copied
   const [chatOrder, setChatOrder] = useState(null); // order to open chat panel for
+
+  // Client-check state — shown after order creation if client not in DB
+  const [clientCheckModal, setClientCheckModal] = useState(null);
+  const [addContactFor, setAddContactFor] = useState(null); // { clientId, companyName } — add contact inline
+
+  const fetchClientsData = async () => {
+    if (clientsLoaded) return;
+    try {
+      const res = await api.get('/clients');
+      setClientsData(res.data || []);
+      setClientsLoaded(true);
+    } catch { /* silent */ }
+  };
+  // { orderRef, clientName, title, portalSlug } — pending order waiting for client record
 
   useEffect(() => {
     fetchOrders();
@@ -296,21 +553,62 @@ export default function App() {
     try {
       const res = await api.post('/orders', payload);
       if (res.status === 201 || res.status === 200) {
+        const savedOrder = res.data;
         setIsModalOpen(false);
-        // Reset form to original state
         setFormData({
-          title: '',
-          clientName: '',
-          orderPlacedBy: '',
-          description: '',
-          attachments: [],
-          orderType: 'product'
+          title: '', clientName: '', orderPlacedBy: '',
+          description: '', attachments: [], orderType: 'product'
         });
-
-        /* this is the workign code for mongo DB directly. 
-        setFormData({ title: '', clientName: '', refNumber: '', orderPlacedBy: '', description: '', attachments: [] });
-        */
         fetchOrders();
+
+        // ── Client DB check + portal email ─────────────────────────────────
+        // Calculate the portal slug the same way the backend does
+        const portalSlug = generatedRef.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+        try {
+          const lookup = await api.get('/clients/lookup', {
+            params: { name: payload.clientName }
+          });
+          if (lookup.data.found && lookup.data.client) {
+            // Client exists — find their email and send portal link
+            const emailContact = lookup.data.client.contacts?.find(ct => ct.email?.includes('@'));
+            if (emailContact?.email) {
+              try {
+                await api.post('/portal/send-email', {
+                  slug:         portalSlug,
+                  clientEmail:  emailContact.email,
+                  contactName:  payload.orderPlacedBy || emailContact.name || '',
+                  clientName:   lookup.data.client.companyName,
+                  orderRef:     generatedRef,
+                  title:        payload.title,
+                  portalUrl:    `${window.location.origin}/p/${portalSlug}`,
+                });
+                console.log('✅ Portal email sent to', emailContact.email);
+              } catch (emailErr) {
+                console.warn('Email send failed (non-fatal):', emailErr.message);
+              }
+            } else {
+              console.warn('Client found but has no email — skipping portal email');
+            }
+          } else {
+            // Client not in DB — show modal to create them
+            setClientCheckModal({
+              clientName:  payload.clientName,
+              orderRef:    generatedRef,
+              title:       payload.title,
+              portalSlug,
+            });
+          }
+        } catch (lookupErr) {
+          console.warn('Client lookup failed:', lookupErr.message);
+          // Show modal as fallback
+          setClientCheckModal({
+            clientName:  payload.clientName,
+            orderRef:    generatedRef,
+            title:       payload.title,
+            portalSlug,
+          });
+        }
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -653,7 +951,7 @@ export default function App() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setIsModalOpen(true); fetchClientsData(); }}
           className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg whitespace-nowrap"
         >
           <Plus size={18} /> NEW INQUIRY
@@ -976,23 +1274,21 @@ export default function App() {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <CustomCreatableSelect
-                    label="Client Company"
-                    options={meta.clients.map(c => ({ label: c, value: c }))}
-                    value={formData.clientName ? { label: formData.clientName, value: formData.clientName } : null}
-                    onChange={(v) => setFormData({ ...formData, clientName: v?.value || '', orderPlacedBy: '' })}
-                    onDelete={(val) => deleteMetaItem('clients', val)}
-                  />
-                  <CustomCreatableSelect
-                    label="Contact Person"
-                    isDisabled={!formData.clientName}
-                    options={(meta.clientContacts[formData.clientName] || []).map(c => ({ label: c, value: c }))}
-                    value={formData.orderPlacedBy ? { label: formData.orderPlacedBy, value: formData.orderPlacedBy } : null}
-                    onChange={(v) => setFormData({ ...formData, orderPlacedBy: v?.value || '' })}
-                    onDelete={(val) => deleteMetaItem('contacts', val, formData.clientName)}
-                  />
-                </div>
+                {/* ── Client Company + Contact Person — live from /api/clients ── */}
+                <ClientContactPicker
+                  clientsData={clientsData}
+                  clientName={formData.clientName}
+                  contactName={formData.orderPlacedBy}
+                  onClientChange={(name) => setFormData({ ...formData, clientName: name, orderPlacedBy: '' })}
+                  onContactChange={(name) => setFormData({ ...formData, orderPlacedBy: name })}
+                  onClientCreated={(newClient) => {
+                    setClientsData(prev => [...prev, newClient]);
+                    setFormData({ ...formData, clientName: newClient.companyName, orderPlacedBy: newClient.contacts?.[0]?.name || '' });
+                  }}
+                  onContactAdded={(updatedClient) => {
+                    setClientsData(prev => prev.map(cl => cl._id === updatedClient._id ? updatedClient : cl));
+                  }}
+                />
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1">
@@ -1112,7 +1408,21 @@ export default function App() {
               <h3 className="text-xl font-black uppercase">Confirm Delete</h3>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-3 text-slate-400 font-black uppercase text-[10px]">Cancel</button>
-                <button onClick={async () => { await api.delete(`/orders/${deleteId}`); setDeleteId(null); fetchOrders(); }} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-[10px]">Delete</button>
+                <button onClick={async () => {
+                  // Delete order then silently clean up its portal (if any)
+                  await api.delete(`/orders/${deleteId}`);
+                  try {
+                    // Find the portal by orderId and delete it
+                    const portalRes = await api.get(`/portal/order/${deleteId}`);
+                    if (portalRes.data?.slug) {
+                      await api.delete(`/portal/${portalRes.data.slug}`);
+                    }
+                  } catch {
+                    // Portal may not exist — that's fine, ignore silently
+                  }
+                  setDeleteId(null);
+                  fetchOrders();
+                }} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-[10px]">Delete</button>
               </div>
             </div>
           </div>
@@ -1120,6 +1430,58 @@ export default function App() {
       }
 
 
+
+      {/* ── Client Check Modal — shown after order creation if client not in DB ── */}
+      {clientCheckModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+          style={{background:'rgba(15,23,42,0.75)',backdropFilter:'blur(6px)'}}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-amber-100 bg-amber-50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center text-xl">⚠️</div>
+                <div>
+                  <div className="font-black text-sm text-slate-800">Client Not in Database</div>
+                  <div className="text-[11px] text-amber-700 font-bold mt-0.5">
+                    "{clientCheckModal.clientName}" has no client record. Add their details to send the portal link.
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setClientCheckModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition">
+                <X size={18} />
+              </button>
+            </div>
+            {/* Body */}
+            <ClientCreateInlineForm
+              clientName={clientCheckModal.clientName}
+              onCreated={async (newClient) => {
+                setClientCheckModal(null);
+                const emailContact = newClient.contacts?.find(ct => ct.email?.includes('@'));
+                if (emailContact?.email) {
+                  try {
+                    await api.post('/portal/send-email', {
+                      slug:         clientCheckModal.portalSlug,
+                      clientEmail:  emailContact.email,
+                      contactName:  newClient.contacts?.[0]?.name || emailContact.name || '',
+                      clientName:   newClient.companyName,
+                      orderRef:     clientCheckModal.orderRef,
+                      title:        clientCheckModal.title,
+                      portalUrl:    `${window.location.origin}/p/${clientCheckModal.portalSlug}`,
+                    });
+                    alert(`✅ Portal link sent to ${emailContact.email}`);
+                  } catch (e) {
+                    alert('Client created but email failed: ' + e.message);
+                  }
+                } else {
+                  alert('Client created. Add an email address to them to send the portal link.');
+                }
+              }}
+              onSkip={() => setClientCheckModal(null)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Portal Chat Panel ── */}
       {chatOrder && (

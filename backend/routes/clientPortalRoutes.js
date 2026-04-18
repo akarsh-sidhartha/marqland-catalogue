@@ -365,4 +365,76 @@ router.post('/public/:slug/view', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/portal/send-email
+ * Sends the portal link to the client by email.
+ * Body: { slug, clientEmail, contactName, clientName, orderRef, title, portalUrl }
+ *   contactName = the individual person's name (orderPlacedBy)
+ *   clientName  = company name
+ */
+router.post('/send-email', async (req, res) => {
+  try {
+    const { slug, clientEmail, contactName, clientName, orderRef, title, portalUrl } = req.body;
+    if (!clientEmail) return res.status(400).json({ message: 'clientEmail required' });
+
+    const nodemailer  = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      service: process.env.EMAIL_SERVICE || 'gmail',
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    });
+
+    const url = portalUrl || `${process.env.APP_URL || 'http://localhost:3000'}/p/${slug}`;
+    // Greet the individual contact person, not the company
+    const greetName = contactName || clientName || 'there';
+
+    await transporter.sendMail({
+      from:    `"Marqland Studios" <${process.env.EMAIL_USER}>`,
+      to:      clientEmail,
+      subject: `Marqland Studios - Your Curated Options — ${orderRef}`,
+      html: `
+        <div style="font-family:Georgia,serif;max-width:580px;margin:0 auto;background:#f4f1ea;border-radius:16px;overflow:hidden;">
+          <!-- Header -->
+          <div style="background:#1a2332;padding:32px 40px;text-align:center;">
+            <div style="display:inline-block;background:rgba(197,163,87,0.15);border:1px solid rgba(197,163,87,0.3);border-radius:8px;padding:6px 18px;margin-bottom:14px;">
+              <span style="color:#c5a357;font-size:10px;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">MARQLAND STUDIOS</span>
+            </div>
+            <h1 style="color:#f4f1ea;font-size:24px;font-weight:700;margin:0;font-family:Georgia,serif;letter-spacing:-0.02em;">Your curated options are ready</h1>
+          </div>
+          <!-- Body -->
+          <div style="padding:36px 40px;background:#f4f1ea;">
+            <p style="color:#1a2332;font-size:15px;line-height:1.8;margin:0 0 10px;">
+              Dear <strong style="color:#1a2332;">${greetName}</strong>,
+            </p>
+            <p style="color:#64748b;font-size:14px;line-height:1.8;margin:0 0 28px;">
+              We've hand-curated a selection of options for <strong style="color:#c5a357;">${title || orderRef}</strong>.
+              Please review them and share your preferences — we're here to make it seamless.
+            </p>
+            <div style="text-align:center;margin:32px 0;">
+              <a href="${url}" style="display:inline-block;background:#1a2332;color:#c5a357;padding:16px 40px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.05em;border:1px solid rgba(197,163,87,0.3);">
+                View Your Portal &rarr;
+              </a>
+            </div>
+            <p style="color:#94a3b8;font-size:11px;text-align:center;margin:24px 0 0;border-top:1px solid rgba(197,163,87,0.15);padding-top:20px;">
+              Ref: ${orderRef} &nbsp;&middot;&nbsp; This link is private — please do not share.
+            </p>
+          </div>
+          <!-- Footer -->
+          <div style="background:#1a2332;padding:18px 40px;text-align:center;">
+            <p style="color:rgba(197,163,87,0.6);font-size:10px;margin:0;letter-spacing:0.08em;text-transform:uppercase;">Marqland Studios · Premium Corporate Gifting &amp; Events</p>
+          </div>
+        </div>
+      `,
+    });
+
+    if (slug) {
+      await ClientPortal.findOneAndUpdate({ slug }, { $set: { clientEmail } });
+    }
+
+    res.json({ ok: true, sentTo: clientEmail });
+  } catch (err) {
+    console.error('Portal email error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

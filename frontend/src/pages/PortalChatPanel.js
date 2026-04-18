@@ -24,28 +24,74 @@ const PortalChatPanel = ({ order, onClose }) => {
   const [sending, setSending] = useState(false);
   const [copied, setCopied]   = useState(false);
   const [error, setError]     = useState('');
-  const chatEnd   = useRef(null);
-  const fileRef   = useRef(null);
+  const chatEnd        = useRef(null);
+  const fileRef        = useRef(null);
+  const [toasts, setToasts]           = useState([]);
+  const prevClientCount = useRef(0);  // tracks last known client message count
+  const pollTimer       = useRef(null);
+
+  const showToast = (title, body, icon = '💬') => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, title, body, icon }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 5000);
+  };
 
   const slug       = order.refNumber?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const portalUrl  = `${window.location.origin}/p/${slug}`;
 
-  useEffect(() => { loadPortal(); }, [order._id]);
+  useEffect(() => {
+    loadPortal();
+    // Request browser notification permission once
+    if (window.Notification?.permission === 'default') {
+      window.Notification.requestPermission();
+    }
+    // Poll every 12 seconds for new client replies
+    pollTimer.current = setInterval(() => loadPortal(true), 12000);
+    return () => clearInterval(pollTimer.current);
+  }, [order._id]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [portal?.messages]);
 
-  const loadPortal = async () => {
-    setLoading(true);
-    setError('');
+  const loadPortal = async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setError('');
     try {
       const res = await api.get(`/portal/order/${order._id}`);
-      setPortal(res.data);
+      const data = res.data;
+
+      // ── New client message detection ────────────────────────────────────────
+      if (silent && prevClientCount.current > 0) {
+        const clientMsgs = (data.messages || []).filter(m => m.sender === 'client');
+        if (clientMsgs.length > prevClientCount.current) {
+          const newest  = clientMsgs[clientMsgs.length - 1];
+          const sender  = newest.senderName || order.clientName || 'Client';
+          const preview = newest.text
+            ? newest.text.slice(0, 60) + (newest.text.length > 60 ? '…' : '')
+            : newest.attachments?.length
+              ? `📎 ${newest.attachments[0].name}`
+              : 'Sent a message';
+          showToast(sender, preview, '💬');
+          // Browser notification
+          if (window.Notification?.permission === 'granted') {
+            new window.Notification(sender, {
+              body: preview,
+              icon: '/favicon.ico',
+              tag:  'portal-client-msg',
+            });
+          }
+        }
+        prevClientCount.current = clientMsgs.length;
+      } else if (!silent) {
+        prevClientCount.current = (data.messages || []).filter(m => m.sender === 'client').length;
+      }
+
+      setPortal(data);
     } catch (err) {
-      setError(err.response?.status === 404
+      if (!silent) setError(err.response?.status === 404
         ? 'No portal found for this order. Add items from Products or Property List first.'
         : 'Could not load portal chat.'
       );
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -58,18 +104,14 @@ const PortalChatPanel = ({ order, onClose }) => {
       fd.append('text', msg.trim());
       fd.append('senderName', user?.name || 'Marqland Team');
       files.forEach(f => fd.append('files', f));
-      const token = localStorage.getItem('marqland_token');
-      const res = await fetch(`/api/portal/${portal.slug}/message/team`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      if (!res.ok) throw new Error();
+      // Use api (axios) — auth token injected automatically by interceptor
+      await api.post(`/portal/${portal.slug}/message/team`, fd);
       setMsg('');
       setFiles([]);
+      showToast('Sent', 'Your message was delivered to the client.', '✅');
       await loadPortal();
-    } catch {
-      setError('Failed to send message.');
+    } catch (err) {
+      setError('Failed to send: ' + (err.response?.data?.message || err.message));
     } finally {
       setSending(false);
     }
@@ -95,7 +137,10 @@ const PortalChatPanel = ({ order, onClose }) => {
       {/* Panel */}
       <div className="h-full w-full max-w-md bg-white shadow-2xl flex flex-col"
         style={{ animation: 'slideIn .25s ease' }}>
-        <style>{`@keyframes slideIn{from{transform:translateX(100%)}to{transform:none}}`}</style>
+        <style>{`
+          @keyframes slideIn{from{transform:translateX(100%)}to{transform:none}}
+          @keyframes toastSlide{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+        `}</style>
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
@@ -180,8 +225,22 @@ const PortalChatPanel = ({ order, onClose }) => {
                     {m.text && <div className="text-sm leading-relaxed">{m.text}</div>}
                     {/* Attachments */}
                     {(m.attachments || []).map((att, i) => (
-                      <a key={i} href={att.url} target="_blank" rel="noreferrer" download={att.name}
-                        className={`flex items-center gap-2 mt-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${isTeam
+                      <a key={i} href={att.url} target="_blank" rel="noreferrer"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          try {
+                            const res = await fetch(att.url);
+                            if (!res.ok) throw new Error();
+                            const blob = await res.blob();
+                            const url  = URL.createObjectURL(blob);
+                            const a    = document.createElement('a');
+                            a.href = url; a.download = att.name;
+                            document.body.appendChild(a); a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          } catch { window.open(att.url, '_blank'); }
+                        }}
+                        className={`flex items-center gap-2 mt-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${isTeam
                           ? 'bg-indigo-500 text-indigo-100 hover:bg-indigo-400'
                           : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}>
                         <Paperclip size={11} className="shrink-0" />
@@ -236,13 +295,11 @@ const PortalChatPanel = ({ order, onClose }) => {
                   className="w-full bg-transparent px-3.5 pt-3 pb-1.5 text-sm outline-none resize-none text-slate-800 placeholder:text-slate-300"
                 />
                 <div className="px-3 pb-2.5 flex items-center gap-2 border-t border-slate-100 mt-1 pt-1.5">
-                  <button onClick={() => fileRef.current?.click()}
+                  <button type="button" onClick={() => fileRef.current?.click()}
                     className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-indigo-600 transition-colors"
                     title="Attach files">
                     <Paperclip size={13} /> Attach
                   </button>
-                  <input ref={fileRef} type="file" multiple className="hidden"
-                    onChange={e => { setFiles(p => [...p, ...Array.from(e.target.files || [])].slice(0, 5)); e.target.value = ''; }} />
                   <span className="text-[9px] text-slate-300">Max 5 files</span>
                 </div>
               </div>
@@ -258,6 +315,21 @@ const PortalChatPanel = ({ order, onClose }) => {
           </div>
         )}
 
+        {/* File input lives at panel root — avoids display:none + nested onClick issues */}
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', top: 0, left: 0 }}
+          onChange={e => {
+            const picked = Array.from(e.target.files || []);
+            if (picked.length > 0) {
+              setFiles(prev => [...prev, ...picked].slice(0, 5));
+            }
+            e.target.value = '';
+          }}
+        />
+
         {/* ── Portal status footer ── */}
         {portal && (
           <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
@@ -270,6 +342,26 @@ const PortalChatPanel = ({ order, onClose }) => {
             <span className="text-[10px] text-slate-300">{portal.messages?.length || 0} messages</span>
           </div>
         )}
+      {/* ── Toast notifications ── */}
+      {toasts.length > 0 && (
+        <div style={{position:'absolute',bottom:100,left:12,right:12,display:'flex',flexDirection:'column',gap:8,zIndex:300,pointerEvents:'none'}}>
+          {toasts.map(t => (
+            <div key={t.id} style={{
+              display:'flex',alignItems:'flex-start',gap:10,
+              background:'#1a2332',border:'1px solid rgba(197,163,87,0.3)',
+              borderRadius:12,padding:'11px 14px',
+              boxShadow:'0 6px 20px rgba(0,0,0,0.2)',
+              animation:'toastSlide .3s ease',
+            }}>
+              <span style={{fontSize:16,flexShrink:0}}>{t.icon}</span>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#c5a357',marginBottom:1}}>{t.title}</div>
+                <div style={{fontSize:12,color:'#e2e8f0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       </div>
     </div>
   );

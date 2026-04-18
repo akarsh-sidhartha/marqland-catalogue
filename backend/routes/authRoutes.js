@@ -11,7 +11,7 @@ const { sendInviteEmail } = require('../services/emailService');
 
 const generateAccessToken = (user) => {
   return jwt.sign(
-    { id: user._id, name: user.name, email: user.email, role: user.role, status: user.status },
+    { id: user._id, name: user.name, email: user.email, role: user.role, status: user.status, allowedRoutes: user.allowedRoutes || [] },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );
@@ -166,7 +166,7 @@ router.post('/login', async (req, res) => {
       message: 'Login successful.',
       accessToken,
       refreshToken,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, status: user.status }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, status: user.status, allowedRoutes: user.allowedRoutes || [] }
     });
   } catch (err) {
     res.status(500).json({ message: 'Login failed.', error: err.message });
@@ -193,6 +193,28 @@ router.post('/refresh', async (req, res) => {
     res.json({ accessToken: generateAccessToken(user) });
   } catch (err) {
     res.status(401).json({ message: 'Refresh token expired. Please log in again.' });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Returns the current user's fresh data from DB (including allowedRoutes).
+ * Used by the frontend on mount to pick up any permission changes.
+ */
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      allowedRoutes: user.allowedRoutes || [],
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -406,7 +428,7 @@ router.patch('/users/:id/approve', authenticate, authorize(['admin']), async (re
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { status: 'active', role, approvedBy: req.user.id, approvedAt: new Date() },
+      { status: 'active', role, approvedBy: req.user.id, approvedAt: new Date(), allowedRoutes: [] },
       { new: true }
     );
     if (!user) return res.status(404).json({ message: 'User not found.' });
@@ -431,6 +453,28 @@ router.patch('/users/:id/role', authenticate, authorize(['admin']), async (req, 
     const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     res.json({ message: `${user.name}'s role updated to ${role}.`, user });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+/**
+ * PATCH /api/auth/users/:id/routes
+ * Set the exact list of routes this user can access (admin-controlled per-user override).
+ */
+router.patch('/users/:id/routes', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    const { allowedRoutes } = req.body;
+    if (!Array.isArray(allowedRoutes))
+      return res.status(400).json({ message: 'allowedRoutes must be an array of strings.' });
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { allowedRoutes },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({ message: 'Route access updated.', user });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -28,4 +28,17 @@ router.delete('/:id', async (req, res) => {
   res.json({ message: 'Client Deleted' });
 });
 
+// GET /api/clients/lookup?name=Acme  — used by OrderTracker after order creation
+router.get('/lookup', async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) return res.status(400).json({ message: 'name query param required' });
+    // Case-insensitive exact match on companyName
+    const client = await Client.findOne({
+      companyName: { $regex: new RegExp('^' + name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '$', 'i') }
+    });
+    res.json({ found: !!client, client: client || null });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 module.exports = router;

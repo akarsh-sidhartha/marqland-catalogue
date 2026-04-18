@@ -4,6 +4,8 @@ const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
 const Product = require('../models/product');
+const { processProductImage } = require('../services/imageProcessingService');
+const ImagePrompt = require('../models/ImagePrompt');
 
 // --- MULTER CONFIGURATION ---
 const storage = multer.diskStorage({
@@ -62,13 +64,44 @@ router.get('/', async (req, res) => {
 // CREATE
 router.post('/', upload.single('image'), async (req, res) => {
   try {
-    const productData = {
-      ...req.body,
-      imageUrl: req.file ? `/uploads/${req.file.filename}` : ''
-    };
-    const product = new Product(productData);
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : '';
+    const productData = { ...req.body, imageUrl };
+    const product    = new Product(productData);
     const newProduct = await product.save();
+
+    // Respond immediately — image processing runs in background
     res.status(201).json(newProduct);
+
+    // ── Background image processing ─────────────────────────────────────────
+    if (req.file && req.body.processImage === 'true') {
+      setImmediate(async () => {
+        try {
+          const { promptId, promptText, category } = req.body;
+
+          // Resolve prompt: explicit text > saved prompt by ID > category default
+          let finalPrompt = promptText?.trim() || null;
+          if (!finalPrompt && promptId) {
+            const saved = await ImagePrompt.findById(promptId);
+            if (saved) finalPrompt = saved.prompt;
+          }
+          if (!finalPrompt) {
+            const def = await ImagePrompt.findOne({ category, isDefault: true });
+            if (def) finalPrompt = def.prompt;
+          }
+
+          const inputPath  = path.join(process.cwd(), 'public', imageUrl);
+          const inputBuf   = require('fs').readFileSync(inputPath);
+          const processed  = await processProductImage(inputBuf, { category, promptText: finalPrompt });
+          const newFilename = imageUrl.replace(/\.[^.]+$/, '-proc.webp');
+          const outputPath  = path.join(process.cwd(), 'public', newFilename);
+          require('fs').writeFileSync(outputPath, processed);
+          await Product.findByIdAndUpdate(newProduct._id, { imageUrl: newFilename });
+          console.log(`✅ Image processed for: ${newProduct.name}`);
+        } catch (e) {
+          console.error(`❌ Image processing failed for ${newProduct._id}:`, e.message);
+        }
+      });
+    }
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -119,7 +152,40 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    // Respond immediately
     res.json(updatedProduct);
+
+    // ── Background image processing ─────────────────────────────────────────
+    if (req.file && req.body.processImage === 'true') {
+      setImmediate(async () => {
+        try {
+          const newImageUrl = updateData.imageUrl;
+          const { promptId, promptText } = req.body;
+          const category = updatedProduct.category;
+
+          let finalPrompt = promptText?.trim() || null;
+          if (!finalPrompt && promptId) {
+            const saved = await ImagePrompt.findById(promptId);
+            if (saved) finalPrompt = saved.prompt;
+          }
+          if (!finalPrompt) {
+            const def = await ImagePrompt.findOne({ category, isDefault: true });
+            if (def) finalPrompt = def.prompt;
+          }
+
+          const inputPath  = path.join(process.cwd(), 'public', newImageUrl);
+          const inputBuf   = require('fs').readFileSync(inputPath);
+          const processed  = await processProductImage(inputBuf, { category, promptText: finalPrompt });
+          const newFilename = newImageUrl.replace(/\.[^.]+$/, '-proc.webp');
+          const outputPath  = path.join(process.cwd(), 'public', newFilename);
+          require('fs').writeFileSync(outputPath, processed);
+          await Product.findByIdAndUpdate(productId, { imageUrl: newFilename });
+          console.log(`✅ Image processed for: ${updatedProduct.name}`);
+        } catch (e) {
+          console.error(`❌ Image processing failed for ${productId}:`, e.message);
+        }
+      });
+    }
   } catch (err) {
     console.error("PUT Error:", err);
     res.status(500).json({ message: "Server error during update", error: err.message });

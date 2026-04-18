@@ -7,6 +7,134 @@ import {
 
 const ROLES = ['admin', 'accounts', 'sales', 'inventory', 'viewer'];
 
+// ── All routes in the app — key = route name, path = used in ProtectedRoute ──
+const ALL_ROUTES = [
+  { key: 'Order Tracker',    path: '/'                },
+  { key: 'Sourcing Hub',     path: '/sourcinghub'     },
+  { key: 'Products',         path: '/products'        },
+  { key: 'Samples Provided', path: '/samplesprovided' },
+  { key: 'Saved Catalogues', path: '/savedcatalogues' },
+  { key: 'Payment Tracker',  path: '/paymenttracker'  },
+  { key: 'Vendors',          path: '/vendors'         },
+  { key: 'Clients',          path: '/clients'         },
+  { key: 'Letter Head',      path: '/MarqlandLetterHead' },
+  { key: 'Invoice Tracking', path: '/InvoiceTracking' },
+  { key: 'Property List',    path: '/properties'      },
+  { key: 'Saved Offsites',   path: '/saved-offsites'  },
+  { key: 'User Management',  path: '/admin/users'     },
+];
+
+// Default routes per role — used when allowedRoutes is empty
+const ROLE_DEFAULTS = {
+  admin:     ALL_ROUTES.map(r => r.key),
+  accounts:  ['Order Tracker','Payment Tracker','Vendors','Clients','Invoice Tracking'],
+  sales:     ['Order Tracker','Sourcing Hub','Products','Saved Catalogues','Clients','Property List','Saved Offsites'],
+  inventory: ['Products','Samples Provided','Saved Catalogues','Sourcing Hub','Property List','Saved Offsites'],
+  viewer:    ['Order Tracker'],
+};
+
+// Resolve the effective route list for a user
+// If allowedRoutes is set (non-empty), use it. Otherwise fall back to role defaults.
+const effectiveRoutes = (user) =>
+  user.allowedRoutes?.length ? user.allowedRoutes : (ROLE_DEFAULTS[user.role] || []);
+
+// ── Interactive route access editor ──────────────────────────────────────────
+const RouteAccessEditor = ({ user, onSaved }) => {
+  const { authFetch, refreshUser } = useAuth();
+  const [selected, setSelected] = React.useState(() => new Set(effectiveRoutes(user)));
+  const [saving, setSaving]     = React.useState(false);
+  const [saved, setSaved]       = React.useState(false);
+  const isAdmin = user.role === 'admin';
+
+  // Keep in sync if parent user changes
+  React.useEffect(() => {
+    setSelected(new Set(effectiveRoutes(user)));
+    setSaved(false);
+  }, [user._id, user.allowedRoutes, user.role]);
+
+  const toggle = (key) => {
+    if (isAdmin) return; // admin always has all routes
+    setSelected(prev => {
+      const s = new Set(prev);
+      s.has(key) ? s.delete(key) : s.add(key);
+      return s;
+    });
+    setSaved(false);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await authFetch(`/api/auth/users/${user._id}/routes`, {
+        method: 'PATCH',
+        body: JSON.stringify({ allowedRoutes: [...selected] }),
+      });
+      setSaved(true);
+      onSaved?.([...selected]);
+      // Refresh the logged-in user's session if they edited their own routes
+      await refreshUser?.();
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hasChanges = () => {
+    const current = effectiveRoutes(user);
+    if (current.length !== selected.size) return true;
+    return current.some(r => !selected.has(r));
+  };
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Route Access {isAdmin ? '— All routes (admin)' : '— click to toggle'}
+        </span>
+        {!isAdmin && (
+          <button
+            onClick={save}
+            disabled={saving || !hasChanges()}
+            style={{
+              padding: '4px 12px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700,
+              background: saved ? '#dcfce7' : hasChanges() ? '#6366f1' : '#f1f5f9',
+              color: saved ? '#16a34a' : hasChanges() ? '#fff' : '#94a3b8',
+              cursor: (saving || !hasChanges()) ? 'not-allowed' : 'pointer',
+              transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+            {saving ? '...' : saved ? '✓ Saved' : 'Save'}
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {ALL_ROUTES.map(({ key }) => {
+          const on = isAdmin || selected.has(key);
+          return (
+            <button
+              key={key}
+              onClick={() => toggle(key)}
+              disabled={isAdmin}
+              style={{
+                padding: '4px 11px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                border: `1px solid ${on ? 'rgba(99,102,241,0.35)' : 'rgba(239,68,68,0.2)'}`,
+                background: on ? 'rgba(99,102,241,0.08)' : 'rgba(239,68,68,0.06)',
+                color: on ? '#4f46e5' : '#dc2626',
+                cursor: isAdmin ? 'default' : 'pointer',
+                transition: 'all .15s',
+                userSelect: 'none',
+              }}
+            >
+              {on ? '✓' : '✗'} {key}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const ROLE_COLORS = {
   admin:     { bg: '#1e1b4b', text: '#a5b4fc', border: '#4338ca' },
   accounts:  { bg: '#022c22', text: '#6ee7b7', border: '#059669' },
@@ -453,91 +581,129 @@ const UserManagement = () => {
           <>
             {filtered.map((u, i) => {
             const statusCfg = STATUS_CONFIG[u.status];
-            const initials = u.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+            const initials = (u.name || u.email || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
             const isLast = i === filtered.length - 1 && (filter !== 'pending' || pendingInvitesList.length === 0);
 
             return (
-              <div key={u._id} style={{ ...S.row, borderBottom: isLast ? 'none' : undefined }}>
-                {/* Left: avatar + info */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+              <div key={u._id} style={{
+                padding: '16px 20px',
+                borderBottom: isLast ? 'none' : '1px solid #f1f5f9',
+              }}>
+                {/* ── Top row: avatar · name/email · status · role · actions ── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+                  {/* Avatar */}
                   <div style={S.avatar}>{initials}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '14px' }}>{u.name}</div>
-                    <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '2px' }}>{u.email}</div>
+
+                  {/* Name + email */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.name || u.email}
+                    </div>
+                    <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.email}
+                    </div>
+                  </div>
+
+                  {/* Status pill */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: statusCfg.color, fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>
+                    {statusCfg.icon} {statusCfg.label}
+                  </div>
+
+                  {/* Role badge — current role */}
+                  <div style={{ flexShrink: 0 }}>
+                    <RoleBadge role={u.role} />
+                  </div>
+
+                  {/* ── Action controls ── */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+
+                    {/* PENDING: role picker + approve */}
+                    {u.status === 'pending' && (
+                      <>
+                        <select
+                          style={S.select}
+                          value={selectedRoles[u._id] || 'viewer'}
+                          onChange={e => setSelectedRoles(prev => ({ ...prev, [u._id]: e.target.value }))}
+                        >
+                          {ROLES.filter(r => r !== 'admin').map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                        <button
+                          style={S.approveBtn}
+                          disabled={actionLoading === u._id + 'approve'}
+                          onClick={() => doAction(u._id, 'approve', { role: selectedRoles[u._id] || 'viewer' })}
+                        >
+                          {actionLoading === u._id + 'approve' ? '...' : 'Approve'}
+                        </button>
+                      </>
+                    )}
+
+                    {/* ACTIVE: change role + suspend */}
+                    {u.status === 'active' && (
+                      <>
+                        <select
+                          style={S.select}
+                          value={u.role}
+                          onChange={e => doAction(u._id, 'role', { role: e.target.value })}
+                        >
+                          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                        <button style={S.actionBtn('#f59e0b')}
+                          onClick={() => doAction(u._id, 'suspend')}
+                          disabled={actionLoading === u._id + 'suspend'}>
+                          <XCircle size={12} /> Suspend
+                        </button>
+                      </>
+                    )}
+
+                    {/* SUSPENDED: reactivate */}
+                    {u.status === 'suspended' && (
+                      <button style={S.actionBtn('#4ade80')}
+                        onClick={() => doAction(u._id, 'reactivate')}
+                        disabled={actionLoading === u._id + 'reactivate'}>
+                        <RefreshCw size={12} /> Reactivate
+                      </button>
+                    )}
+
+                    {/* Reset password email */}
+                    {u.status !== 'pending' && (
+                      <button style={S.actionBtn('#6366f1')}
+                        onClick={() => sendResetEmail(u.email, u.name)}
+                        title="Send password reset email">
+                        <Mail size={12} /> Reset
+                      </button>
+                    )}
+
+                    {/* Delete */}
+                    <button style={S.actionBtn('#f87171')}
+                      onClick={() => deleteUser(u._id, u.name || u.email)}
+                      disabled={actionLoading === u._id + 'delete'}
+                      title="Delete permanently">
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
 
-                {/* Status */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: statusCfg.color, fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>
-                  {statusCfg.icon} {statusCfg.label}
-                </div>
-
-                {/* Role */}
-                <div style={{ flexShrink: 0 }}>
-                  <RoleBadge role={u.role} />
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                  {u.status === 'pending' && (
-                    <>
-                      <select
-                        style={S.select}
-                        value={selectedRoles[u._id] || 'viewer'}
-                        onChange={e => setSelectedRoles(prev => ({ ...prev, [u._id]: e.target.value }))}
-                      >
-                        {ROLES.filter(r => r !== 'admin').map(r => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                      <button
-                        style={S.approveBtn}
-                        disabled={actionLoading === u._id + 'approve'}
-                        onClick={() => doAction(u._id, 'approve', { role: selectedRoles[u._id] || 'viewer' })}
-                      >
-                        {actionLoading === u._id + 'approve' ? '...' : 'Approve'}
-                      </button>
-                    </>
-                  )}
-
-                  {u.status === 'active' && (
-                    <>
-                      <select style={S.select} value={u.role}
-                        onChange={e => doAction(u._id, 'role', { role: e.target.value })}>
-                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <button style={S.actionBtn('#f59e0b')}
-                        onClick={() => doAction(u._id, 'suspend')}
-                        disabled={actionLoading === u._id + 'suspend'}>
-                        <XCircle size={12} /> Suspend
-                      </button>
-                    </>
-                  )}
-
-                  {u.status === 'suspended' && (
-                    <button style={S.actionBtn('#4ade80')}
-                      onClick={() => doAction(u._id, 'reactivate')}
-                      disabled={actionLoading === u._id + 'reactivate'}>
-                      <RefreshCw size={12} /> Reactivate
-                    </button>
-                  )}
-
-                  {/* Send reset email — available for all non-pending users */}
-                  {u.status !== 'pending' && (
-                    <button
-                      style={S.actionBtn('#6366f1')}
-                      onClick={() => sendResetEmail(u.email, u.name)}
-                      title="Send password reset email">
-                      <Mail size={12} /> Reset
-                    </button>
-                  )}
-                  <button style={S.actionBtn('#f87171')}
-                    onClick={() => deleteUser(u._id, u.name)}
-                    disabled={actionLoading === u._id + 'delete'}
-                    title="Delete permanently">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
+                {/* ── Bottom row: interactive route access editor ── */}
+                {u.status !== 'pending' && (
+                  <RouteAccessEditor
+                    user={u}
+                    onSaved={(routes) => {
+                      setUsers(prev => prev.map(x => x._id === u._id ? { ...x, allowedRoutes: routes } : x));
+                    }}
+                  />
+                )}
+                {u.status === 'pending' && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
+                      Route access will be configurable after approval.
+                      Default for <strong>{selectedRoles[u._id] || 'viewer'}</strong>:{' '}
+                      {(ROLE_DEFAULTS[selectedRoles[u._id] || 'viewer'] || []).join(', ')}
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}

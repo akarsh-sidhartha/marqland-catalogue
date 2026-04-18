@@ -1120,7 +1120,86 @@ function InvoiceViewerModal({ invoice, onClose }) {
             </div>
           </div>
           {invoice.notes && <div style={{ padding: "10px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, fontSize: 13, color: "#92400e", marginBottom: 14 }}>📝 {invoice.notes}</div>}
-          {invoice.image && <a href={invoice.image} download={`Invoice_${invoice.invoice_number}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px", background: "#0891b2", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: "none" }}>⬇ Download</a>}
+
+          {/* ── All Documents section ── */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>All Documents</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+
+              {/* Invoice document */}
+              {invoice.image && (
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:16 }}>{invoice.mimeType==="application/pdf"?"📄":"🖼"}</span>
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>Invoice Document</div>
+                      <div style={{ fontSize:10, color:"#94a3b8" }}>{invoice.invoice_number}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <a href={invoice.image} target="_blank" rel="noreferrer"
+                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#eff6ff", color:"#1d4ed8", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                      <Eye size={11}/> View
+                    </a>
+                    <a href={invoice.image} download={`Invoice_${invoice.invoice_number}`}
+                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#0891b2", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                      <Download size={11}/> Download
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* PI document — shown if a linked PI exists with attachment */}
+              {invoice._linkedPI?.attachment && (
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:16 }}>📋</span>
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#6366f1" }}>Proforma Invoice</div>
+                      <div style={{ fontSize:10, color:"#94a3b8" }}>{invoice._linkedPI.piNumber}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <a href={invoice._linkedPI.attachment} target="_blank" rel="noreferrer"
+                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#ede9fe", color:"#6d28d9", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                      <Eye size={11}/> View
+                    </a>
+                    <a href={invoice._linkedPI.attachment} download={`PI_${invoice._linkedPI.piNumber}`}
+                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#6366f1", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                      <Download size={11}/> Download
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment receipts */}
+              {invoice._linkedPayments?.filter(p => p.screenshot).map((p, i) => (
+                <div key={p._id||i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:16 }}>💳</span>
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#10b981" }}>Payment Receipt — {fmt(p.amount)}</div>
+                      <div style={{ fontSize:10, color:"#94a3b8" }}>{p.paymentRef} · {fmtDate(p.paymentDate)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <a href={p.screenshot} target="_blank" rel="noreferrer"
+                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#f0fdf4", color:"#15803d", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                      <Eye size={11}/> View
+                    </a>
+                    <a href={p.screenshot} download={`Payment_${p.paymentRef}`}
+                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#10b981", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                      <Download size={11}/> Download
+                    </a>
+                  </div>
+                </div>
+              ))}
+
+              {!invoice.image && !invoice._linkedPI?.attachment && !invoice._linkedPayments?.some(p=>p.screenshot) && (
+                <div style={{ textAlign:"center", color:"#94a3b8", fontSize:12, padding:"10px 0" }}>No documents attached</div>
+              )}
+            </div>
+          </div>
         </div>
         <div style={{ background: "#f1f5f9", borderRadius: 16, overflow: "hidden", minHeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {invoice.image ? (invoice.mimeType === "application/pdf" ? <iframe src={invoice.image} style={{ width: "100%", height: 500, border: "none" }} title="PDF" /> : <div style={{ overflowY: "auto", maxHeight: 600 }}><img src={invoice.image} style={{ width: "100%" }} alt="Invoice" /></div>)
@@ -1422,16 +1501,24 @@ function InvoiceVaultTab({ invoices, payments, proformaInvoices, vendors, onDele
                                       {/* Level 2: Linked PI (if exists) */}
                                       {matchedPI && (
                                         <div style={{ marginLeft: 14, borderLeft: "2px solid #e2e8f0", paddingLeft: 18, marginBottom: 8 }}>
-                                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                                            <div style={{ width: 24, height: 24, borderRadius: 7, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                              <ClipboardList size={12} color="#fff" />
+                                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                              <div style={{ width: 24, height: 24, borderRadius: 7, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                                <ClipboardList size={12} color="#fff" />
+                                              </div>
+                                              <div style={{ fontSize: 12, fontWeight: 700, color: "#6366f1" }}>
+                                                PI: {matchedPI.piNumber}
+                                                <span style={{ fontSize: 11, fontWeight: 400, color: "#64748b", marginLeft: 8 }}>
+                                                  Total: {fmt(matchedPI.totalAmount)} · Paid: {fmt(matchedPI.amountPaid)}
+                                                </span>
+                                              </div>
                                             </div>
-                                            <div style={{ fontSize: 12, fontWeight: 700, color: "#6366f1" }}>
-                                              PI: {matchedPI.piNumber}
-                                              <span style={{ fontSize: 11, fontWeight: 400, color: "#64748b", marginLeft: 8 }}>
-                                                Total: {fmt(matchedPI.totalAmount)} · Paid: {fmt(matchedPI.amountPaid)}
-                                              </span>
-                                            </div>
+                                            {matchedPI.attachment && (
+                                              <a href={matchedPI.attachment} download={`PI_${matchedPI.piNumber}`} target="_blank" rel="noreferrer"
+                                                style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"4px 9px", borderRadius:6, background:"#ede9fe", color:"#6d28d9", fontWeight:700, fontSize:10, textDecoration:"none", whiteSpace:"nowrap", flexShrink:0 }}>
+                                                <Download size={10}/> PI Doc
+                                              </a>
+                                            )}
                                           </div>
 
                                           {/* Level 3: Payments against PI */}
@@ -1447,7 +1534,15 @@ function InvoiceVaultTab({ invoices, payments, proformaInvoices, vendors, onDele
                                                       <div style={{ fontSize: 11, color: "#64748b" }}>{fmtDate(p.paymentDate)} · {p.paymentMode?.toUpperCase()}{p.bankRef ? ` · ${p.bankRef}` : ""}</div>
                                                     </div>
                                                   </div>
-                                                  <span style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{p.paymentRef}</span>
+                                                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                                    <span style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{p.paymentRef}</span>
+                                                    {p.screenshot && (
+                                                      <a href={p.screenshot} download={`Payment_${p.paymentRef}`} target="_blank" rel="noreferrer"
+                                                        style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"3px 7px", borderRadius:5, background:"#ddd6fe", color:"#5b21b6", fontWeight:700, fontSize:10, textDecoration:"none" }}>
+                                                        <Download size={9}/> Receipt
+                                                      </a>
+                                                    )}
+                                                  </div>
                                                 </div>
                                               ))}
                                             </div>
@@ -1469,7 +1564,15 @@ function InvoiceVaultTab({ invoices, payments, proformaInvoices, vendors, onDele
                                                   <div style={{ fontSize: 11, color: "#64748b" }}>{fmtDate(p.paymentDate)} · {p.paymentMode?.toUpperCase()}{p.bankRef ? ` · ${p.bankRef}` : ""}</div>
                                                 </div>
                                               </div>
-                                              <span style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{p.paymentRef}</span>
+                                              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                                <span style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{p.paymentRef}</span>
+                                                {p.screenshot && (
+                                                  <a href={p.screenshot} download={`Payment_${p.paymentRef}`} target="_blank" rel="noreferrer"
+                                                    style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"3px 7px", borderRadius:5, background:"#bfdbfe", color:"#1d4ed8", fontWeight:700, fontSize:10, textDecoration:"none" }}>
+                                                    <Download size={9}/> Receipt
+                                                  </a>
+                                                )}
+                                              </div>
                                             </div>
                                           ))}
                                         </div>
@@ -2048,7 +2151,22 @@ export default function PaymentTracker() {
                 proformaInvoices={data.pi}
                 vendors={vendors}
                 onDelete={async (id) => { await api.delete(`/payment-tracker/invoices/${id}`); load(); showToast("Invoice deleted"); }}
-                onViewInvoice={(inv) => { setSelected(inv); setModal("invoice_view"); }}
+                onViewInvoice={(inv) => {
+                  // Enrich invoice with linked PI and all payments before showing modal
+                  const linkedPI = data.pi.find(pi =>
+                    pi.invoices?.includes(inv._id) ||
+                    (inv.vendor_name && pi.vendor?.companyName &&
+                      (inv.vendor_name.toLowerCase().includes(pi.vendor.companyName.toLowerCase()) ||
+                       pi.vendor.companyName.toLowerCase().includes(inv.vendor_name.toLowerCase())) &&
+                      Math.abs((inv.total_amount||0) - (pi.totalAmount||0)) < (pi.totalAmount||1) * 0.5)
+                  );
+                  const linkedPayments = [
+                    ...data.payments.filter(p => p.invoiceId === inv._id || p.mappedTo === inv._id),
+                    ...(linkedPI ? data.payments.filter(p => p.proformaId === linkedPI._id || p.mappedTo === linkedPI._id) : []),
+                  ].filter((p, i, a) => a.findIndex(x => x._id === p._id) === i); // dedupe
+                  setSelected({ ...inv, _linkedPI: linkedPI || null, _linkedPayments: linkedPayments });
+                  setModal("invoice_view");
+                }}
                 onUpload={() => { setLinkedPiId(null); setModal("upload_invoice"); }}
               />
             )}

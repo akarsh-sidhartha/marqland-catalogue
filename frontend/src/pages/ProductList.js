@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api'; // ← replaces: import axios from 'axios' + getBaseUrl
-import { Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil, RotateCcw, Info, CheckSquare, Square, MessageSquare } from 'lucide-react';
+import { Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil, RotateCcw, Info, CheckSquare, Square, MessageSquare, Sparkles, FileText, Download } from 'lucide-react';
 import usePortalItems from '../hooks/usePortalItems';
 
 /**
@@ -76,7 +76,34 @@ const CustomCreatableSelect = ({ options, value, onChange, placeholder, isDisabl
   );
 };
 
-// ── All API calls now go through /api/... — proxy forwards to :5000 ──────────
+// ── Reusable prompt selector (used in add product + PDF modals) ──────────────
+const PromptSelector = ({ prompts, category, selectedId, onSelect, customText, onCustom }) => {
+  const filtered = prompts.filter(p => !category || p.category === category || p.category === 'All');
+  return (
+    <div className="space-y-2">
+      {filtered.length > 0 && (
+        <div>
+          <label className="block text-[9px] font-black text-purple-500 uppercase mb-1">Studio Prompt</label>
+          <select value={selectedId} onChange={e => { onSelect(e.target.value); onCustom(''); }}
+            className="w-full border border-purple-200 rounded-lg p-1.5 text-[10px] bg-white">
+            <option value="">— use category default —</option>
+            {filtered.map(p => (
+              <option key={p._id} value={p._id}>{p.name}{p.isDefault ? ' ★' : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div>
+        <label className="block text-[9px] font-black text-purple-500 uppercase mb-1">Custom Prompt Override</label>
+        <textarea rows={2} value={customText}
+          onChange={e => { onCustom(e.target.value); onSelect(''); }}
+          placeholder="Optional — leave blank to use saved prompt above…"
+          className="w-full border border-purple-200 rounded-lg p-2 text-[10px] bg-white resize-none placeholder:text-purple-200" />
+      </div>
+    </div>
+  );
+};
+
 const ProductList = () => {
   const [products, setProducts] = useState([]);
   const [meta, setMeta] = useState({ brands: [], categories: [], subCategories: {} });
@@ -97,6 +124,23 @@ const ProductList = () => {
     description: '', purchasePrice: '', markupPercent: 30
   });
   const [imageFile, setImageFile] = useState(null);
+  // Image processing options (Scenario 2)
+  const [processImage, setProcessImage]     = useState(true);
+  const [selectedPromptId, setPromptId]     = useState('');      // saved prompt ID
+  const [customPromptText, setCustomPrompt] = useState('');      // free-text override
+  const [savedPrompts, setSavedPrompts]     = useState([]);      // loaded from API
+  // Prompt management panel
+  const [showPromptManager, setShowPromptManager] = useState(false);
+  const [promptForm, setPromptForm] = useState({ name:'', category:'', prompt:'', isDefault:false });
+  const [editingPromptId, setEditingPromptId]     = useState(null);
+  // PDF import state (Scenario 3)
+  const [showPdfModal, setShowPdfModal]   = useState(false);
+  const [pdfMode, setPdfMode]             = useState('same'); // 'same' | 'mixed'
+  const [pdfFile, setPdfFile]             = useState(null);
+  const [pdfCategory, setPdfCategory]     = useState('');
+  const [pdfBrand, setPdfBrand]           = useState('');
+  const [pdfLoading, setPdfLoading]       = useState(false);
+  const [pdfResult, setPdfResult]         = useState(null);
   const [filters, setFilters] = useState({
     brand: '', category: '', subCategory: '', minPrice: '', maxPrice: '', searchTerm: ''
   });
@@ -125,6 +169,10 @@ const ProductList = () => {
 
   const resetFilters = () => {
     setFilters({ brand: '', category: '', subCategory: '', minPrice: '', maxPrice: '', searchTerm: '' });
+    // Load saved prompts for image processing UI
+    api.get('/image-processing/prompts').then(res => {
+      setSavedPrompts(res.data);
+    }).catch(() => {}); // non-critical
   };
 
   const resetForm = () => {
@@ -133,6 +181,10 @@ const ProductList = () => {
     setIsEditing(false);
     setCurrentId(null);
     setAvailableSubCats([]);
+    // Reset image processing state so each product starts fresh
+    setProcessImage(true);
+    setPromptId('');
+    setCustomPrompt('');
   };
 
   const toggleCategory = (category) => {
@@ -246,7 +298,12 @@ const ProductList = () => {
       data.append('description', formData.description);
       data.append('purchasePrice', formData.purchasePrice);
       data.append('markupPercent', formData.markupPercent);
-      if (imageFile) data.append('image', imageFile);
+      if (imageFile) {
+        data.append('image', imageFile);
+        data.append('processImage', processImage ? 'true' : 'false');
+        if (selectedPromptId)  data.append('promptId',   selectedPromptId);
+        if (customPromptText)  data.append('promptText', customPromptText);
+      }
 
       // For multipart/form-data, don't set Content-Type manually —
       // axios sets it automatically with the correct boundary
@@ -262,6 +319,94 @@ const ProductList = () => {
     } catch (err) {
       console.error("Save error:", err);
     }
+  };
+
+  // ── PDF bulk import handler ───────────────────────────────────────────────
+  const handlePdfImport = async () => {
+    if (!pdfFile) return alert('Please select a PDF file');
+    if (pdfMode === 'same' && (!pdfCategory || !pdfBrand)) return alert('Category and brand are required');
+    setPdfLoading(true);
+    setPdfResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('pdf', pdfFile);
+      if (pdfMode === 'same') {
+        fd.append('category', pdfCategory);
+        fd.append('brand', pdfBrand);
+        const res = await api.post('/image-processing/pdf/same-category', fd);
+        setPdfResult({ type: 'same', count: res.data.productIds?.length || 0 });
+        fetchData(); // refresh product list
+      } else {
+        // Mixed — fetch as arraybuffer so auth headers work correctly
+        // and we can detect error responses before treating as ZIP
+        const res = await api.post('/image-processing/pdf/mixed', fd, {
+          responseType: 'arraybuffer',
+        });
+
+        // Check if the response is actually an error JSON (not a ZIP)
+        const contentType = res.headers['content-type'] || '';
+        if (!contentType.includes('application/zip')) {
+          // Decode the error message
+          const text = new TextDecoder().decode(res.data);
+          let msg = 'Processing failed';
+          try { msg = JSON.parse(text).message || msg; } catch {}
+          throw new Error(msg);
+        }
+
+        const blob = new Blob([res.data], { type: 'application/zip' });
+        const url  = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href  = url;
+        link.download = `pdf-images-${Date.now()}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        setPdfResult({ type: 'mixed' });
+      }
+    } catch (err) {
+      // Handle arraybuffer error responses
+      let msg = err.message;
+      if (err.response?.data instanceof ArrayBuffer) {
+        try { msg = JSON.parse(new TextDecoder().decode(err.response.data)).message; } catch {}
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      }
+      if (msg.includes('not installed')) {
+        alert('Missing backend packages. Run in backend folder:\n\nnpm install pdf2pic pdfjs-dist archiver\n\nThen restart the server.');
+      } else {
+        alert('PDF import failed: ' + msg);
+      }
+    } finally { setPdfLoading(false); }
+  };
+
+  // ── Prompt management handlers ───────────────────────────────────────────
+  const savePrompt = async () => {
+    if (!promptForm.name || !promptForm.category || !promptForm.prompt)
+      return alert('Name, category and prompt are all required');
+    try {
+      if (editingPromptId) {
+        await api.put(`/image-processing/prompts/${editingPromptId}`, promptForm);
+      } else {
+        await api.post('/image-processing/prompts', promptForm);
+      }
+      const res = await api.get('/image-processing/prompts');
+      setSavedPrompts(res.data);
+      setPromptForm({ name:'', category:'', prompt:'', isDefault:false });
+      setEditingPromptId(null);
+    } catch (err) { alert('Failed: ' + (err.response?.data?.message || err.message)); }
+  };
+
+  const deletePrompt = async (id) => {
+    if (!window.confirm('Delete this prompt?')) return;
+    await api.delete(`/image-processing/prompts/${id}`);
+    setSavedPrompts(prev => prev.filter(p => p._id !== id));
+  };
+
+  const setDefaultPrompt = async (id) => {
+    await api.patch(`/image-processing/prompts/${id}/default`);
+    const res = await api.get('/image-processing/prompts');
+    setSavedPrompts(res.data);
   };
 
   const handleDelete = async (id) => {
@@ -322,8 +467,14 @@ const ProductList = () => {
           <div className="flex items-center gap-3 border-r pr-3 border-gray-100 flex-shrink-0">
             <h1 className="text-xs font-black text-indigo-600 uppercase tracking-tighter">Catalogue</h1>
             <button onClick={() => { resetForm(); setShowModal(true); }}
+              title="Add Product"
               className="bg-indigo-600 hover:bg-indigo-700 text-white w-8 h-8 rounded-lg shadow-sm flex items-center justify-center transition flex-shrink-0">
               <Plus size={18} />
+            </button>
+            <button onClick={() => { setPdfFile(null); setPdfResult(null); setShowPdfModal(true); }}
+              title="Import from PDF"
+              className="bg-purple-600 hover:bg-purple-700 text-white w-8 h-8 rounded-lg shadow-sm flex items-center justify-center transition flex-shrink-0">
+              <FileText size={16} />
             </button>
           </div>
 
@@ -559,8 +710,67 @@ const ProductList = () => {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Image</label>
-                  <input type="file" onChange={(e) => setImageFile(e.target.files[0])} className="text-[10px] mt-1" />
-                  {isEditing && <p className="text-[8px] text-indigo-500 mt-1 italic">Leave empty to keep current</p>}
+                  <input type="file" accept="image/*"
+                    onChange={e => setImageFile(e.target.files[0])}
+                    className="text-[10px] mt-1 w-full" />
+                  {isEditing && <p className="text-[8px] text-indigo-500 mt-1 italic">Leave empty to keep current image</p>}
+                  {imageFile && (
+                    <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-3">
+                      {/* Toggle */}
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={processImage}
+                          onChange={e => setProcessImage(e.target.checked)}
+                          className="accent-purple-600 w-4 h-4" />
+                        <span className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1">
+                          <Sparkles size={11} /> Studio AI Processing
+                        </span>
+                      </label>
+                      {processImage && (
+                        <div className="space-y-2">
+                          {/* Saved prompt selector */}
+                          {savedPrompts.length > 0 && (
+                            <div>
+                              <label className="block text-[9px] font-black text-purple-500 uppercase mb-1">
+                                Saved Prompt
+                              </label>
+                              <select value={selectedPromptId}
+                                onChange={e => { setPromptId(e.target.value); setCustomPrompt(''); }}
+                                className="w-full border border-purple-200 rounded-lg p-1.5 text-[10px] bg-white">
+                                <option value="">— category default —</option>
+                                {savedPrompts
+                                  .filter(p => p.category === formData.category || p.category === 'All')
+                                  .map(p => (
+                                    <option key={p._id} value={p._id}>
+                                      {p.name}{p.isDefault ? ' ★' : ''}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
+                          {/* Custom prompt override */}
+                          <div>
+                            <label className="block text-[9px] font-black text-purple-500 uppercase mb-1">
+                              Custom Prompt Override
+                            </label>
+                            <textarea rows={3}
+                              value={customPromptText}
+                              onChange={e => { setCustomPrompt(e.target.value); setPromptId(''); }}
+                              placeholder="Leave blank to use saved/default prompt for this category…"
+                              className="w-full border border-purple-200 rounded-lg p-2 text-[10px] bg-white resize-none placeholder:text-purple-200" />
+                          </div>
+                          {/* Manage prompts link */}
+                          <button type="button"
+                            onClick={() => setShowPromptManager(true)}
+                            className="text-[9px] font-black text-purple-500 uppercase tracking-widest hover:text-purple-700 flex items-center gap-1">
+                            <Plus size={9} /> Manage Prompts
+                          </button>
+                          <p className="text-[8px] text-purple-400 leading-relaxed">
+                            Image → FLUX AI studio transformation → 1024×1024 WebP
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="bg-indigo-50 p-6 rounded-xl">
@@ -639,6 +849,213 @@ const ProductList = () => {
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
       <PortalModal />
+
+      {/* ── Prompt Manager Modal ── */}
+      {showPromptManager && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[130] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h2 className="text-xl font-black text-gray-800 uppercase flex items-center gap-2">
+                <Sparkles size={18} className="text-purple-600" /> Studio Prompts
+              </h2>
+              <button onClick={() => { setShowPromptManager(false); setEditingPromptId(null); setPromptForm({ name:'', category:'', prompt:'', isDefault:false }); }}
+                className="text-gray-400 text-2xl">×</button>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Add / Edit form */}
+              <div className="bg-purple-50 border border-purple-100 rounded-xl p-5 space-y-3">
+                <h3 className="text-[10px] font-black text-purple-700 uppercase tracking-widest">
+                  {editingPromptId ? 'Edit Prompt' : 'New Prompt'}
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Name</label>
+                    <input value={promptForm.name}
+                      onChange={e => setPromptForm({ ...promptForm, name: e.target.value })}
+                      placeholder="e.g. Dark Studio"
+                      className="w-full border rounded-lg p-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Category</label>
+                    <select value={promptForm.category}
+                      onChange={e => setPromptForm({ ...promptForm, category: e.target.value })}
+                      className="w-full border rounded-lg p-2 text-sm bg-white">
+                      <option value="">Select...</option>
+                      <option value="All">All Categories</option>
+                      {meta.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Prompt</label>
+                  <textarea rows={5} value={promptForm.prompt}
+                    onChange={e => setPromptForm({ ...promptForm, prompt: e.target.value })}
+                    placeholder="Act as a high-end commercial photographer. Take this product image and perform a professional studio staging..."
+                    className="w-full border rounded-lg p-2 text-sm resize-none" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={promptForm.isDefault}
+                      onChange={e => setPromptForm({ ...promptForm, isDefault: e.target.checked })}
+                      className="accent-purple-600 w-4 h-4" />
+                    <span className="text-[10px] font-black text-purple-600 uppercase">Set as default for category</span>
+                  </label>
+                  <div className="flex gap-2">
+                    {editingPromptId && (
+                      <button onClick={() => { setEditingPromptId(null); setPromptForm({ name:'', category:'', prompt:'', isDefault:false }); }}
+                        className="px-4 py-2 text-gray-400 font-bold text-xs uppercase">Cancel</button>
+                    )}
+                    <button onClick={savePrompt}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg font-black text-xs uppercase hover:bg-purple-700">
+                      {editingPromptId ? 'Update' : 'Save Prompt'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Saved prompts list */}
+              <div className="space-y-2">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  Saved Prompts ({savedPrompts.length})
+                </h3>
+                {savedPrompts.length === 0 && (
+                  <p className="text-sm text-gray-400 italic">No prompts saved yet.</p>
+                )}
+                {savedPrompts.map(p => (
+                  <div key={p._id} className="bg-white border border-gray-100 rounded-xl p-4 flex gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-black text-gray-800">{p.name}</span>
+                        <span className="text-[9px] font-black text-purple-500 bg-purple-50 px-2 py-0.5 rounded-full uppercase">
+                          {p.category}
+                        </span>
+                        {p.isDefault && (
+                          <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase">
+                            ★ Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400 leading-relaxed line-clamp-2">{p.prompt}</p>
+                    </div>
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      {!p.isDefault && (
+                        <button onClick={() => setDefaultPrompt(p._id)}
+                          title="Set as default"
+                          className="p-1.5 text-amber-400 hover:bg-amber-50 rounded-lg transition text-[10px] font-black">★</button>
+                      )}
+                      <button onClick={() => {
+                        setEditingPromptId(p._id);
+                        setPromptForm({ name: p.name, category: p.category, prompt: p.prompt, isDefault: p.isDefault });
+                      }} className="p-1.5 text-indigo-400 hover:bg-indigo-50 rounded-lg transition">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => deletePrompt(p._id)}
+                        className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PDF Import Modal ── */}
+      {showPdfModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h2 className="text-xl font-black text-gray-800 uppercase flex items-center gap-2">
+                <FileText size={18} className="text-purple-600" /> Import from PDF
+              </h2>
+              <button onClick={() => setShowPdfModal(false)} className="text-gray-400 text-2xl">×</button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Mode selector */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">PDF Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setPdfMode('same')}
+                    className={`p-3 rounded-xl border-2 text-left transition ${pdfMode === 'same' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'}`}>
+                    <div className="text-[10px] font-black uppercase text-purple-700 mb-1">Same Category</div>
+                    <div className="text-[9px] text-gray-500 leading-relaxed">All products are the same type. Images are processed and saved directly to product list.</div>
+                  </button>
+                  <button onClick={() => setPdfMode('mixed')}
+                    className={`p-3 rounded-xl border-2 text-left transition ${pdfMode === 'mixed' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'}`}>
+                    <div className="text-[10px] font-black uppercase text-purple-700 mb-1">Mixed Categories</div>
+                    <div className="text-[9px] text-gray-500 leading-relaxed">Different product types. Images are processed and downloaded as a ZIP for manual assignment.</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Same category fields */}
+              {pdfMode === 'same' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Category</label>
+                      <select value={pdfCategory} onChange={e => setPdfCategory(e.target.value)}
+                        className="w-full border rounded-lg p-2 text-sm">
+                        <option value="">Select...</option>
+                        {meta.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Brand</label>
+                      <select value={pdfBrand} onChange={e => setPdfBrand(e.target.value)}
+                        className="w-full border rounded-lg p-2 text-sm">
+                        <option value="">Select...</option>
+                        {meta.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <PromptSelector prompts={savedPrompts} category={pdfCategory}
+                    selectedId={selectedPromptId} onSelect={setPromptId}
+                    customText={customPromptText} onCustom={setCustomPrompt} />
+                </div>
+              )}
+              {/* Mixed: just prompt selector */}
+              {pdfMode === 'mixed' && (
+                <PromptSelector prompts={savedPrompts} category=""
+                  selectedId={selectedPromptId} onSelect={setPromptId}
+                  customText={customPromptText} onCustom={setCustomPrompt} />
+              )}
+
+              {/* PDF file picker */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">PDF File</label>
+                <input type="file" accept="application/pdf"
+                  onChange={e => setPdfFile(e.target.files[0])}
+                  className="text-sm w-full" />
+                {pdfFile && <p className="text-[9px] text-purple-500 mt-1">{pdfFile.name}</p>}
+              </div>
+
+              {/* Result */}
+              {pdfResult && (
+                <div className={`p-3 rounded-xl text-[11px] font-bold ${pdfResult.type === 'same' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                  {pdfResult.type === 'same'
+                    ? `✅ ${pdfResult.count} draft products created — find them in the product list with "Import" in the name`
+                    : '✅ ZIP downloaded — upload each image to the correct product via Edit Product'}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t flex justify-end gap-3">
+              <button onClick={() => setShowPdfModal(false)}
+                className="px-6 py-2 text-gray-400 font-bold uppercase text-xs">Close</button>
+              <button onClick={handlePdfImport} disabled={pdfLoading || !pdfFile}
+                className="px-8 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-xs hover:bg-purple-700 disabled:opacity-50 shadow-lg flex items-center gap-2">
+                {pdfLoading
+                  ? <><RotateCcw size={13} className="animate-spin" /> Processing...</>
+                  : pdfMode === 'mixed'
+                    ? <><Download size={13} /> Process & Download ZIP</>
+                    : <><Sparkles size={13} /> Process & Save Products</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

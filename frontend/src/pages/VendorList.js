@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api';
-import { Download, Plus, Search, ChevronDown, ChevronRight, Edit2, Trash2, MapPin, Tag, Mail, Phone, Building2 } from 'lucide-react';
+import { Download, Plus, Search, ChevronDown, ChevronRight, Edit2, Trash2, MapPin, Tag, Mail, Phone, Building2, Paperclip, FileText, Image as ImageIcon, Video, X, Eye } from 'lucide-react';
 
 const VendorList = () => {
   const [vendors, setVendors] = useState([]);
@@ -18,6 +18,11 @@ const VendorList = () => {
   // Scanning States
   const [cardImages, setCardImages] = useState({ front: null, back: null });
   const [isScanning, setIsScanning] = useState(false);
+
+  // Media attachment state
+  const [newMediaFiles, setNewMediaFiles] = useState([]);   // new files to upload
+  const [keepMediaIds,  setKeepMediaIds]  = useState([]);   // existing media ids to retain
+  const [lightboxMedia, setLightboxMedia] = useState(null); // { url, mimeType, name }
 
   const [formData, setFormData] = useState({
     companyName: '',
@@ -74,16 +79,45 @@ const VendorList = () => {
 
   const handleSave = async () => {
     try {
+      const fd = new FormData();
+      fd.append('companyName',      formData.companyName);
+      fd.append('state',            formData.state);
+      fd.append('category',         formData.category);
+      fd.append('suppliedProducts', formData.suppliedProducts);
+      fd.append('contacts',         JSON.stringify(formData.contacts));
+      if (isEditing) fd.append('keepMediaIds', keepMediaIds.join(','));
+      newMediaFiles.forEach(f => fd.append('mediaFiles', f));
+
       if (isEditing) {
-        await api.put(`/vendors/${currentId}`, formData);
+        await api.put(`/vendors/${currentId}`, fd);
       } else {
-        await api.post('/vendors', formData);
+        await api.post('/vendors', fd);
       }
       setShowModal(false);
       resetForm();
       fetchVendors();
-    } catch (err) { alert("Error saving vendor."); }
+    } catch (err) { alert("Error saving vendor: " + (err.response?.data?.message || err.message)); }
   };
+
+  const handleDeleteMedia = async (vendorId, mediaId, e) => {
+    e.stopPropagation();
+    if (!window.confirm('Remove this file?')) return;
+    try {
+      await api.delete(`/vendors/${vendorId}/media/${mediaId}`);
+      setKeepMediaIds(prev => prev.filter(id => id !== mediaId));
+      fetchVendors();
+    } catch { alert('Failed to delete file'); }
+  };
+
+  const mediaIcon = (mimeType = '') => {
+    if (mimeType.startsWith('image/')) return <ImageIcon size={13} className="text-blue-500 shrink-0" />;
+    if (mimeType.startsWith('video/')) return <Video size={13} className="text-purple-500 shrink-0" />;
+    return <FileText size={13} className="text-orange-500 shrink-0" />;
+  };
+
+  const fmtSize = (bytes = 0) => bytes < 1048576
+    ? `${Math.round(bytes / 1024)}KB`
+    : `${(bytes / 1048576).toFixed(1)}MB`;
 
   const handleDelete = async (id, name, e) => {
     e.stopPropagation();
@@ -106,6 +140,8 @@ const VendorList = () => {
       suppliedProducts: v.suppliedProducts || '',
       contacts: v.contacts && v.contacts.length > 0 ? [...v.contacts] : [{ name: '', phone: '', email: '' }]
     });
+    setKeepMediaIds((v.media || []).map(m => m._id));
+    setNewMediaFiles([]);
     setShowModal(true);
   };
 
@@ -114,6 +150,8 @@ const VendorList = () => {
     setCardImages({ front: null, back: null });
     setIsEditing(false);
     setCurrentId(null);
+    setNewMediaFiles([]);
+    setKeepMediaIds([]);
   };
 
   const handleCardCapture = (side, e) => {
@@ -268,9 +306,14 @@ const VendorList = () => {
                   </td>
                   <td className="p-3">
                     <div className="font-bold text-gray-800 text-sm uppercase">{v.companyName}</div>
-                    <div className="flex gap-2 mt-1">
+                    <div className="flex gap-2 mt-1 flex-wrap">
                       <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-black uppercase">{v.category || 'N/A'}</span>
                       <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-black uppercase">{v.state}</span>
+                      {v.media && v.media.length > 0 && (
+                        <span className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-black uppercase flex items-center gap-1">
+                          <Paperclip size={9} /> {v.media.length} file{v.media.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="p-3 text-sm text-gray-500 truncate max-w-xs">{v.suppliedProducts || '---'}</td>
@@ -290,7 +333,6 @@ const VendorList = () => {
                         </div>
                         <div>
                           <h4 className="text-[10px] font-black text-gray-400 uppercase mb-2">Contacts</h4>
-                          {/* FIXED CONTACT DISPLAY */}
                           {v.contacts && v.contacts.length > 0 ? (
                             v.contacts.map((c, i) => (
                               <div key={i} className="mb-2 p-2 bg-white rounded border text-sm shadow-sm">
@@ -303,7 +345,52 @@ const VendorList = () => {
                             <p className="text-xs text-gray-400">No contacts listed.</p>
                           )}
                         </div>
-                      </div>
+
+                        {/* ── Media files ── */}
+                        {v.media && v.media.length > 0 && (
+                          <div className="col-span-1 md:col-span-2 mt-2">
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase mb-3 flex items-center gap-1">
+                              <Paperclip size={11} /> Attached Files ({v.media.length})
+                            </h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                              {v.media.map((m) => {
+                                const isImg = m.mimeType?.startsWith('image/');
+                                const isVid = m.mimeType?.startsWith('video/');
+                                return (
+                                  <div key={m._id}
+                                    className="relative group bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                                    <div
+                                      className="h-28 flex items-center justify-center bg-gray-50 cursor-pointer"
+                                      onClick={() => setLightboxMedia({ url: m.url, mimeType: m.mimeType, name: m.name })}>
+                                      {isImg ? (
+                                        <img src={m.url} alt={m.name} className="h-full w-full object-cover" />
+                                      ) : isVid ? (
+                                        <div className="flex flex-col items-center gap-1 text-purple-400">
+                                          <Video size={32} /><span className="text-[9px] font-bold uppercase">Video</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-col items-center gap-1 text-orange-400">
+                                          <FileText size={32} />
+                                          <span className="text-[9px] font-bold uppercase text-gray-400">{m.name.split('.').pop()?.toUpperCase()}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="px-2 py-1.5">
+                                      <div className="text-[10px] font-bold text-gray-700 truncate">{m.name}</div>
+                                      <div className="text-[9px] text-gray-400">{fmtSize(m.size)}</div>
+                                    </div>
+                                    <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <a href={m.url} download={m.name} onClick={e => e.stopPropagation()}
+                                        className="p-1.5 bg-white/90 rounded-lg shadow text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all">
+                                        <Download size={11} />
+                                      </a>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}</div>
                     </td>
                   </tr>
                 )}
@@ -410,9 +497,113 @@ const VendorList = () => {
               </div>
             </div>
 
+            {/* ── Media Attachments ── */}
+            <div className="px-6 md:px-8 pb-4">
+              <div className="border-2 border-dashed border-gray-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[11px] font-black text-gray-500 uppercase flex items-center gap-1.5">
+                    <Paperclip size={12} /> Attach Files
+                    <span className="text-gray-300 font-normal normal-case ml-1">
+                      Images · Documents · Video recordings
+                    </span>
+                  </h3>
+                  <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase hover:bg-indigo-700 transition">
+                    <Plus size={11} /> Add Files
+                    <input type="file" multiple className="hidden"
+                      accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={e => setNewMediaFiles(prev => [...prev, ...Array.from(e.target.files)])} />
+                  </label>
+                </div>
+
+                {/* Existing media (edit mode) */}
+                {isEditing && (() => {
+                  const editingVendor = vendors.find(v => v._id === currentId);
+                  const existingMedia = (editingVendor?.media || []).filter(m => keepMediaIds.includes(m._id));
+                  return existingMedia.length > 0 ? (
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-gray-400 uppercase">Existing Files</p>
+                      {existingMedia.map(m => (
+                        <div key={m._id} className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {mediaIcon(m.mimeType)}
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-gray-700 truncate">{m.name}</div>
+                              <div className="text-[9px] text-gray-400">{fmtSize(m.size)}</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={e => handleDeleteMedia(currentId, m._id, e)}
+                            className="p-1 text-red-400 hover:bg-red-50 rounded transition flex-shrink-0">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* New files staged for upload */}
+                {newMediaFiles.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-gray-400 uppercase">New Files ({newMediaFiles.length})</p>
+                    {newMediaFiles.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {mediaIcon(f.type)}
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-indigo-700 truncate">{f.name}</div>
+                            <div className="text-[9px] text-indigo-400">{fmtSize(f.size)}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setNewMediaFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="p-1 text-red-400 hover:bg-red-50 rounded transition flex-shrink-0">
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {newMediaFiles.length === 0 && !(isEditing && vendors.find(v => v._id === currentId)?.media?.length) && (
+                  <p className="text-[11px] text-gray-300 text-center py-2">No files attached yet</p>
+                )}
+              </div>
+            </div>
+
             <div className="p-6 bg-gray-50 border-t flex flex-col md:flex-row justify-end gap-3">
               <button onClick={() => setShowModal(false)} className="px-6 py-3 font-bold text-gray-400 uppercase text-xs">Cancel</button>
               <button onClick={handleSave} className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-black uppercase text-xs">Save Vendor</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Media Lightbox ── */}
+      {lightboxMedia && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4"
+          onClick={() => setLightboxMedia(null)}>
+          <button className="absolute top-6 right-6 text-white/60 hover:text-white p-2">
+            <X size={28} />
+          </button>
+          <div className="max-w-4xl w-full max-h-[90vh] flex flex-col items-center"
+            onClick={e => e.stopPropagation()}>
+            {lightboxMedia.mimeType?.startsWith('image/') ? (
+              <img src={lightboxMedia.url} alt={lightboxMedia.name}
+                className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-2xl" />
+            ) : lightboxMedia.mimeType?.startsWith('video/') ? (
+              <video src={lightboxMedia.url} controls autoPlay
+                className="max-h-[80vh] max-w-full rounded-lg shadow-2xl" />
+            ) : (
+              <iframe src={lightboxMedia.url} title={lightboxMedia.name}
+                className="w-full h-[80vh] rounded-lg shadow-2xl bg-white" />
+            )}
+            <div className="mt-4 flex items-center gap-4">
+              <span className="text-white/70 text-sm">{lightboxMedia.name}</span>
+              <a href={lightboxMedia.url} download={lightboxMedia.name}
+                onClick={e => e.stopPropagation()}
+                className="flex items-center gap-1.5 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition">
+                <Download size={14} /> Download
+              </a>
             </div>
           </div>
         </div>

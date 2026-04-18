@@ -53,6 +53,11 @@ const userSchema = new mongoose.Schema({
     default: null,
     select: false,
   },
+  // Per-user route access overrides. If empty, role-based defaults apply.
+  allowedRoutes: {
+    type: [String],
+    default: [],
+  },
 }, {
   timestamps: true, // createdAt, updatedAt
 });
