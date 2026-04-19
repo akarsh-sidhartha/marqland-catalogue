@@ -183,7 +183,7 @@ const SourcingHub = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900">Sourcing Hub</h1>
+          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900">Sourcing Hub - Work In Progress</h1>
           <p className="text-slate-400 font-bold text-xs uppercase">Vendor Engagement & Inquiry Tracking</p>
         </div>
         <div className="flex gap-3">

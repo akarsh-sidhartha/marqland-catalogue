@@ -1,6 +1,6 @@
 'use strict';
-const express      = require('express');
-const router       = express.Router();
+const express = require('express');
+const router = express.Router();
 const OrderInquiry = require('../models/orderInquiry');
 const ClientPortal = require('../models/ClientPortal');
 
@@ -29,11 +29,11 @@ router.get('/', async (req, res) => {
         return {
           ...order,
           attachments: files.map((f) => ({
-            name:        f.name,
-            size:        f.size,
-            webUrl:      f.webUrl,
+            name: f.name,
+            size: f.size,
+            webUrl: f.webUrl,
             downloadUrl: f['@microsoft.graph.downloadUrl'],
-            isOneDrive:  true,
+            isOneDrive: true,
           })),
         };
       } catch {
@@ -84,22 +84,37 @@ router.post('/', async (req, res) => {
 
     await order.save();
 
+
     // ── Auto-create ClientPortal when order is created ───────────────────────
     // This ensures the portal exists immediately so ProductList / PropertyList
     // can add items to it via usePortalItems hook without waiting for a manual step.
     try {
+      /*
       const slug = (order.refNumber || order._id.toString())
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
+        */
+      const genToken = () => {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let t = '';
+        for (let i = 0; i < 5; i++) t += chars[Math.floor(Math.random() * chars.length)];
+        return t;
+      };
+      const baseSlug = (order.refNumber || order._id.toString())
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      const slug = `${genToken()}-${baseSlug}`;
+      console.log('🔵 Portal slug created:', slug);
       await ClientPortal.create({
-        orderId:       order._id,
+        orderId: order._id,
         slug,
-        type:          order.orderType || 'product',
-        orderRef:      order.refNumber || '',
-        clientName:    order.clientName,
+        type: order.orderType || 'product',
+        orderRef: order.refNumber || '',
+        clientName: order.clientName,
         orderPlacedBy: order.orderPlacedBy || '',
-        title:         order.title || '',
+        title: order.title || '',
       });
     } catch (portalErr) {
       // Don't fail the order creation if portal creation fails (e.g. duplicate)
@@ -135,9 +150,9 @@ router.patch('/:id', async (req, res) => {
 
         // Sync attachments: delete removed, upload new
         if (attachments) {
-          const currentFiles  = await listFolderContents(folderId).catch(() => []);
+          const currentFiles = await listFolderContents(folderId).catch(() => []);
           const filesToDelete = currentFiles.filter((f) => !attachments.some((a) => a.name === f.name));
-          for (const f of filesToDelete) await deleteFile(f.id).catch(() => {});
+          for (const f of filesToDelete) await deleteFile(f.id).catch(() => { });
 
           const newUploads = attachments.filter((a) => a.base64);
           if (newUploads.length) await uploadFiles(folderId, newUploads);
@@ -167,13 +182,13 @@ router.delete('/:id', async (req, res) => {
     if (order.clientName && order.refNumber) {
       const orderDate = new Date(order.createdAt || order.updatedAt || new Date());
       const mo = orderDate.getMonth() + 1;
-      const y  = orderDate.getFullYear();
+      const y = orderDate.getFullYear();
       const sh = (n) => String(n).slice(-2).padStart(2, '0');
       const fy = mo >= 4 ? `${sh(y)}-${sh(y + 1)}` : `${sh(y - 1)}-${sh(y)}`;
 
       await deleteFolderByPath([
         'Orders',
-        (order.clientName    || 'Unknown Client').trim(),
+        (order.clientName || 'Unknown Client').trim(),
         fy,
         (order.orderPlacedBy || 'General').trim(),
         order.refNumber.replace(/\//g, '-').trim(),

@@ -8,6 +8,8 @@ import {
 const ROLES = ['admin', 'accounts', 'sales', 'inventory', 'viewer'];
 
 // ── All routes in the app — key = route name, path = used in ProtectedRoute ──
+// ⚠ KEEP IN SYNC WITH PATH_TO_ROUTE_KEY in App.js.
+// When you add a new page: 1) add it here, 2) add it to App.js PATH_TO_ROUTE_KEY.
 const ALL_ROUTES = [
   { key: 'Order Tracker',    path: '/'                },
   { key: 'Sourcing Hub',     path: '/sourcinghub'     },
@@ -22,6 +24,7 @@ const ALL_ROUTES = [
   { key: 'Property List',    path: '/properties'      },
   { key: 'Saved Offsites',   path: '/saved-offsites'  },
   { key: 'User Management',  path: '/admin/users'     },
+  { key: 'Activity Logs',    path: '/admin/logs'      },
 ];
 
 // Default routes per role — used when allowedRoutes is empty
@@ -40,7 +43,7 @@ const effectiveRoutes = (user) =>
 
 // ── Interactive route access editor ──────────────────────────────────────────
 const RouteAccessEditor = ({ user, onSaved }) => {
-  const { authFetch, refreshUser } = useAuth();
+  const { authFetch } = useAuth();
   const [selected, setSelected] = React.useState(() => new Set(effectiveRoutes(user)));
   const [saving, setSaving]     = React.useState(false);
   const [saved, setSaved]       = React.useState(false);
@@ -71,8 +74,6 @@ const RouteAccessEditor = ({ user, onSaved }) => {
       });
       setSaved(true);
       onSaved?.([...selected]);
-      // Refresh the logged-in user's session if they edited their own routes
-      await refreshUser?.();
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       alert('Failed to save: ' + e.message);

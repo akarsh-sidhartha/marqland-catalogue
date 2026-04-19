@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../api';
-import PortalChatPanel from './PortalChatPanel';
+import ClientPortalEditor from './ClientPortalEditor';
 import CreatableSelect from 'react-select/creatable';
 import {
   Plus,
@@ -31,188 +31,6 @@ import {
 } from 'lucide-react';
 
 
-
-
-// ── ClientContactPicker ────────────────────────────────────────────────────────
-// Replaces the two CreatableSelects in the create-order modal.
-// Pulls client list from /api/clients, lets user search & pick.
-// Contact dropdown is enabled only after a client is chosen.
-// If client not found → type to create new (existing ClientCreateInlineForm handles it).
-// If client found but contact not found → inline "Add Contact" mini-form.
-function ClientContactPicker({ clientsData, clientName, contactName, onClientChange, onContactChange, onClientCreated, onContactAdded }) {
-  const [clientSearch, setClientSearch] = React.useState('');
-  const [contactSearch, setContactSearch] = React.useState('');
-  const [showClientDrop, setShowClientDrop] = React.useState(false);
-  const [showContactDrop, setShowContactDrop] = React.useState(false);
-  const [showAddContact, setShowAddContact] = React.useState(false);
-  const [newContact, setNewContact] = React.useState({ name: '', phone: '', email: '' });
-  const [savingContact, setSavingContact] = React.useState(false);
-  const clientRef = React.useRef(null);
-  const contactRef = React.useRef(null);
-
-  // Close dropdowns on outside click
-  React.useEffect(() => {
-    const handler = (e) => {
-      if (clientRef.current && !clientRef.current.contains(e.target)) setShowClientDrop(false);
-      if (contactRef.current && !contactRef.current.contains(e.target)) setShowContactDrop(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const selectedClient = clientsData.find(cl => cl.companyName === clientName);
-  const contacts = selectedClient?.contacts || [];
-
-  const filteredClients = clientsData.filter(cl =>
-    cl.companyName.toLowerCase().includes(clientSearch.toLowerCase())
-  );
-  const filteredContacts = contacts.filter(ct =>
-    ct.name?.toLowerCase().includes(contactSearch.toLowerCase())
-  );
-
-  // Check if typed client name exactly matches a known client
-  const isNewClient = clientName && !clientsData.find(cl =>
-    cl.companyName.toLowerCase() === clientName.toLowerCase()
-  );
-
-  const saveNewContact = async () => {
-    if (!newContact.name.trim() || !selectedClient) return;
-    setSavingContact(true);
-    try {
-      const updatedContacts = [...contacts, newContact];
-      const res = await api.put(`/clients/${selectedClient._id}`, {
-        ...selectedClient,
-        contacts: updatedContacts,
-      });
-      onContactAdded(res.data);
-      onContactChange(newContact.name);
-      setNewContact({ name: '', phone: '', email: '' });
-      setShowAddContact(false);
-    } catch (e) { alert('Failed to add contact: ' + (e.response?.data?.message || e.message)); }
-    finally { setSavingContact(false); }
-  };
-
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      {/* ── Client Company ── */}
-      <div className="space-y-1" ref={clientRef}>
-        <label className="text-[10px] font-black text-slate-400 uppercase px-1">Client Company</label>
-        <div className="relative">
-          <div className="flex items-center bg-slate-50 rounded-xl border-2 border-transparent focus-within:border-indigo-200 transition-all overflow-hidden">
-            <Search size={13} className="ml-3 text-slate-400 shrink-0" />
-            <input
-              className="flex-1 bg-transparent p-3 text-sm font-bold outline-none"
-              placeholder="Search or type new…"
-              value={clientSearch || clientName}
-              onFocus={() => { setClientSearch(''); setShowClientDrop(true); }}
-              onChange={e => { setClientSearch(e.target.value); onClientChange(e.target.value); setShowClientDrop(true); }}
-            />
-            {clientName && (
-              <button type="button" onClick={() => { onClientChange(''); setClientSearch(''); }} className="mr-2 text-slate-300 hover:text-slate-500">
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          {showClientDrop && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-              {filteredClients.length === 0 ? (
-                <div className="px-4 py-3 text-xs text-slate-400 font-semibold">
-                  {clientSearch ? `"${clientSearch}" — new client (will be created)` : 'No clients yet'}
-                </div>
-              ) : filteredClients.map(cl => (
-                <button key={cl._id} type="button"
-                  className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
-                  onMouseDown={() => { onClientChange(cl.companyName); setClientSearch(''); setShowClientDrop(false); }}>
-                  {cl.companyName}
-                  <span className="ml-2 text-[10px] text-slate-400 font-normal">{cl.contacts?.length || 0} contact{cl.contacts?.length !== 1 ? 's' : ''}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {isNewClient && (
-          <p className="text-[10px] text-amber-500 font-bold px-1">⚠ New client — will be created on submit</p>
-        )}
-      </div>
-
-      {/* ── Contact Person ── */}
-      <div className="space-y-1" ref={contactRef}>
-        <label className={`text-[10px] font-black uppercase px-1 ${clientName ? 'text-slate-400' : 'text-slate-200'}`}>Contact Person</label>
-        <div className={`relative ${!clientName ? 'opacity-40 pointer-events-none' : ''}`}>
-          <div className="flex items-center bg-slate-50 rounded-xl border-2 border-transparent focus-within:border-indigo-200 transition-all overflow-hidden">
-            <Search size={13} className="ml-3 text-slate-400 shrink-0" />
-            <input
-              className="flex-1 bg-transparent p-3 text-sm font-bold outline-none"
-              placeholder={clientName ? 'Search contacts…' : 'Select client first'}
-              disabled={!clientName}
-              value={contactSearch || contactName}
-              onFocus={() => { setContactSearch(''); setShowContactDrop(true); }}
-              onChange={e => { setContactSearch(e.target.value); onContactChange(e.target.value); setShowContactDrop(true); }}
-            />
-            {contactName && (
-              <button type="button" onClick={() => { onContactChange(''); setContactSearch(''); }} className="mr-2 text-slate-300 hover:text-slate-500">
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          {showContactDrop && clientName && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-              {filteredContacts.length === 0 && !isNewClient ? (
-                <div className="px-4 py-3">
-                  <p className="text-xs text-slate-400 font-semibold mb-2">No contacts found for this client.</p>
-                  <button type="button" onMouseDown={() => { setShowContactDrop(false); setShowAddContact(true); }}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-                    <Plus size={11} /> Add a contact to {clientName}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {filteredContacts.map((ct, i) => (
-                    <button key={i} type="button"
-                      className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors"
-                      onMouseDown={() => { onContactChange(ct.name); setContactSearch(''); setShowContactDrop(false); }}>
-                      <div className="text-sm font-bold text-slate-700">{ct.name}</div>
-                      <div className="text-[10px] text-slate-400">{ct.phone} {ct.email && `· ${ct.email}`}</div>
-                    </button>
-                  ))}
-                  {!isNewClient && selectedClient && (
-                    <button type="button" onMouseDown={() => { setShowContactDrop(false); setShowAddContact(true); }}
-                      className="w-full text-left px-4 py-2 text-xs font-bold text-indigo-500 hover:bg-indigo-50 border-t border-slate-100 flex items-center gap-1">
-                      <Plus size={11} /> Add new contact
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Inline Add Contact form ── */}
-        {showAddContact && selectedClient && (
-          <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
-            <p className="text-[10px] font-black text-indigo-500 uppercase">Add contact to {clientName}</p>
-            <input className="w-full border border-indigo-200 rounded-lg p-2 text-xs bg-white focus:border-indigo-400 outline-none font-semibold"
-              placeholder="Name *" value={newContact.name} onChange={e => setNewContact(p => ({...p, name: e.target.value}))} />
-            <div className="grid grid-cols-2 gap-2">
-              <input className="border border-indigo-200 rounded-lg p-2 text-xs bg-white focus:border-indigo-400 outline-none"
-                placeholder="Phone" value={newContact.phone} onChange={e => setNewContact(p => ({...p, phone: e.target.value}))} />
-              <input className="border border-indigo-200 rounded-lg p-2 text-xs bg-white focus:border-indigo-400 outline-none"
-                placeholder="Email" value={newContact.email} onChange={e => setNewContact(p => ({...p, email: e.target.value}))} />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button type="button" onClick={() => setShowAddContact(false)} className="text-xs text-slate-400 font-bold hover:text-slate-600">Cancel</button>
-              <button type="button" onClick={saveNewContact} disabled={!newContact.name.trim() || savingContact}
-                className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-xs font-black disabled:opacity-40 flex items-center justify-center gap-1">
-                {savingContact ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <Plus size={11}/>}
-                Save & Select
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ── Inline client creation form (used inside the modal above) ─────────────────
 function ClientCreateInlineForm({ clientName, onCreated, onSkip }) {
@@ -289,8 +107,6 @@ export default function App() {
   const [selectedContact, setSelectedContact] = useState('');
 
   const [meta, setMeta] = useState({ clients: [], clientContacts: {} });
-  const [clientsData, setClientsData] = useState([]); // full Client objects from /api/clients
-  const [clientsLoaded, setClientsLoaded] = useState(false);
 
   // Refs for Rich Text Editors
   const createEditorRef = useRef(null);
@@ -310,16 +126,6 @@ export default function App() {
 
   // Client-check state — shown after order creation if client not in DB
   const [clientCheckModal, setClientCheckModal] = useState(null);
-  const [addContactFor, setAddContactFor] = useState(null); // { clientId, companyName } — add contact inline
-
-  const fetchClientsData = async () => {
-    if (clientsLoaded) return;
-    try {
-      const res = await api.get('/clients');
-      setClientsData(res.data || []);
-      setClientsLoaded(true);
-    } catch { /* silent */ }
-  };
   // { orderRef, clientName, title, portalSlug } — pending order waiting for client record
 
   useEffect(() => {
@@ -951,7 +757,7 @@ export default function App() {
         </div>
 
         <button
-          onClick={() => { setIsModalOpen(true); fetchClientsData(); }}
+          onClick={() => setIsModalOpen(true)}
           className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg whitespace-nowrap"
         >
           <Plus size={18} /> NEW INQUIRY
@@ -1274,21 +1080,23 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* ── Client Company + Contact Person — live from /api/clients ── */}
-                <ClientContactPicker
-                  clientsData={clientsData}
-                  clientName={formData.clientName}
-                  contactName={formData.orderPlacedBy}
-                  onClientChange={(name) => setFormData({ ...formData, clientName: name, orderPlacedBy: '' })}
-                  onContactChange={(name) => setFormData({ ...formData, orderPlacedBy: name })}
-                  onClientCreated={(newClient) => {
-                    setClientsData(prev => [...prev, newClient]);
-                    setFormData({ ...formData, clientName: newClient.companyName, orderPlacedBy: newClient.contacts?.[0]?.name || '' });
-                  }}
-                  onContactAdded={(updatedClient) => {
-                    setClientsData(prev => prev.map(cl => cl._id === updatedClient._id ? updatedClient : cl));
-                  }}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <CustomCreatableSelect
+                    label="Client Company"
+                    options={meta.clients.map(c => ({ label: c, value: c }))}
+                    value={formData.clientName ? { label: formData.clientName, value: formData.clientName } : null}
+                    onChange={(v) => setFormData({ ...formData, clientName: v?.value || '', orderPlacedBy: '' })}
+                    onDelete={(val) => deleteMetaItem('clients', val)}
+                  />
+                  <CustomCreatableSelect
+                    label="Contact Person"
+                    isDisabled={!formData.clientName}
+                    options={(meta.clientContacts[formData.clientName] || []).map(c => ({ label: c, value: c }))}
+                    value={formData.orderPlacedBy ? { label: formData.orderPlacedBy, value: formData.orderPlacedBy } : null}
+                    onChange={(v) => setFormData({ ...formData, orderPlacedBy: v?.value || '' })}
+                    onDelete={(val) => deleteMetaItem('contacts', val, formData.clientName)}
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1">
@@ -1483,12 +1291,20 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Portal Chat Panel ── */}
+      {/* ── Client Portal Editor — slide-in panel ── */}
       {chatOrder && (
-        <PortalChatPanel
-          order={chatOrder}
-          onClose={() => setChatOrder(null)}
-        />
+        <div className="fixed inset-0 z-[200] flex items-center justify-end"
+          style={{ background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(4px)' }}
+          onClick={e => { if (e.target === e.currentTarget) setChatOrder(null); }}>
+          <div className="h-full w-full max-w-lg bg-white shadow-2xl flex flex-col"
+            style={{ animation: 'slideIn .25s ease', position: 'relative' }}>
+            <style>{`@keyframes slideIn{from{transform:translateX(100%)}to{transform:none}}`}</style>
+            <ClientPortalEditor
+              order={chatOrder}
+              onClose={() => setChatOrder(null)}
+            />
+          </div>
+        </div>
       )}
 
       <style>{`

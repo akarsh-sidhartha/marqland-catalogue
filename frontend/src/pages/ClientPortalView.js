@@ -949,16 +949,23 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OFFSITE CARDS — property options
+// Night Stay : side-by-side image + info, fixed 260px height, prices inside
+// Day Outing : same layout but info panel height is natural (no clamp),
+//              full description shown, packages expand in full-width section below
 // ─────────────────────────────────────────────────────────────────────────────
 const OffsiteCards = ({ items, onZoom }) => (
   <div>
     <p style={{fontSize:12,color:DS.sub,marginBottom:24,fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{items.length} propert{items.length!==1?'ies':'y'} selected for you</p>
     <div style={{display:'flex',flexDirection:'column',gap:20}}>
-      {items.map((item,idx)=>(
+      {items.map((item,idx)=>{
+        const isDayOut   = item.type !== 'Night Stay';
+        const hasPackages = isDayOut && item.dayPackages?.length > 0;
+        return (
         <GlassCard key={item._id} delay={idx*0.08} style={{borderRadius:12}}>
-          <div style={{display:'grid',gridTemplateColumns:'280px 1fr',height:260,borderRadius:'12px 12px 0 0',overflow:'hidden'}}>
+          {/* Top section: image (fixed 260px) + info side by side */}
+          <div style={{display:'grid',gridTemplateColumns:'280px 1fr',minHeight:260,borderRadius:'12px 12px 0 0',overflow:'hidden'}}>
             {/* Image */}
-            <div style={{position:'relative',height:260,cursor:item.imageUrl?'zoom-in':'default',overflow:'hidden'}}
+            <div style={{position:'relative',height:260,cursor:item.imageUrl?'zoom-in':'default',overflow:'hidden',flexShrink:0}}
               onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}>
               {item.imageUrl
                 ?<img src={item.imageUrl} alt={item.name} className="img-hover" style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .5s ease'}}/>
@@ -966,12 +973,12 @@ const OffsiteCards = ({ items, onZoom }) => (
               }
               <div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,rgba(0,0,0,0.3) 0%,transparent 55%)',pointerEvents:'none'}}/>
               <div style={{position:'absolute',top:14,left:14,background:'rgba(10,20,34,0.75)',color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(6px)',fontFamily:'Manrope,sans-serif',letterSpacing:'0.06em'}}>Option {idx+1}</div>
-              <div style={{position:'absolute',bottom:14,left:14,background:item.type==='Night Stay'?'rgba(29,78,216,0.82)':'rgba(180,83,9,0.82)',color:'#fff',fontSize:9,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)',fontFamily:'Manrope,sans-serif'}}>
-                {item.type==='Night Stay'?'🌙 Night Stay':'☀️ Day Outing'}
+              <div style={{position:'absolute',bottom:14,left:14,background:isDayOut?'rgba(180,83,9,0.82)':'rgba(29,78,216,0.82)',color:'#fff',fontSize:9,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)',fontFamily:'Manrope,sans-serif'}}>
+                {isDayOut?'☀️ Day Outing':'🌙 Night Stay'}
               </div>
             </div>
-            {/* Info panel — tonal surface shift */}
-            <div style={{padding:'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',overflow:'hidden',background:DS.contHi}}>
+            {/* Info panel */}
+            <div style={{padding:'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',background:DS.contHi,overflow:'hidden'}}>
               <div>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:8}}>
                   <div>
@@ -987,9 +994,15 @@ const OffsiteCards = ({ items, onZoom }) => (
                     </a>
                   )}
                 </div>
-                {item.details&&<p style={{fontSize:12,color:DS.sub,lineHeight:1.65,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden',fontFamily:'Manrope,sans-serif'}}>{item.details}</p>}
+                {/* Details — clamp for Night Stay, full text for Day Outing */}
+                {item.details&&(
+                  isDayOut
+                    ? <p style={{fontSize:12,color:DS.sub,lineHeight:1.65,fontFamily:'Manrope,sans-serif'}}>{item.details}</p>
+                    : <p style={{fontSize:12,color:DS.sub,lineHeight:1.65,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden',fontFamily:'Manrope,sans-serif'}}>{item.details}</p>
+                )}
               </div>
-              {item.type==='Night Stay'&&(
+              {/* Night Stay prices */}
+              {!isDayOut&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {item.singlePrice>0&&<PBox label="Single" value={item.singlePrice} sub="per night"/>}
                   {item.doublePrice>0&&<PBox label="Double" value={item.doublePrice} sub="per night"/>}
@@ -999,50 +1012,72 @@ const OffsiteCards = ({ items, onZoom }) => (
                   {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
                 </div>
               )}
-              {item.type!=='Night Stay'&&(
+              {/* Day Outing: show flat price only if no packages */}
+              {isDayOut&&!hasPackages&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
-                  {(!item.dayPackages||item.dayPackages.length===0)&&item.packagePrice>0&&<PBox label="Day package" value={item.packagePrice} sub="per person"/>}
+                  {item.packagePrice>0&&<PBox label="Day package" value={item.packagePrice} sub="per person"/>}
+                  {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
+                </div>
+              )}
+              {/* Day Outing with packages: show add-ons only (packages shown below) */}
+              {isDayOut&&hasPackages&&(item.djCost>0||item.cocktailSnacks>0)&&(
+                <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
                   {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
                 </div>
               )}
             </div>
           </div>
-          {/* Day packages — full-width expansion below */}
-          {item.type!=='Night Stay'&&item.dayPackages?.length>0&&(
-            <div style={{padding:'20px 24px 24px',background:DS.cont}}>
-              <div style={{fontSize:9,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontFamily:'Manrope,sans-serif'}}>☀️ Day Packages — {item.dayPackages.length} option{item.dayPackages.length!==1?'s':''}</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:10}}>
+
+          {/* ── Day Packages — full-width section below, expands freely ── */}
+          {hasPackages&&(
+            <div style={{padding:'20px 24px 24px',background:DS.cont,borderTop:`1px solid rgba(255,255,255,0.05)`}}>
+              <div style={{fontSize:9,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontFamily:'Manrope,sans-serif'}}>
+                ☀️ Day Packages — {item.dayPackages.length} option{item.dayPackages.length!==1?'s':''}
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
                 {item.dayPackages.map((pkg,pi)=>(
-                  <div key={pi} style={{background:DS.contTop,border:'1px solid rgba(245,158,11,0.15)',borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:10}}>
+                  <div key={pi} style={{background:DS.contTop,border:'1px solid rgba(245,158,11,0.18)',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:10}}>
                     <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
                       <div style={{fontWeight:700,fontSize:14,color:DS.text,lineHeight:1.2,flex:1,fontFamily:'Manrope,sans-serif'}}>{pkg.name||`Package ${pi+1}`}</div>
-                      {pkg.sellingPrice>0&&<div style={{textAlign:'right',flexShrink:0}}>
-                        <div style={{fontSize:17,fontWeight:700,color:'#fbbf24',fontFamily:'Noto Serif,serif'}}>₹{Number(pkg.sellingPrice).toLocaleString('en-IN')}</div>
-                        <div style={{fontSize:9,color:'#f59e0b',fontWeight:600,marginTop:2,fontFamily:'Manrope,sans-serif'}}>per person</div>
-                      </div>}
-                    </div>
-                    {pkg.activities&&<div style={{display:'flex',flexDirection:'column',gap:4}}>
-                      {pkg.activities.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean).map((line,li)=>(
-                        <div key={li} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:DS.sub,lineHeight:1.4,fontFamily:'Manrope,sans-serif'}}>
-                          <span style={{color:'#f59e0b',flexShrink:0,fontSize:11,marginTop:1}}>✓</span>
-                          <span>{line}</span>
+                      {pkg.sellingPrice>0&&(
+                        <div style={{textAlign:'right',flexShrink:0}}>
+                          <div style={{fontSize:18,fontWeight:700,color:'#fbbf24',fontFamily:'Noto Serif,serif',lineHeight:1}}>₹{Number(pkg.sellingPrice).toLocaleString('en-IN')}</div>
+                          <div style={{fontSize:9,color:'#f59e0b',fontWeight:600,marginTop:3,fontFamily:'Manrope,sans-serif'}}>per person</div>
                         </div>
-                      ))}
-                    </div>}
+                      )}
+                    </div>
+                    {pkg.activities&&(
+                      <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                        {pkg.activities.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean).map((line,li)=>(
+                          <div key={li} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:DS.sub,lineHeight:1.5,fontFamily:'Manrope,sans-serif'}}>
+                            <span style={{color:'#f59e0b',flexShrink:0,fontSize:11,marginTop:1}}>✓</span>
+                            <span>{line}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              {item.note&&<div style={{marginTop:14,background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'8px 12px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>}
+              {item.note&&(
+                <div style={{marginTop:14,background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>
+                  💡 {item.note}
+                </div>
+              )}
             </div>
           )}
-          {item.type==='Night Stay'&&item.note&&(
+
+          {/* Night Stay note */}
+          {!isDayOut&&item.note&&(
             <div style={{padding:'0 24px 18px',background:DS.cont}}>
-              <div style={{background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'8px 12px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>
+              <div style={{background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>
             </div>
           )}
         </GlassCard>
-      ))}
+        );
+      })}
     </div>
   </div>
 );

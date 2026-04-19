@@ -18,6 +18,7 @@ import {
   PanelLeftOpen,
   LogOut,
   Shield,
+  Activity,
 } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -35,13 +36,14 @@ import OffsiteBuilder from './components/OffsiteBuilder';
 import PropertyList from './pages/PropertyList';
 import OffsiteCatalogues from './pages/OffsiteCatalogues';
 import MarqlandLetterHead from './pages/MarqlandLetterHead';
-import InvoiceTracking from './pages/Invoice';
-import InvoiceScanMobileVersionPage from './pages/InvoiceScanMobileVersion';
+//import InvoiceTracking from './pages/Invoice';
+//import InvoiceScanMobileVersionPage from './pages/InvoiceScanMobileVersion';
 import OrderTracker from './pages/OrderTracker';
 import SamplesProvided from './pages/SamplesProvided';
 import SourcingHub from './pages/SourcingHub';
 import PaymentTracker from './pages/PaymentTracker';
 import ClientPortalView from './pages/ClientPortalView';
+import ActivityLogView from './pages/ActivityLogView';
 
 // ── Route keys matching ALL_ROUTES in UserManagement ─────────────────────────
 // Maps each path to its route key so ProtectedRoute can check allowedRoutes.
@@ -55,16 +57,17 @@ const PATH_TO_ROUTE_KEY = {
   '/vendors':            'Vendors',
   '/clients':            'Clients',
   '/MarqlandLetterHead': 'Letter Head',
-  '/InvoiceTracking':    'Invoice Tracking',
   '/properties':         'Property List',
   '/saved-offsites':     'Saved Offsites',
   '/admin/users':        'User Management',
+  '/admin/logs':         'Activity Logs',
+  // ⚠ Add new routes here AND in ALL_ROUTES in UserManagement.js
 };
 
 // Role-based defaults (mirrors ROLE_DEFAULTS in UserManagement)
 const ROLE_DEFAULTS = {
   admin:     Object.values(PATH_TO_ROUTE_KEY),
-  accounts:  ['Payment Tracker','Vendors','Clients','Invoice Tracking'],
+  accounts:  ['Order Tracker','Payment Tracker','Vendors','Clients','Invoice Tracking'],
   sales:     ['Order Tracker','Sourcing Hub','Products','Saved Catalogues','Clients','Property List','Saved Offsites'],
   inventory: ['Products','Samples Provided','Saved Catalogues','Sourcing Hub','Property List','Saved Offsites'],
   viewer:    ['Order Tracker'],
@@ -74,33 +77,19 @@ const ROLE_DEFAULTS = {
 const getUserRoutes = (user) =>
   user?.allowedRoutes?.length ? user.allowedRoutes : (ROLE_DEFAULTS[user?.role] || []);
 
-// ── Find the first path the user is allowed to visit ─────────────────────────
-const getFirstAllowedPath = (user) => {
-  const allowed = getUserRoutes(user);
-  // Walk PATH_TO_ROUTE_KEY in sidebar order to find first match
-  const ordered = [
-    '/paymenttracker', '/vendors', '/clients', '/InvoiceTracking',
-    '/', '/sourcinghub', '/products', '/samplesprovided', '/savedcatalogues',
-    '/properties', '/saved-offsites', '/change-password',
-  ];
-  const found = ordered.find(path => {
-    const key = PATH_TO_ROUTE_KEY[path];
-    return !key || allowed.includes(key);
-  });
-  return found || '/change-password';
-};
-
 // ── Protected route wrapper ───────────────────────────────────────────────────
 const ProtectedRoute = ({ children, routeKey }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) return null;
   if (!user) return <Navigate to="/" replace />;
+  // Admins always pass
   if (user.role === 'admin') return children;
+  // Determine route key from prop or from current path
   const key = routeKey || PATH_TO_ROUTE_KEY[location.pathname];
   if (key && !getUserRoutes(user).includes(key)) {
-    // Redirect to first route the user CAN access — never show Access Denied
-    return <Navigate to={getFirstAllowedPath(user)} replace />;
+    // Redirect to home silently instead of showing Access Denied
+    return <Navigate to="/" replace />;
   }
   return children;
 };
@@ -126,18 +115,10 @@ const Sidebar = () => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const userRoutes = getUserRoutes(user);
-
-  // Returns true if the user can see at least one of the given route keys
-  const canSeeAny = (...routeKeys) => {
-    if (user?.role === 'admin') return true;
-    return routeKeys.some(k => !k || userRoutes.includes(k));
-  };
-
   const NavLink = ({ to, icon: Icon, label, routeKey }) => {
+    // Hide link if user doesn't have access
     const key = routeKey || PATH_TO_ROUTE_KEY[to];
-    // Hide link entirely if user doesn't have access
-    if (user?.role !== 'admin' && key && !userRoutes.includes(key)) return null;
+    if (user?.role !== 'admin' && key && !getUserRoutes(user).includes(key)) return null;
     return (
       <Link
         to={to}
@@ -189,56 +170,48 @@ const Sidebar = () => {
 
       {/* Nav */}
       <div className="flex-grow p-4 space-y-8 overflow-y-auto no-scrollbar">
-        {canSeeAny('Order Tracker', 'Sourcing Hub') && (
-          <nav>
-            <SectionBtn sectionKey="orders" icon={Package} label="Management" />
-            {(openSections.orders || isCollapsed) && (
-              <div className="flex flex-col gap-1">
-                <NavLink to="/" icon={Package} label="Order Tracker" />
-                <NavLink to="/sourcinghub" icon={Package} label="Sourcing Hub" />
-              </div>
-            )}
-          </nav>
-        )}
+        <nav>
+          <SectionBtn sectionKey="orders" icon={Package} label="Management" />
+          {(openSections.orders || isCollapsed) && (
+            <div className="flex flex-col gap-1">
+              <NavLink to="/" icon={Package} label="Order Tracker" />
+              <NavLink to="/sourcinghub" icon={Package} label="Sourcing Hub" />
+            </div>
+          )}
+        </nav>
 
-        {canSeeAny('Products', 'Samples Provided', 'Saved Catalogues') && (
-          <nav>
-            <SectionBtn sectionKey="gifting" icon={Gift} label="Gifting" />
-            {(openSections.gifting || isCollapsed) && (
-              <div className="flex flex-col gap-1">
-                <NavLink to="/products" icon={Package} label="Products" />
-                <NavLink to="/samplesprovided" icon={Package} label="Samples Provided" />
-                <NavLink to="/savedcatalogues" icon={Bookmark} label="Saved Catalogues" />
-              </div>
-            )}
-          </nav>
-        )}
+        <nav>
+          <SectionBtn sectionKey="gifting" icon={Gift} label="Gifting" />
+          {(openSections.gifting || isCollapsed) && (
+            <div className="flex flex-col gap-1">
+              <NavLink to="/products" icon={Package} label="Products" />
+              <NavLink to="/samplesprovided" icon={Package} label="Samples Provided" />
+              <NavLink to="/savedcatalogues" icon={Bookmark} label="Saved Catalogues" />
+            </div>
+          )}
+        </nav>
 
-        {canSeeAny('Payment Tracker', 'Vendors', 'Clients', 'Letter Head', 'Invoice Tracking') && (
-          <nav>
-            <SectionBtn sectionKey="documentation" icon={FileText} label="Documentation" />
-            {(openSections.documentation || isCollapsed) && (
-              <div className="flex flex-col gap-1">
-                <NavLink to="/paymenttracker" icon={Bookmark} label="Invoice & Payment Tracker" />
-                <NavLink to="/vendors" icon={Users} label="Vendors" />
-                <NavLink to="/clients" icon={Building} label="Clients" />
-                <NavLink to="/MarqlandLetterHead" icon={LetterTextIcon} label="Letter Head" />
-              </div>
-            )}
-          </nav>
-        )}
+        <nav>
+          <SectionBtn sectionKey="documentation" icon={FileText} label="Documentation" />
+          {(openSections.documentation || isCollapsed) && (
+            <div className="flex flex-col gap-1">
+              <NavLink to="/paymenttracker" icon={Bookmark} label="Invoice & Payment Tracker" />
+              <NavLink to="/vendors" icon={Users} label="Vendors" />
+              <NavLink to="/clients" icon={Building} label="Clients" />
+              <NavLink to="/MarqlandLetterHead" icon={LetterTextIcon} label="Letter Head" />
+            </div>
+          )}
+        </nav>
 
-        {canSeeAny('Property List', 'Saved Offsites') && (
-          <nav>
-            <SectionBtn sectionKey="offsites" icon={Compass} label="Offsites" accent="orange" />
-            {(openSections.offsites || isCollapsed) && (
-              <div className="flex flex-col gap-1">
-                <NavLink to="/properties" icon={Map} label="Property List" />
-                <NavLink to="/saved-offsites" icon={HardDrive} label="Saved Offsites" />
-              </div>
-            )}
-          </nav>
-        )}
+        <nav>
+          <SectionBtn sectionKey="offsites" icon={Compass} label="Offsites" accent="orange" />
+          {(openSections.offsites || isCollapsed) && (
+            <div className="flex flex-col gap-1">
+              <NavLink to="/properties" icon={Map} label="Property List" />
+              <NavLink to="/saved-offsites" icon={HardDrive} label="Saved Offsites" />
+            </div>
+          )}
+        </nav>
 
         {/* Admin section */}
         {user?.role === 'admin' && (
@@ -246,6 +219,7 @@ const Sidebar = () => {
             <SectionBtn sectionKey="admin" icon={Shield} label="Admin" />
             <div className="flex flex-col gap-1">
               <NavLink to="/admin/users" icon={Shield} label="User Management" />
+              <NavLink to="/admin/logs" icon={Activity} label="Activity Logs" />
               <NavLink to="/public-site-admin" icon={Shield} label="Public Admin Management" />
             </div>
           </nav>
@@ -339,8 +313,6 @@ const AppShell = () => {
           <Route path="/vendors" element={<ProtectedRoute routeKey="Vendors"><VendorList /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute routeKey="Clients"><ClientList /></ProtectedRoute>} />
           <Route path="/MarqlandLetterHead" element={<ProtectedRoute routeKey="Letter Head"><MarqlandLetterHead /></ProtectedRoute>} />
-          <Route path="/InvoiceTracking" element={<ProtectedRoute routeKey="Invoice Tracking"><InvoiceTracking /></ProtectedRoute>} />
-          <Route path="/scaninvoice" element={<InvoiceScanMobileVersionPage />} />
 
           {/* Offsites */}
           <Route path="/properties" element={<ProtectedRoute routeKey="Property List"><PropertyList /></ProtectedRoute>} />
@@ -349,6 +321,7 @@ const AppShell = () => {
 
           {/* Admin */}
           <Route path="/admin/users" element={<ProtectedRoute routeKey="User Management"><UserManagement /></ProtectedRoute>} />
+          <Route path="/admin/logs" element={<ProtectedRoute routeKey="User Management"><ActivityLogView /></ProtectedRoute>} />
           <Route path="/public-site-admin" element={<ProtectedRoute routeKey="User Management"><PublicAdminPoral /></ProtectedRoute>} />
 
           {/* All users */}

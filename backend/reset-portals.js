@@ -19,6 +19,13 @@ const ClientPortal = require('./models/ClientPortal');
 const slugify = (str) =>
   (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+const genToken = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let t = '';
+  for (let i = 0; i < 5; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  return t;
+};
+
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bizManager');
   console.log('✅ Connected to MongoDB\n');
@@ -41,7 +48,7 @@ async function run() {
   let created = 0, failed = 0;
 
   for (const order of orders) {
-    const slug = slugify(order.refNumber || order._id.toString());
+    const slug = `${genToken()}-${slugify(order.refNumber || order._id.toString())}`;
     const type = order.orderType || 'product';
 
     console.log(`  Creating portal for: ${order.refNumber || order._id}`);

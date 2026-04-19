@@ -41,9 +41,21 @@ const msgStorage = multer.diskStorage({
 });
 const uploadMsg = multer({ storage: msgStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// ─── Helper ────────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 const slugify = (str) =>
   str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// Generate a secure URL token: 5 random alphanumeric chars
+const genToken = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 5; i++) token += chars[Math.floor(Math.random() * chars.length)];
+  console.log("gettoken value  = "+ token);
+  return token;
+};
+
+// Build a slug with a token prefix: e.g. "ac1d4-inq-26-27-002"
+const makeSlug = (orderRef) => `${genToken()}-${slugify(orderRef)}`;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TEAM ROUTES (require auth middleware in server.js)
@@ -55,6 +67,7 @@ const slugify = (str) =>
  * Called automatically when an order is created, or manually.
  */
 router.post('/', async (req, res) => {
+  console.log('🔵 POST /api/portal hit — body:', JSON.stringify(req.body));
   try {
     const { orderId, type, orderRef, clientName, clientEmail, title } = req.body;
 
@@ -66,8 +79,8 @@ router.post('/', async (req, res) => {
     const existing = await ClientPortal.findOne({ orderId });
     if (existing) return res.status(409).json({ message: 'Portal already exists.', portal: existing });
 
-    const slug = slugify(orderRef);
-
+    const slug = makeSlug(orderRef);
+    console.log("slug value = "+slug);
     const portal = new ClientPortal({
       orderId,
       slug,
@@ -367,72 +380,89 @@ router.post('/public/:slug/view', async (req, res) => {
 
 /**
  * POST /api/portal/send-email
- * Sends the portal link to the client by email.
- * Body: { slug, clientEmail, contactName, clientName, orderRef, title, portalUrl }
- *   contactName = the individual person's name (orderPlacedBy)
- *   clientName  = company name
+ * Send the portal link to the client.
+ * Backend builds the URL from APP_URL env — never trusts window.location from frontend.
  */
 router.post('/send-email', async (req, res) => {
   try {
-    const { slug, clientEmail, contactName, clientName, orderRef, title, portalUrl } = req.body;
+    const { slug, clientEmail, contactName, clientName, orderRef, title } = req.body;
     if (!clientEmail) return res.status(400).json({ message: 'clientEmail required' });
+    if (!slug)        return res.status(400).json({ message: 'slug required' });
 
-    const nodemailer  = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail',
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
-
-    const url = portalUrl || `${process.env.APP_URL || 'http://localhost:3000'}/p/${slug}`;
-    // Greet the individual contact person, not the company
+    // Build URL from env var — correct in all environments (local + production)
+    const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const url    = `${appUrl}/p/${slug}`;
     const greetName = contactName || clientName || 'there';
 
+    // Build transporter — same logic as emailService.js
+    const nodemailer = require('nodemailer');
+    const isGmail    = process.env.EMAIL_SERVICE === 'gmail';
+    const transporter = isGmail
+      ? nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+        })
+      : nodemailer.createTransport({
+          host:       process.env.EMAIL_HOST || 'smtp.office365.com',
+          port:       parseInt(process.env.EMAIL_PORT || '587', 10),
+          secure:     parseInt(process.env.EMAIL_PORT || '587', 10) === 465,
+          requireTLS: true,
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+          tls: { rejectUnauthorized: false },
+        });
+
     await transporter.sendMail({
-      from:    `"Marqland Studios" <${process.env.EMAIL_USER}>`,
+      from:    process.env.EMAIL_FROM || `Marqland Studios <${process.env.EMAIL_USER}>`,
       to:      clientEmail,
       subject: `Marqland Studios - Your Curated Options — ${orderRef}`,
-      html: `
-        <div style="font-family:Georgia,serif;max-width:580px;margin:0 auto;background:#f4f1ea;border-radius:16px;overflow:hidden;">
-          <!-- Header -->
-          <div style="background:#1a2332;padding:32px 40px;text-align:center;">
-            <div style="display:inline-block;background:rgba(197,163,87,0.15);border:1px solid rgba(197,163,87,0.3);border-radius:8px;padding:6px 18px;margin-bottom:14px;">
-              <span style="color:#c5a357;font-size:10px;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">MARQLAND STUDIOS</span>
-            </div>
-            <h1 style="color:#f4f1ea;font-size:24px;font-weight:700;margin:0;font-family:Georgia,serif;letter-spacing:-0.02em;">Your curated options are ready</h1>
-          </div>
-          <!-- Body -->
-          <div style="padding:36px 40px;background:#f4f1ea;">
-            <p style="color:#1a2332;font-size:15px;line-height:1.8;margin:0 0 10px;">
-              Dear <strong style="color:#1a2332;">${greetName}</strong>,
-            </p>
-            <p style="color:#64748b;font-size:14px;line-height:1.8;margin:0 0 28px;">
-              We've hand-curated a selection of options for <strong style="color:#c5a357;">${title || orderRef}</strong>.
-              Please review them and share your preferences — we're here to make it seamless.
-            </p>
-            <div style="text-align:center;margin:32px 0;">
-              <a href="${url}" style="display:inline-block;background:#1a2332;color:#c5a357;padding:16px 40px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.05em;border:1px solid rgba(197,163,87,0.3);">
-                View Your Portal &rarr;
-              </a>
-            </div>
-            <p style="color:#94a3b8;font-size:11px;text-align:center;margin:24px 0 0;border-top:1px solid rgba(197,163,87,0.15);padding-top:20px;">
-              Ref: ${orderRef} &nbsp;&middot;&nbsp; This link is private — please do not share.
-            </p>
-          </div>
-          <!-- Footer -->
-          <div style="background:#1a2332;padding:18px 40px;text-align:center;">
-            <p style="color:rgba(197,163,87,0.6);font-size:10px;margin:0;letter-spacing:0.08em;text-transform:uppercase;">Marqland Studios · Premium Corporate Gifting &amp; Events</p>
-          </div>
-        </div>
-      `,
+      html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#0a1422;font-family:'Segoe UI',system-ui,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#17202f;border-radius:16px;overflow:hidden;">
+<tr><td style="background:#1a2332;padding:32px 40px;text-align:center;">
+  <table cellpadding="0" cellspacing="0" align="center"><tr>
+    <td style="background:linear-gradient(45deg,#e6c273,#c5a357);width:32px;height:32px;border-radius:8px;text-align:center;vertical-align:middle;">
+      <span style="color:#3f2e00;font-size:16px;font-weight:900;">M</span>
+    </td>
+    <td style="padding-left:10px;color:#f0e8d6;font-size:16px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;">Marqland Studios</td>
+  </tr></table>
+</td></tr>
+<tr><td style="padding:40px 40px 32px;">
+  <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#f0e8d6;font-family:Georgia,serif;">Your curated options are ready</h1>
+  <p style="margin:0 0 8px;font-size:15px;color:#f0e8d6;line-height:1.8;">Dear <strong style="color:#e6c273;">${greetName}</strong>,</p>
+  <p style="margin:0 0 28px;font-size:14px;color:rgba(240,232,214,0.65);line-height:1.8;">
+    We have hand-curated a selection for <strong style="color:#c5a357;">${title || orderRef}</strong>. Please review and share your preferences.
+  </p>
+  <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;"><tr>
+    <td style="background:linear-gradient(45deg,#e6c273,#c5a357);border-radius:10px;">
+      <a href="${url}" style="display:inline-block;padding:14px 36px;color:#3f2e00;text-decoration:none;font-size:15px;font-weight:700;">View Your Portal &rarr;</a>
+    </td>
+  </tr></table>
+  <p style="font-size:12px;color:rgba(240,232,214,0.3);text-align:center;margin:0;">
+    Or copy: <a href="${url}" style="color:#c5a357;word-break:break-all;font-size:11px;">${url}</a>
+  </p>
+</td></tr>
+<tr><td style="background:#0a1422;padding:18px 40px;text-align:center;border-top:1px solid rgba(197,163,87,0.15);">
+  <p style="margin:0;font-size:11px;color:rgba(197,163,87,0.5);letter-spacing:0.08em;text-transform:uppercase;">Marqland Studios &middot; Premium Corporate Gifting</p>
+  <p style="margin:6px 0 0;font-size:10px;color:rgba(255,255,255,0.15);">Ref: ${orderRef} &middot; This link is private.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`,
     });
 
-    if (slug) {
-      await ClientPortal.findOneAndUpdate({ slug }, { $set: { clientEmail } });
-    }
+    // Store clientEmail on the portal for future reference
+    await ClientPortal.findOneAndUpdate({ slug }, { $set: { clientEmail } });
 
-    res.json({ ok: true, sentTo: clientEmail });
+    console.log(`✅ Portal email sent to ${clientEmail} — ${url}`);
+    res.json({ ok: true, sentTo: clientEmail, url });
   } catch (err) {
-    console.error('Portal email error:', err.message);
+    console.error('Portal send-email error:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
