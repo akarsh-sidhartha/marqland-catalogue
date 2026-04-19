@@ -198,6 +198,17 @@ const Toast = ({ toasts }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Mobile breakpoint hook ────────────────────────────────────────────────────
+const useMobile = () => {
+  const [mob, setMob] = React.useState(() => window.innerWidth <= 480);
+  React.useEffect(() => {
+    const fn = () => setMob(window.innerWidth <= 480);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return mob;
+};
+
 const ClientPortalView = () => {
   const { slug }            = useParams();
   const [portal, setPortal] = useState(null);
@@ -216,6 +227,7 @@ const ClientPortalView = () => {
   const fileRef         = useRef(null);
   const prevMsgCount    = useRef(0);
   const pollTimer       = useRef(null);
+  const isMobile        = useMobile();
 
   const showToast = (title, body, icon) => {
     const id = Date.now();
@@ -359,9 +371,9 @@ const ClientPortalView = () => {
         backdropFilter:'blur(20px)',
         WebkitBackdropFilter:'blur(20px)',
         borderBottom:`1px solid rgba(255,255,255,0.06)`,
-        padding:'0 32px',
+        padding: isMobile ? '0 16px' : '0 32px',
       }}>
-        <div style={{maxWidth:1160,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:60}}>
+        <div style={{maxWidth:1160,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:isMobile?52:60}}>
           {/* Brand mark */}
           <div style={{display:'flex',alignItems:'center',gap:11}}>
             <div style={{width:28,height:28,background:GOLD_GRAD,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:11,letterSpacing:'-0.02em',flexShrink:0}}>M</div>
@@ -377,7 +389,7 @@ const ClientPortalView = () => {
                 {portal.status==='active'?'Active':'Completed'}
               </span>
             </div>
-            <span style={{color:'rgba(255,255,255,0.2)',fontSize:12,fontFamily:'monospace',letterSpacing:'0.04em'}}>{portal.orderRef}</span>
+            {!isMobile&&<span style={{color:'rgba(255,255,255,0.2)',fontSize:12,fontFamily:'monospace',letterSpacing:'0.04em'}}>{portal.orderRef}</span>}
             <button onClick={()=>navigator.clipboard.writeText(window.location.href)}
               className="ghost-btn"
               style={{background:'transparent',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'6px 9px',cursor:'pointer',color:DS.sub,display:'flex',alignItems:'center',transition:'background .15s'}}
@@ -388,7 +400,7 @@ const ClientPortalView = () => {
       </nav>
 
       {/* ── Tab Bar — tonal shift from nav ── */}
-      <div style={{background:DS.cont,borderBottom:`1px solid rgba(255,255,255,0.05)`,padding:'0 32px'}}>
+      <div style={{background:DS.cont,borderBottom:`1px solid rgba(255,255,255,0.05)`,padding:isMobile?'0 12px':'0 32px'}}>
         <div style={{maxWidth:1160,margin:'0 auto',display:'flex',gap:4}}>
           {[
             {k:'catalogue',l:'Catalogue Options', b:items.length},
@@ -397,14 +409,19 @@ const ClientPortalView = () => {
           ].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)}
               style={{
-                padding:'16px 22px',background:'none',border:'none',
+                padding: isMobile ? '12px 8px' : '16px 22px',
+                background:'none',border:'none',
                 borderBottom: tab===t.k ? `2px solid ${DS.gold}` : '2px solid transparent',
                 color: tab===t.k ? DS.gold : DS.sub,
-                fontSize:13,fontWeight:600,cursor:'pointer',
-                display:'flex',alignItems:'center',gap:8,
+                fontSize: isMobile ? 11 : 13,
+                fontWeight:600,cursor:'pointer',
+                display:'flex',alignItems:'center',gap:isMobile?4:8,
+                flex: isMobile ? 1 : 'none',
+                justifyContent: isMobile ? 'center' : 'flex-start',
                 transition:'color .15s, border-color .15s',
                 fontFamily:'Manrope,sans-serif',
                 letterSpacing:'0.01em',
+                whiteSpace:'nowrap',
               }}>
               {t.l}
               {t.b!=null&&<span style={{
@@ -420,7 +437,7 @@ const ClientPortalView = () => {
 
       {/* ── Hero — catalogue tab only ── */}
       {tab==='catalogue'&&(
-        <div style={{background:`linear-gradient(180deg, rgba(197,163,87,0.05) 0%, transparent 100%)`,padding:'40px 32px 24px',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+        <div style={{background:`linear-gradient(180deg, rgba(197,163,87,0.05) 0%, transparent 100%)`,padding:isMobile?'24px 16px 16px':'40px 32px 24px',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
           <div style={{maxWidth:1160,margin:'0 auto'}}>
             {/* Label chip */}
             <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:6,padding:'4px 12px',marginBottom:14}}>
@@ -429,7 +446,7 @@ const ClientPortalView = () => {
               </span>
             </div>
             {/* Headline — Noto Serif display */}
-            <h1 style={{fontFamily:'Noto Serif,serif',fontSize:28,fontWeight:700,color:DS.text,marginBottom:10,letterSpacing:'-0.02em',lineHeight:1.2}}>
+            <h1 style={{fontFamily:'Noto Serif,serif',fontSize:isMobile?20:28,fontWeight:700,color:DS.text,marginBottom:10,letterSpacing:'-0.02em',lineHeight:1.2}}>
               {portal.title||`Curated for ${portal.clientName}`}
             </h1>
             {portal.teamNote&&<p style={{color:DS.sub,fontSize:14,lineHeight:1.75,maxWidth:580,fontFamily:'Manrope,sans-serif'}}>{portal.teamNote}</p>}
@@ -438,7 +455,7 @@ const ClientPortalView = () => {
       )}
 
       {/* ── Content ── */}
-      <div style={{maxWidth:1160,margin:'0 auto',padding:'32px 32px 80px'}}>
+      <div style={{maxWidth:1160,margin:'0 auto',padding:isMobile?'16px 12px 80px':'32px 32px 80px'}}>
 
         {/* CATALOGUE */}
         {tab==='catalogue'&&(
@@ -474,7 +491,7 @@ const ClientPortalView = () => {
                 </div>
               </div>
               {/* Selected items — 3-col bento grid with image + description + price */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+              <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(3,1fr)',gap:14}}>
                 {sel.map((item,idx)=>(
                   <GlassCard key={item._id} delay={idx*0.04} style={{display:'flex',flexDirection:'column',overflow:'hidden'}}>
                     {/* Image */}
@@ -515,10 +532,10 @@ const ClientPortalView = () => {
 
         {/* MESSAGE BOARD */}
         {tab==='chat'&&(
-          <div style={{display:'grid',gridTemplateColumns:'220px 1fr',gap:24,alignItems:'start'}}>
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'220px 1fr',gap:isMobile?12:24,alignItems:'start'}}>
 
-            {/* Left sidebar — tonal container per DESIGN.md */}
-            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            {/* Left sidebar — hidden on mobile */}
+            <div style={{display: isMobile ? 'none' : 'flex',flexDirection:'column',gap:16}}>
               {/* Project info */}
               <div style={{background:DS.cont,borderRadius:12,padding:20}}>
                 <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:'Manrope,sans-serif'}}>Current Project</div>
@@ -566,7 +583,7 @@ const ClientPortalView = () => {
             </div>
 
             {/* Chat window — elevated surface */}
-            <div style={{background:DS.cont,borderRadius:12,display:'flex',flexDirection:'column',minHeight:580}}>
+            <div style={{background:DS.cont,borderRadius:12,display:'flex',flexDirection:'column',minHeight:isMobile?'calc(100vh - 200px)':580}}>
               {/* Chat header */}
               <div style={{padding:'16px 20px',borderBottom:`1px solid rgba(255,255,255,0.05)`,display:'flex',alignItems:'center',gap:12}}>
                 <div style={{width:36,height:36,background:'rgba(197,163,87,0.12)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🏢</div>
@@ -685,7 +702,7 @@ const ClientPortalView = () => {
       />
 
       {/* ── Footer — tonal shift ── */}
-      <div style={{background:DS.cont,borderTop:`1px solid rgba(255,255,255,0.04)`,padding:'20px 32px',textAlign:'center'}}>
+      <div style={{background:DS.cont,borderTop:`1px solid rgba(255,255,255,0.04)`,padding:isMobile?'16px':'20px 32px',textAlign:'center'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:9,marginBottom:5}}>
           <div style={{width:16,height:16,background:GOLD_GRAD,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:9}}>M</div>
           <span style={{color:DS.sub,fontSize:11,fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>Marqland Studios</span>
@@ -715,6 +732,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
   const [activeSubCat,   setActiveSubCat]   = React.useState(null);
   const [imgSpans,  setImgSpans]  = React.useState({});
   const [hoveredId, setHoveredId] = React.useState(null);
+  const isMobile = useMobile();
 
   const handleImgLoad = (id, e) => {
     const {naturalWidth:w, naturalHeight:h} = e.target;
@@ -757,7 +775,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
   return (
     <div>
       {/* Filter bar — surface-container tonal panel */}
-      <div style={{marginBottom:32,padding:'18px 22px',background:DS.cont,borderRadius:12}}>
+      <div style={{marginBottom:isMobile?16:32,padding:isMobile?'14px 16px':'18px 22px',background:DS.cont,borderRadius:12}}>
         <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>
           <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:'Manrope,sans-serif'}}>Category</span>
           {categories.map(cat=>(
@@ -786,7 +804,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
       {groups.map((group,gi)=>(
         <div key={group.cat} style={{marginBottom:56}}>
           {/* Category header — Status Pillar style */}
-          <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:22}}>
+          <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:isMobile?14:22}}>
             <div style={{width:2,height:20,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
             <span style={{fontSize:10,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.14em',fontFamily:'Manrope,sans-serif'}}>{group.cat}</span>
             <div style={{flex:1,height:1,background:`linear-gradient(90deg, rgba(197,163,87,0.2), transparent)`}}/>
@@ -811,15 +829,15 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                      Heart always top-left. No category/subcat badges on image. */}
                 <div style={{
                   display:'grid',
-                  gridTemplateColumns:'repeat(3,1fr)',
-                  gap:16,
+                  gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)',
+                  gap: isMobile ? 10 : 16,
                 }}>
                   {subItems.map((item,idx)=>{
                     const span  = imgSpans[item._id] || 'square';
                     const loved = wishlisted.has(String(item._id));
                     return (
                       <GlassCard key={item._id} delay={(gi*0.08)+(idx*0.04)} style={{
-                        gridColumn: span==='wide' ? 'span 2' : 'span 1',
+                        gridColumn: (span==='wide' || isMobile) ? 'span 2' : 'span 1',
                         display:'flex', flexDirection:'column',
                         overflow:'hidden',
                       }}>
@@ -835,7 +853,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                             ? <img
                                 src={item.imageUrl}
                                 alt={item.name}
-                                style={{width:'100%',display:'block',objectFit:'cover',transition:'transform .5s ease',maxHeight:span==='wide'?320:280,minHeight:180}}
+                                style={{width:'100%',display:'block',objectFit:'cover',transition:'transform .5s ease',maxHeight:isMobile?200:(span==='wide'?320:280),minHeight:isMobile?140:180}}
                                 onLoad={e=>handleImgLoad(item._id,e)}
                               />
                             : <div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',background:DS.contHi,color:'rgba(255,255,255,0.15)',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
@@ -908,14 +926,14 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                         </div>
 
                         {/* ── Info panel ── */}
-                        <div style={{padding:'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
+                        <div style={{padding:isMobile?'10px 12px 12px':'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
 
                           {/* Row 1: Name + Price side by side */}
                           <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
-                            <div style={{fontSize:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>
+                            <div style={{fontSize:isMobile?12:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>
                               {item.name}
                             </div>
-                            <div style={{fontSize:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>
+                            <div style={{fontSize:isMobile?13:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>
                               {toINR(item.price)}
                             </div>
                           </div>
@@ -953,7 +971,9 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
 // Day Outing : same layout but info panel height is natural (no clamp),
 //              full description shown, packages expand in full-width section below
 // ─────────────────────────────────────────────────────────────────────────────
-const OffsiteCards = ({ items, onZoom }) => (
+const OffsiteCards = ({ items, onZoom }) => {
+  const isMobile = useMobile();
+  return (
   <div>
     <p style={{fontSize:12,color:DS.sub,marginBottom:24,fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{items.length} propert{items.length!==1?'ies':'y'} selected for you</p>
     <div style={{display:'flex',flexDirection:'column',gap:20}}>
@@ -963,9 +983,9 @@ const OffsiteCards = ({ items, onZoom }) => (
         return (
         <GlassCard key={item._id} delay={idx*0.08} style={{borderRadius:12}}>
           {/* Top section: image (fixed 260px) + info side by side */}
-          <div style={{display:'grid',gridTemplateColumns:'280px 1fr',minHeight:260,borderRadius:'12px 12px 0 0',overflow:'hidden'}}>
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'280px 1fr',minHeight:isMobile?'auto':260,borderRadius:'12px 12px 0 0',overflow:'hidden'}}>
             {/* Image */}
-            <div style={{position:'relative',height:260,cursor:item.imageUrl?'zoom-in':'default',overflow:'hidden',flexShrink:0}}
+            <div style={{position:'relative',height:isMobile?220:260,cursor:item.imageUrl?'zoom-in':'default',overflow:'hidden',flexShrink:0}}
               onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}>
               {item.imageUrl
                 ?<img src={item.imageUrl} alt={item.name} className="img-hover" style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .5s ease'}}/>
@@ -978,11 +998,11 @@ const OffsiteCards = ({ items, onZoom }) => (
               </div>
             </div>
             {/* Info panel */}
-            <div style={{padding:'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',background:DS.contHi,overflow:'hidden'}}>
+            <div style={{padding:isMobile?'16px 18px':'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',background:DS.contHi,overflow:'hidden'}}>
               <div>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:8}}>
                   <div>
-                    <h3 style={{fontFamily:'Noto Serif,serif',fontSize:20,fontWeight:700,color:DS.text,marginBottom:5,lineHeight:1.2}}>{item.name}</h3>
+                    <h3 style={{fontFamily:'Noto Serif,serif',fontSize:isMobile?17:20,fontWeight:700,color:DS.text,marginBottom:5,lineHeight:1.2}}>{item.name}</h3>
                     <div style={{display:'flex',alignItems:'center',gap:5,color:DS.sub,fontSize:13,fontFamily:'Manrope,sans-serif'}}>
                       <span style={{color:DS.gold}}>{Ic.pin}</span>{item.location||'Location TBD'}
                     </div>
@@ -1036,7 +1056,7 @@ const OffsiteCards = ({ items, onZoom }) => (
               <div style={{fontSize:9,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontFamily:'Manrope,sans-serif'}}>
                 ☀️ Day Packages — {item.dayPackages.length} option{item.dayPackages.length!==1?'s':''}
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
+              <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${isMobile?200:260}px,1fr))`,gap:12}}>
                 {item.dayPackages.map((pkg,pi)=>(
                   <div key={pi} style={{background:DS.contTop,border:'1px solid rgba(245,158,11,0.18)',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:10}}>
                     <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
@@ -1080,6 +1100,7 @@ const OffsiteCards = ({ items, onZoom }) => (
       })}
     </div>
   </div>
-);
+  );
+};
 
 export default ClientPortalView;

@@ -39,7 +39,7 @@ const SourcingHub = require('./routes/inquiryRoutes');
 const { router: paymentTracker, syncOutlookInvoices } = require('./routes/paymentTrackerRoutes');
 const activityLogger = require('./middleware/activityLogger');
 const logRoutes      = require('./routes/logRoutes');
-
+const imageProcessing = require('./routes/imageProcessingRoutes');
 /**
  * 2. STATIC FILE SERVING
  * This ensures that images uploaded by one person are visible to 
@@ -71,8 +71,9 @@ app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
 app.use('/api/orders', orderInquiry);
 app.use('/api/challans', SamplesProvided);
 app.use('/api/inquiries', SourcingHub);
-app.use('/api/auth',            authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/payment-tracker', paymentTracker);
+app.use('/api/image-processing', imageProcessing);
 
 // Client Portal routes
 const clientPortalRoutes = require('./routes/clientPortalRoutes');

@@ -11,9 +11,12 @@
  *   PATCH  /prompts/:id/default  — set as default for category
  *
  * Image processing:
- *   POST   /process-single       — reprocess one product (non-blocking)
- *   POST   /pdf/same-category    — PDF → process → save as draft products
- *   POST   /pdf/mixed            — PDF → process → download ZIP
+ *   POST   /preview              — process image, return base64 data URL (for before/after compare)
+ *   POST   /process-single       — reprocess one product (non-blocking, saves to disk)
+ *   POST   /pdf/same-category    — PDF → extract images → AI process → save as draft products
+ *   POST   /pdf/extract          — PDF → extract raw images → download as ZIP (no AI)
+ *
+ * All AI processing is delegated to imageProcessingService.js — single source of truth.
  */
 
 const express = require('express');
@@ -24,7 +27,7 @@ const fs      = require('fs');
 
 const Product     = require('../models/product');
 const ImagePrompt = require('../models/ImagePrompt');
-const { processProductImage, DEFAULT_STUDIO_PROMPT } = require('../services/imageProcessingService');
+const { processProductImage } = require('../services/imageProcessingService');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 const adminOnly = [authenticate, authorize(['admin', 'inventory'])];
@@ -39,7 +42,14 @@ const pdfUpload = multer({
     file.mimetype === 'application/pdf' ? cb(null, true) : cb(new Error('PDF files only')),
 });
 
-// ── Resolve prompt from request ───────────────────────────────────────────────
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Image files only')),
+});
+
+// ── Resolve prompt: explicit text → saved prompt by ID → category default ─────
 async function resolvePrompt(promptText, promptId, category) {
   if (promptText?.trim()) return promptText.trim();
   if (promptId) {
@@ -50,7 +60,7 @@ async function resolvePrompt(promptText, promptId, category) {
     const def = await ImagePrompt.findOne({ category, isDefault: true });
     if (def) return def.prompt;
   }
-  return null; // service will use built-in category default
+  return null; // imageProcessingService will use its built-in category/default prompt
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -109,7 +119,28 @@ router.patch('/prompts/:id/default', adminOnly, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// IMAGE PROCESSING
+// PREVIEW — process image, return as base64 data URL
+// Used by the Add Product modal for before/after comparison.
+// Image is NOT saved to disk here — the user decides whether
+// to keep it when they click Save Product.
+// ═══════════════════════════════════════════════════════════
+
+router.post('/preview', adminOnly, imageUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
+    const { promptText, promptId, category } = req.body;
+    const finalPrompt = await resolvePrompt(promptText, promptId, category || null);
+    const processed = await processProductImage(req.file.buffer, { category, promptText: finalPrompt });
+    const dataUrl = `data:image/webp;base64,${processed.toString('base64')}`;
+    res.json({ imageDataUrl: dataUrl });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// SINGLE PRODUCT RE-PROCESS
+// Reprocesses an already-saved product image in the background.
 // ═══════════════════════════════════════════════════════════
 
 router.post('/process-single', adminOnly, async (req, res) => {
@@ -137,23 +168,23 @@ router.post('/process-single', adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── PDF image extraction — extracts EMBEDDED images, not page screenshots ────
-// Uses pdf-lib with the correct PDFRawStream API.
-// Install: npm install pdf-lib archiver
+// ═══════════════════════════════════════════════════════════
+// PDF UTILITIES
+// ═══════════════════════════════════════════════════════════
 
 function requireArchiver() {
   try { return require('archiver'); }
   catch { throw new Error('archiver not installed — run: npm install archiver'); }
 }
 
-// Rate limiter: Gemini free tier = 15 req/min (~5s between calls)
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-const GEMINI_DELAY_MS = 5000;
-
+/**
+ * Extract embedded images from a PDF.
+ * Falls back to page screenshots for scanned PDFs.
+ */
 async function extractPdfPages(pdfPath) {
   let PDFLib;
   try { PDFLib = require('pdf-lib'); }
-  catch { throw new Error('pdf-lib not installed — run: npm install pdf-lib archiver'); }
+  catch { throw new Error('pdf-lib not installed — run: npm install pdf-lib'); }
 
   const outDir = path.join(tmpDir, `pdf_${Date.now()}`);
   fs.mkdirSync(outDir, { recursive: true });
@@ -174,7 +205,6 @@ async function extractPdfPages(pdfPath) {
 
     for (const [key, ref] of xobj.entries()) {
       try {
-        // XObjects in this PDF are PDFRawStream — must use .dict to access metadata
         const stream = doc.context.lookup(ref);
         if (!stream || stream.constructor.name !== 'PDFRawStream') continue;
 
@@ -182,8 +212,8 @@ async function extractPdfPages(pdfPath) {
         const subtype = dict.get(PDFLib.PDFName.of('Subtype'));
         if (!subtype || subtype.toString() !== '/Image') continue;
 
-        const rawData = stream.getContents(); // Uint8Array of raw image bytes
-        if (!rawData || rawData.length < 5000) continue; // skip tiny images/icons
+        const rawData = stream.getContents();
+        if (!rawData || rawData.length < 5000) continue;
 
         const filter  = dict.get(PDFLib.PDFName.of('Filter'))?.toString() ?? '';
         const width   = dict.get(PDFLib.PDFName.of('Width'))?.value?.()   ?? 0;
@@ -192,14 +222,12 @@ async function extractPdfPages(pdfPath) {
         let buf, ext;
 
         if (filter.includes('DCTDecode')) {
-          // Raw bytes ARE the JPEG — save directly
           buf = Buffer.from(rawData);
           ext = 'jpg';
         } else if (filter.includes('JPXDecode')) {
           buf = Buffer.from(rawData);
           ext = 'jp2';
         } else {
-          // Raw pixel data — wrap with sharp using image dimensions
           if (width < 20 || height < 20) continue;
           const csObj    = dict.get(PDFLib.PDFName.of('ColorSpace'));
           const csName   = csObj?.toString() ?? '/DeviceRGB';
@@ -227,7 +255,6 @@ async function extractPdfPages(pdfPath) {
   }
 
   if (paths.length === 0) {
-    // Fallback for scanned PDFs (whole page is one image)
     console.warn('   No embedded images found — falling back to page screenshots');
     try {
       const pdfToImg = require('pdf-to-img');
@@ -248,7 +275,7 @@ async function extractPdfPages(pdfPath) {
   return { imagePaths: paths, outDir };
 }
 
-
+// ── PDF: Same category — process with AI, save as draft products ──────────────
 router.post('/pdf/same-category', adminOnly, pdfUpload.single('pdf'), async (req, res) => {
   const tmpPdf = req.file?.path;
   let outDir;
@@ -270,12 +297,15 @@ router.post('/pdf/same-category', adminOnly, pdfUpload.single('pdf'), async (req
         const name = `pdf-${Date.now()}-${i}.webp`;
         fs.writeFileSync(path.join(process.cwd(), 'public/uploads', name), out);
         const p = await Product.create({
-          brand, category, name: `${brand} — Import ${i+1}`,
-          description: '', imageUrl: `/uploads/${name}`,
-          purchasePrice: 0, markupPercent: 30,
+          brand, category,
+          name: `${brand} — Import ${i + 1}`,
+          description: '',
+          imageUrl: `/uploads/${name}`,
+          purchasePrice: 0,
+          markupPercent: 30,
         });
         created.push(p._id);
-      } catch (e) { console.warn(`Page ${i+1}: ${e.message}`); }
+      } catch (e) { console.warn(`Page ${i + 1}: ${e.message}`); }
     }
 
     fs.rmSync(outDir, { recursive: true, force: true });
@@ -288,38 +318,26 @@ router.post('/pdf/same-category', adminOnly, pdfUpload.single('pdf'), async (req
   }
 });
 
-router.post('/pdf/mixed', adminOnly, pdfUpload.single('pdf'), async (req, res) => {
+// ── PDF: Extract raw images only — download as ZIP, no AI ────────────────────
+router.post('/pdf/extract', adminOnly, pdfUpload.single('pdf'), async (req, res) => {
   const tmpPdf = req.file?.path;
   let outDir;
   try {
     if (!req.file) return res.status(400).json({ message: 'No PDF uploaded' });
-    const archiver = requireArchiver(); // check early before heavy work
-    const { promptText, promptId } = req.body;
-    const finalPrompt = await resolvePrompt(promptText, promptId, null);
+    const archiver = requireArchiver();
 
     const { imagePaths, outDir: od } = await extractPdfPages(tmpPdf);
     outDir = od;
-    if (!imagePaths.length) return res.status(400).json({ message: 'No pages extracted' });
-
-    const files = [];
-    for (let i = 0; i < imagePaths.length; i++) {
-      try {
-        const buf  = fs.readFileSync(imagePaths[i]);
-        const out  = await processProductImage(buf, { promptText: finalPrompt });
-        const outp = imagePaths[i].replace(/\.[^.]+$/, '-proc.webp');
-        fs.writeFileSync(outp, out);
-        files.push({ disk: outp, zip: `image-${i+1}.webp` });
-      } catch (e) { console.warn(`Page ${i+1}: ${e.message}`); }
-    }
-
-    if (!files.length) return res.status(500).json({ message: 'All pages failed to process' });
+    if (!imagePaths.length) return res.status(400).json({ message: 'No images extracted from PDF' });
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="pdf-${Date.now()}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="pdf-images-${Date.now()}.zip"`);
     const archive = archiver('zip', { zlib: { level: 6 } });
     archive.on('error', e => { if (!res.headersSent) res.status(500).json({ message: e.message }); });
     archive.pipe(res);
-    files.forEach(f => archive.file(f.disk, { name: f.zip }));
+    imagePaths.forEach((imgPath, i) => {
+      archive.file(imgPath, { name: `image-${i + 1}${path.extname(imgPath)}` });
+    });
     await archive.finalize();
 
     res.on('finish', () => {

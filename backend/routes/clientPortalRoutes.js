@@ -385,7 +385,7 @@ router.post('/public/:slug/view', async (req, res) => {
  */
 router.post('/send-email', async (req, res) => {
   try {
-    const { slug, clientEmail, contactName, clientName, orderRef, title } = req.body;
+    const { slug, clientEmail, contactName, clientName, orderRef, title, cc } = req.body;
     if (!clientEmail) return res.status(400).json({ message: 'clientEmail required' });
     if (!slug)        return res.status(400).json({ message: 'slug required' });
 
@@ -393,6 +393,9 @@ router.post('/send-email', async (req, res) => {
     const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
     const url    = `${appUrl}/p/${slug}`;
     const greetName = contactName || clientName || 'there';
+
+    // CC address — always copy info@marqland.com (overridable via request body)
+    const ccAddress = cc || process.env.PORTAL_CC_EMAIL || 'info@marqland.com';
 
     // Build transporter — same logic as emailService.js
     const nodemailer = require('nodemailer');
@@ -414,6 +417,7 @@ router.post('/send-email', async (req, res) => {
     await transporter.sendMail({
       from:    process.env.EMAIL_FROM || `Marqland Studios <${process.env.EMAIL_USER}>`,
       to:      clientEmail,
+      cc:      ccAddress,
       subject: `Marqland Studios - Your Curated Options — ${orderRef}`,
       html: `<!DOCTYPE html>
 <html lang="en">

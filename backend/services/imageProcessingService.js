@@ -73,7 +73,7 @@ async function discoverGeminiImageModels(apiKey) {
     const allNames = models
       .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
       .map(m => m.name.replace('models/', ''));
-    console.log(`   Available generateContent models: ${allNames.join(', ')}`);
+    //console.log(`   Available generateContent models: ${allNames.join(', ')}`);
 
     // Broad filter — any flash model (image gen models are flash variants)
     // Prefer models with 'image' or 'flash' in name, sorted so image-specific ones come first
@@ -93,7 +93,7 @@ async function discoverGeminiImageModels(apiKey) {
 
     if (imageModels.length > 0) {
       global._geminiImageModels = imageModels;
-      console.log(`✅ Gemini image models to try: ${imageModels.join(', ')}`);
+      //console.log(`✅ Gemini image models to try: ${imageModels.join(', ')}`);
     } else if (allNames.length > 0) {
       // Fallback: use all flash models even if no image-specific ones found
       const flashModels = allNames.filter(n => n.includes('flash'));
