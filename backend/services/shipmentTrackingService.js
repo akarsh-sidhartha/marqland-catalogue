@@ -1,0 +1,222 @@
+'use strict';
+/**
+ * backend/services/shipmentTrackingService.js
+ *
+ * PRIMARY PROVIDER: trackcourier.io (unified aggregator)
+ *   - Covers Blue Dart, DTDC, DP World, Delhivery, Ekart, etc. via one API
+ *   - API key stored in process.env.TRACKCOURIER_API_KEY
+ *
+ * FUTURE DIRECT INTEGRATIONS:
+ *   When you obtain a direct API from a courier partner, add a handler in
+ *   DIRECT_HANDLERS keyed by the partner name (must match what's saved in
+ *   the ShippingPartner collection). Direct handlers are tried first;
+ *   trackcourier.io is the fallback for everything else.
+ *
+ * POLLING INTERVALS (to avoid unnecessary API calls):
+ *   Pending          → poll after 8 hrs
+ *   Booked           → poll after 8 hrs
+ *   In Transit       → poll after 4 hrs
+ *   Out for Delivery → poll after 4 hrs
+ *   Delivered        → never poll  (terminal)
+ *   Returned         → never poll  (terminal)
+ *   Exception        → never poll  (terminal)
+ *
+ * The scheduler runs every 30 minutes but each shipment is only actually
+ * polled when its minimum interval has elapsed since lastTrackedAt.
+ * This way fast-moving shipments (Out for Delivery) are checked more
+ * frequently than idle ones (Pending/Booked).
+ */
+
+const Shipment        = require('../models/Shipment');
+const ShippingPartner = require('../models/ShippingPartner');
+const axios           = require('axios');
+
+// ── Polling interval config ───────────────────────────────────────────────────
+// Returns the minimum number of milliseconds that must have passed since
+// lastTrackedAt before we poll again. Null = never poll.
+const POLL_INTERVAL_MS = {
+  'Pending':           8 * 60 * 60 * 1000,   // 8 hours
+  'Booked':            8 * 60 * 60 * 1000,   // 8 hours
+  'In Transit':        4 * 60 * 60 * 1000,   // 4 hours
+  'Out for Delivery':  4 * 60 * 60 * 1000,   // 4 hours
+  'Delivered':         null,                  // terminal — skip
+  'Completed':         null,                  // terminal — skip
+  'Returned':          null,                  // terminal — skip
+  'Exception':         null,                  // terminal — skip
+};
+
+const shouldPoll = (shipment) => {
+  const interval = POLL_INTERVAL_MS[shipment.status];
+  if (interval === null || interval === undefined) return false;    // terminal
+  if (!shipment.lastTrackedAt) return true;                        // never polled yet
+  return (Date.now() - new Date(shipment.lastTrackedAt).getTime()) >= interval;
+};
+
+// ── trackcourier.io status normaliser ────────────────────────────────────────
+// Maps trackcourier.io "status" strings to our internal enum.
+// Full status list: https://docs.trackcourier.io/reference/statuses
+const normaliseTrackCourier = (raw = '') => {
+  const s = raw.toLowerCase().trim();
+
+  // trackcourier.io canonical statuses
+  if (s === 'delivered')                          return 'Delivered';
+  if (s === 'out_for_delivery' || s === 'out for delivery') return 'Out for Delivery';
+  if (s === 'in_transit'       || s === 'in transit')       return 'In Transit';
+  if (s === 'picked_up'        || s === 'booked'  || s === 'manifested') return 'Booked';
+  if (s === 'returned'         || s === 'rto')    return 'Returned';
+  if (s === 'exception'        || s === 'failed'  || s === 'lost') return 'Exception';
+  if (s === 'pending'          || s === 'info_received') return 'Pending';
+
+  // Fallback: substring matching for edge cases
+  if (s.includes('deliver') && !s.includes('out')) return 'Delivered';
+  if (s.includes('out'))    return 'Out for Delivery';
+  if (s.includes('transit') || s.includes('in-transit')) return 'In Transit';
+  if (s.includes('book')    || s.includes('pick'))       return 'Booked';
+  if (s.includes('return')  || s.includes('rto'))        return 'Returned';
+  if (s.includes('exception') || s.includes('fail') || s.includes('lost')) return 'Exception';
+
+  return null; // unknown — don't overwrite existing status
+};
+
+// ── trackcourier.io API call ──────────────────────────────────────────────────
+// Docs: https://docs.trackcourier.io/reference/tracking
+// Endpoint: GET https://api.trackcourier.io/api/v1/track/{trackingNumber}
+// Headers:  api-key: <key>
+//
+// The `courier` param is optional but improves accuracy when provided.
+// We pass the shipping partner name; trackcourier.io will auto-detect if blank.
+const fetchFromTrackCourier = async (trackingId, courierName = '') => {
+  const apiKey = process.env.TRACKCOURIER_API_KEY;
+  if (!apiKey) throw new Error('TRACKCOURIER_API_KEY not set in environment');
+
+  const params = {};
+  if (courierName) params.courier = courierName.toLowerCase().replace(/\s+/g, '_');
+
+  const res = await axios.get(
+    `https://api.trackcourier.io/api/v1/track/${encodeURIComponent(trackingId)}`,
+    {
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+      params,
+      timeout: 10000,
+    }
+  );
+
+  // trackcourier.io response shape:
+  // { tracking_number, courier, status, status_description, checkpoints: [...] }
+  const data = res.data;
+  if (!data || !data.status) return null;
+
+  return normaliseTrackCourier(data.status);
+};
+
+// ── DIRECT HANDLERS (future cost-saving integrations) ────────────────────────
+// Add an entry here when you get a direct API contract with a courier partner.
+// Key must match the partner name stored in the ShippingPartner collection.
+// Each handler receives (trackingId, partnerDoc) and returns a status string or null.
+//
+// Example (uncomment and fill in when ready):
+//
+// const DIRECT_HANDLERS = {
+//   'Blue Dart': async (trackingId, partner) => {
+//     const res = await axios.get(`${partner.apiEndpoint}/${trackingId}`, {
+//       headers: { Authorization: `Bearer ${partner.apiKey}` },
+//       timeout: 8000,
+//     });
+//     return normaliseTrackCourier(res.data?.ShipmentTrackingNumber?.[0]?.Status || '');
+//   },
+// };
+//
+const DIRECT_HANDLERS = {};  // empty until direct integrations are added
+
+// ── Core: poll a single shipment ─────────────────────────────────────────────
+const pollShipment = async (shipment, partnerMap) => {
+  // 1. Try direct integration first (cheaper)
+  const directHandler = DIRECT_HANDLERS[shipment.shippingPartner];
+  if (directHandler) {
+    const partnerDoc = partnerMap[shipment.shippingPartner];
+    if (partnerDoc) {
+      return directHandler(shipment.trackingId, partnerDoc);
+    }
+  }
+
+  // 2. Fall back to trackcourier.io
+  return fetchFromTrackCourier(shipment.trackingId, shipment.shippingPartner);
+};
+
+// ── Main refresh function ─────────────────────────────────────────────────────
+// Called by the scheduler and by POST /api/shipments/refresh-status (manual trigger).
+const refreshShipmentStatuses = async () => {
+  // Fetch all non-terminal shipments that have a tracking ID
+  const candidates = await Shipment.find({
+    status:     { $nin: ['Delivered', 'Completed', 'Returned', 'Exception'] },
+    trackingId: { $nin: ['', null] },
+  }).lean();
+
+  if (candidates.length === 0) {
+    console.log('[ShipmentTracking] No active shipments to poll.');
+    return { updated: 0, skipped: 0, errors: 0, total: 0 };
+  }
+
+  // Filter to only those whose polling interval has elapsed
+  const due = candidates.filter(shouldPoll);
+
+  console.log(`[ShipmentTracking] ${candidates.length} active, ${due.length} due for polling.`);
+  if (due.length === 0) return { updated: 0, skipped: candidates.length, errors: 0, total: candidates.length };
+
+  // Load partner docs once (for direct handlers)
+  const partnerDocs = await ShippingPartner.find().lean();
+  const partnerMap  = Object.fromEntries(partnerDocs.map(p => [p.name, p]));
+
+  let updated = 0, skipped = 0, errors = 0;
+
+  await Promise.allSettled(due.map(async (shipment) => {
+    try {
+      const newStatus = await pollShipment(shipment, partnerMap);
+
+      if (newStatus && newStatus !== shipment.status) {
+        await Shipment.findByIdAndUpdate(shipment._id, {
+          status:        newStatus,
+          lastTrackedAt: new Date(),
+        });
+        console.log(`[ShipmentTracking] ${shipment.trackingId}: ${shipment.status} → ${newStatus}`);
+        updated++;
+      } else {
+        // No status change — just update the poll timestamp
+        await Shipment.findByIdAndUpdate(shipment._id, { lastTrackedAt: new Date() });
+      }
+    } catch (err) {
+      console.error(`[ShipmentTracking] Error polling ${shipment.trackingId}:`, err.message);
+      errors++;
+    }
+  }));
+
+  const summary = { updated, skipped: candidates.length - due.length, errors, total: candidates.length };
+  console.log(`[ShipmentTracking] Done — updated: ${updated}, skipped: ${summary.skipped}, errors: ${errors}`);
+  return summary;
+};
+
+// ── Scheduler ─────────────────────────────────────────────────────────────────
+// Runs every 30 minutes. The shouldPoll() check inside refreshShipmentStatuses
+// ensures each shipment is only actually called according to its own interval:
+//   Pending/Booked       → called at most every 8 hrs
+//   In Transit/OFD       → called at most every 4 hrs
+//
+// Call startTrackingScheduler() once from server.js at startup.
+const startTrackingScheduler = () => {
+  const TICK = 30 * 60 * 1000; // 30 minutes
+  console.log('[ShipmentTracking] Scheduler started — ticking every 30 min, intervals per status applied.');
+
+  // Run once immediately on startup to catch anything overdue
+  refreshShipmentStatuses().catch(err =>
+    console.error('[ShipmentTracking] Startup poll error:', err.message)
+  );
+
+  setInterval(() => {
+    console.log('[ShipmentTracking] Scheduled tick…');
+    refreshShipmentStatuses().catch(err =>
+      console.error('[ShipmentTracking] Scheduler error:', err.message)
+    );
+  }, TICK);
+};
+
+module.exports = { refreshShipmentStatuses, startTrackingScheduler };

@@ -19,17 +19,22 @@ const usePortalItems = (type) => {
   const [pending, setPending]   = useState([]);
   const [error, setError]       = useState('');
   const [expanded, setExpanded] = useState(null);
+  const [search, setSearch]     = useState('');
 
   const S = { spin: { width: 16, height: 16, border: '2px solid #e2e8f0', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'pm-spin 0.7s linear infinite', flexShrink: 0 } };
 
-  const close = () => { setOpen(false); setExpanded(null); setDone(null); setError(''); };
+  const close = () => { setOpen(false); setExpanded(null); setDone(null); setError(''); setSearch(''); };
 
   const loadPortals = async () => {
     setLoading(true);
     setError('');
     try {
       const res = await api.get(`/portal?type=${type}&status=active`);
-      setPortals(res.data || []);
+      // Only show portals whose linked order is still in inquiry or ongoing state
+      const active = (res.data || []).filter(p =>
+        p.orderStatus === 'inquiry' || p.orderStatus === 'ongoing'
+      );
+      setPortals(active);
     } catch {
       setError(`Could not load portals. Make sure the backend is running.`);
       setPortals([]);
@@ -134,6 +139,30 @@ const usePortalItems = (type) => {
             </button>
           </div>
 
+          {/* Search bar */}
+          {!done && (
+            <div style={{ padding: '10px 20px 0', flexShrink: 0, borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ position: 'relative', marginBottom: 12 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search by client, title, ref or contact…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{ width: '100%', padding: '7px 30px 7px 30px', border: '1px solid #e2e8f0', borderRadius: 9, fontSize: 12, outline: 'none', background: '#f8fafc', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                />
+                {search && (
+                  <button onClick={() => setSearch('')}
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 2 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Body */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px 20px' }}>
 
@@ -171,7 +200,22 @@ const usePortalItems = (type) => {
               </div>
             )}
 
-            {!done && !loading && portals.map(p => {
+            {!done && !loading && (() => {
+              const term = search.toLowerCase().trim();
+              const filtered = term
+                ? portals.filter(p =>
+                    [p.title, p.orderRef, p.clientName, p.orderPlacedBy]
+                      .filter(Boolean).join(' ').toLowerCase().includes(term)
+                  )
+                : portals;
+
+              if (portals.length > 0 && filtered.length === 0) return (
+                <div style={{ textAlign: 'center', padding: '28px 0', color: '#94a3b8' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>No orders match "{search}"</div>
+                </div>
+              );
+
+              return filtered.map(p => {
               const key = type === 'product' ? 'productItems' : 'offsiteItems';
               const items = p[key] || [];
               const isExp = expanded === p.slug;
@@ -188,7 +232,9 @@ const usePortalItems = (type) => {
                         {p.title || p.orderRef}
                       </div>
                       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                        {p.clientName} · {p.orderRef} · <span style={{ color: items.length > 0 ? '#6366f1' : '#94a3b8', fontWeight: 600 }}>{items.length} in portal</span>
+                        {p.clientName} · {p.orderRef}
+                        {p.orderPlacedBy && <> · <span style={{ color: '#64748b', fontWeight: 600 }}>via {p.orderPlacedBy}</span></>}
+                        {' · '}<span style={{ color: items.length > 0 ? '#6366f1' : '#94a3b8', fontWeight: 600 }}>{items.length} in portal</span>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -244,7 +290,8 @@ const usePortalItems = (type) => {
                   )}
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
         </div>
       </div>

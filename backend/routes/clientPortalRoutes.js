@@ -22,6 +22,7 @@
 const express        = require('express');
 const router         = express.Router();
 const ClientPortal   = require('../models/ClientPortal');
+const OrderInquiry   = require('../models/orderInquiry'); // needed for .populate('orderId') to resolve
 const Product        = require('../models/product'); // for category enrichment
 const multer         = require('multer');
 const path           = require('path');
@@ -104,34 +105,30 @@ router.post('/', async (req, res) => {
  * List all portals, optionally filtered by type and/or status.
  * Used by usePortalItems hook to show active portals when adding items.
  * Query params: ?type=product|offsite  &status=active|completed
+ *
+ * Returns orderStatus (from the linked order) and orderPlacedBy so the
+ * frontend hook can filter to inquiry/ongoing only and display the contact.
  */
 router.get('/', async (req, res) => {
   try {
     const filter = {};
     if (req.query.type)   filter.type   = req.query.type;
     if (req.query.status) filter.status = req.query.status;
-    const portals = await ClientPortal.find(filter)
-      .select('slug type orderRef clientName title status productItems offsiteItems')
-      .sort({ createdAt: -1 });
-    res.json(portals);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
-/**
- * GET /api/portal?type=product&status=active
- * List portals — used by usePortalItems hook when adding items from ProductList/PropertyList.
- */
-router.get('/', async (req, res) => {
-  try {
-    const filter = {};
-    if (req.query.type)   filter.type   = req.query.type;
-    if (req.query.status) filter.status = req.query.status;
     const portals = await ClientPortal.find(filter)
-      .select('slug type orderRef clientName title status productItems offsiteItems')
-      .sort({ createdAt: -1 });
-    res.json(portals);
+      .select('slug type orderRef orderPlacedBy clientName title status productItems offsiteItems orderId')
+      .populate('orderId', 'status')   // pulls only the status field from OrderInquiry
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Flatten the populated order status onto each portal object
+    const enriched = portals.map(p => ({
+      ...p,
+      orderStatus: p.orderId?.status || 'unknown',
+      orderId: p.orderId?._id || p.orderId, // keep as plain ID, not the full object
+    }));
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -308,6 +305,7 @@ router.get('/public/:slug', async (req, res) => {
       slug:          portal.slug,
       type:          portal.type,
       orderRef:      portal.orderRef,
+      orderId:       portal.orderId,        // needed for shipment tab fetch
       clientName:    portal.clientName,
       orderPlacedBy: portal.orderPlacedBy || '',
       title:         portal.title,
@@ -321,6 +319,30 @@ router.get('/public/:slug', async (req, res) => {
     };
 
     res.json(clientData);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/public/:slug/shipments
+ * Returns shipments linked to this portal's order.
+ * Only returns non-sensitive fields — safe for public client view.
+ * Only relevant for product portals; offsite portals won't call this.
+ */
+router.get('/public/:slug/shipments', async (req, res) => {
+  try {
+    const portal = await ClientPortal.findOne({ slug: req.params.slug }, 'orderId type').lean();
+    if (!portal) return res.status(404).json({ message: 'Portal not found.' });
+    if (!portal.orderId) return res.json([]);
+
+    const Shipment = require('../models/Shipment');
+    const shipments = await Shipment.find(
+      { orderId: portal.orderId },
+      'recipientName city state phone trackingId shippingPartner status lastTrackedAt shippedDate'
+    ).sort({ createdAt: 1 }).lean();
+
+    res.json(shipments);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

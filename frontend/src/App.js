@@ -19,6 +19,8 @@ import {
   LogOut,
   Shield,
   Activity,
+  TrendingUp,
+  Truck 
 } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -44,6 +46,8 @@ import SourcingHub from './pages/SourcingHub';
 import PaymentTracker from './pages/PaymentTracker';
 import ClientPortalView from './pages/ClientPortalView';
 import ActivityLogView from './pages/ActivityLogView';
+import TrendingProducts from './pages/TrendingProducts';
+import CourierTracking from './pages/CourierTracking';
 
 // ── Route keys matching ALL_ROUTES in UserManagement ─────────────────────────
 // Maps each path to its route key so ProtectedRoute can check allowedRoutes.
@@ -61,6 +65,8 @@ const PATH_TO_ROUTE_KEY = {
   '/saved-offsites':     'Saved Offsites',
   '/admin/users':        'User Management',
   '/admin/logs':         'Activity Logs',
+  '/trending-products':  'Trending Products',
+  '/courier-tracking':   'Courier Tracking',
   // ⚠ Add new routes here AND in ALL_ROUTES in UserManagement.js
 };
 
@@ -70,6 +76,7 @@ const ROLE_DEFAULTS = {
   accounts:  ['Order Tracker','Payment Tracker','Vendors','Clients','Invoice Tracking'],
   sales:     ['Order Tracker','Sourcing Hub','Products','Saved Catalogues','Clients','Property List','Saved Offsites'],
   inventory: ['Products','Samples Provided','Saved Catalogues','Sourcing Hub','Property List','Saved Offsites'],
+  courier: ['Courier Tracking'],
   viewer:    ['Order Tracker'],
 };
 
@@ -150,6 +157,7 @@ const Sidebar = () => {
     accounts: 'bg-green-100 text-green-700',
     sales: 'bg-yellow-100 text-yellow-700',
     inventory: 'bg-blue-100 text-blue-700',
+    courier: 'bg-purple-100 text-purple-700',
     viewer: 'bg-gray-100 text-gray-600',
   };
 
@@ -175,6 +183,7 @@ const Sidebar = () => {
           {(openSections.orders || isCollapsed) && (
             <div className="flex flex-col gap-1">
               <NavLink to="/" icon={Package} label="Order Tracker" />
+              <NavLink to="/courier-tracking" icon={Truck} label="Courier Tracking" />
               <NavLink to="/sourcinghub" icon={Package} label="Sourcing Hub" />
             </div>
           )}
@@ -187,6 +196,7 @@ const Sidebar = () => {
               <NavLink to="/products" icon={Package} label="Products" />
               <NavLink to="/samplesprovided" icon={Package} label="Samples Provided" />
               <NavLink to="/savedcatalogues" icon={Bookmark} label="Saved Catalogues" />
+              <NavLink to="/trending-products" icon={TrendingUp} label="Trending Products" />
             </div>
           )}
         </nav>
@@ -300,6 +310,7 @@ const AppShell = () => {
         <Routes>
           {/* Management */}
           <Route path="/" element={<ProtectedRoute routeKey="Order Tracker"><OrderTracker /></ProtectedRoute>} />
+          <Route path="/courier-tracking" element={<ProtectedRoute routeKey="Courier Tracking"><CourierTracking /></ProtectedRoute>} />
           <Route path="/sourcinghub" element={<ProtectedRoute routeKey="Sourcing Hub"><SourcingHub /></ProtectedRoute>} />
 
           {/* Gifting */}
@@ -307,6 +318,7 @@ const AppShell = () => {
           <Route path="/samplesprovided" element={<ProtectedRoute routeKey="Samples Provided"><SamplesProvided /></ProtectedRoute>} />
           <Route path="/savedcatalogues" element={<ProtectedRoute routeKey="Saved Catalogues"><SavedCatalogues /></ProtectedRoute>} />
           <Route path="/builder" element={<ProtectedRoute routeKey="Saved Catalogues"><CatalogueBuilder /></ProtectedRoute>} />
+          <Route path="/trending-products" element={<ProtectedRoute routeKey="Trending Products"><TrendingProducts /></ProtectedRoute>} />
 
           {/* Documentation */}
           <Route path="/paymenttracker" element={<ProtectedRoute routeKey="Payment Tracker"><PaymentTracker /></ProtectedRoute>} />

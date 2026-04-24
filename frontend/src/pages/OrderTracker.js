@@ -125,6 +125,96 @@ function ContactAddInlineForm({ clientId, companyName, contactName, onAdded, onS
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LINKED SHIPMENTS PANEL
+// Shown inside the Edit Order modal for product orders only.
+// Fetches all shipments linked to this orderId and renders them as a compact
+// read-only list. No editing here — full management is in Courier Tracking.
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_COLORS_OT = {
+  'Pending':           'bg-slate-100 text-slate-500',
+  'Booked':            'bg-blue-50 text-blue-600',
+  'In Transit':        'bg-amber-50 text-amber-700',
+  'Out for Delivery':  'bg-orange-50 text-orange-600',
+  'Delivered':         'bg-emerald-50 text-emerald-700',
+  'Completed':         'bg-emerald-50 text-emerald-700',
+  'Returned':          'bg-red-50 text-red-500',
+  'Exception':         'bg-red-50 text-red-500',
+};
+
+const LinkedShipmentsPanel = ({ orderId }) => {
+  const [shipments, setShipments] = React.useState([]);
+  const [loading, setLoading]     = React.useState(true);
+
+  React.useEffect(() => {
+    if (!orderId) return;
+    api.get(`/shipments?orderId=${orderId}`)
+      .then(res => setShipments(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setShipments([]))
+      .finally(() => setLoading(false));
+  }, [orderId]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between px-1">
+        <label className="text-[9px] font-black uppercase text-slate-400">
+          Shipments
+        </label>
+        {shipments.length > 0 && (
+          <span className="text-[9px] font-black uppercase text-slate-400">
+            {shipments.length} shipment{shipments.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 rounded-xl text-xs text-slate-400 font-bold">
+          <Loader2 size={12} className="animate-spin" /> Loading shipments...
+        </div>
+      ) : shipments.length === 0 ? (
+        <div className="px-4 py-3 bg-slate-50 rounded-xl text-xs text-slate-400 font-bold">
+          No shipments linked to this order yet.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-100 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100">
+                {['Recipient', 'City', 'Tracking ID', 'Partner', 'Status'].map(h => (
+                  <th key={h} className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase text-left">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {shipments.map((s, i) => (
+                <tr key={s._id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors">
+                  <td className="px-3 py-2">
+                    <div className="text-xs font-bold text-slate-700 leading-tight">{s.recipientName}</div>
+                    {s.phone && <div className="text-[10px] text-slate-400">{s.phone}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-500">{s.city || '—'}</td>
+                  <td className="px-3 py-2">
+                    {s.trackingId
+                      ? <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{s.trackingId}</span>
+                      : <span className="text-slate-300 text-xs">—</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-500">{s.shippingPartner || '—'}</td>
+                  <td className="px-3 py-2">
+                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${STATUS_COLORS_OT[s.status] || 'bg-slate-100 text-slate-500'}`}>
+                      {s.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -839,6 +929,11 @@ export default function App() {
                     </label>
                   </div>
                 </div>
+                {/* ── Linked Shipments — product orders only ── */}
+                {editOrder.orderType !== 'offsite' && (
+                  <LinkedShipmentsPanel orderId={editOrder._id} />
+                )}
+
                 <button disabled={loading} onClick={() => updateOrder(editOrder._id, editOrder)}
                   className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg disabled:bg-slate-300 transition-all">
                   {loading ? 'Processing...' : 'Update Database'}

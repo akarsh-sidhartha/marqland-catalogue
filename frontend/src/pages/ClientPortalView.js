@@ -222,6 +222,8 @@ const ClientPortalView = () => {
   const [nameSet, setNameSet] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [wishlisted, setWishlisted] = useState(new Set());
+  const [shipments, setShipments]   = useState([]);
+  const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
   const [toasts, setToasts] = useState([]);
   const chatEnd         = useRef(null);
   const fileRef         = useRef(null);
@@ -248,6 +250,15 @@ const ClientPortalView = () => {
   },[slug]);
 
   useEffect(()=>{ if(tab==='chat') chatEnd.current?.scrollIntoView({behavior:'smooth'}); },[portal?.messages,tab]);
+
+  // Fetch shipments when shipments tab is first opened
+  useEffect(()=>{
+    if(tab!=='shipments'||shipmentsLoaded||!portal?.orderId) return;
+    fetch(`/api/portal/public/${slug}/shipments`)
+      .then(r=>r.ok?r.json():[])
+      .then(data=>{ setShipments(Array.isArray(data)?data:[]); setShipmentsLoaded(true); })
+      .catch(()=>setShipmentsLoaded(true));
+  },[tab,shipmentsLoaded,portal,slug]);
 
   const load = async (silent=false) => {
     try{
@@ -405,6 +416,7 @@ const ClientPortalView = () => {
           {[
             {k:'catalogue',l:'Catalogue Options', b:items.length},
             ...(portal.type==='product' ? [{k:'selected', l:'Selected Items', b:wishlisted.size||null}] : []),
+            ...(portal.type==='product' ? [{k:'shipments',l:'Shipment Tracking', b:null}] : []),
             {k:'chat',     l:'Message Board',     b:newMsgs||null},
           ].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)}
@@ -525,6 +537,102 @@ const ClientPortalView = () => {
                     </div>
                   </GlassCard>
                 ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* SHIPMENTS TAB — product portals only */}
+        {tab==='shipments'&&(()=>{
+          const STATUS_CHIP = {
+            'Pending':           {bg:'rgba(100,116,139,0.15)', color:'rgba(148,163,184,1)'},
+            'Booked':            {bg:'rgba(59,130,246,0.12)',  color:'#93c5fd'},
+            'In Transit':        {bg:'rgba(245,158,11,0.12)',  color:'#fcd34d'},
+            'Out for Delivery':  {bg:'rgba(249,115,22,0.12)',  color:'#fdba74'},
+            'Delivered':         {bg:'rgba(16,185,129,0.12)',  color:'#6ee7b7'},
+            'Completed':         {bg:'rgba(16,185,129,0.12)',  color:'#6ee7b7'},
+            'Returned':          {bg:'rgba(239,68,68,0.12)',   color:'#fca5a5'},
+            'Exception':         {bg:'rgba(239,68,68,0.12)',   color:'#fca5a5'},
+          };
+          if(!shipmentsLoaded) return (
+            <div style={{textAlign:'center',padding:'64px 0'}}>
+              <div style={{width:32,height:32,border:`2px solid ${DS.contTop}`,borderTopColor:DS.gold,borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 16px'}}/>
+              <div style={{fontSize:12,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>Loading shipments…</div>
+            </div>
+          );
+          if(shipments.length===0) return (
+            <div style={{textAlign:'center',padding:'64px 0',color:DS.sub}}>
+              <div style={{fontSize:40,marginBottom:14}}>📦</div>
+              <div style={{fontFamily:'Noto Serif,serif',fontSize:18,fontWeight:700,color:DS.text,marginBottom:8}}>No shipments yet</div>
+              <div style={{fontSize:13,fontFamily:'Manrope,sans-serif',lineHeight:1.7}}>Shipment details will appear here once your parcels are dispatched.</div>
+            </div>
+          );
+          return (
+            <div>
+              {/* Summary strip */}
+              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:28,padding:'16px 20px',background:DS.cont,borderRadius:12,border:`1px solid rgba(255,255,255,0.05)`}}>
+                <div style={{width:2,height:24,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:16,fontWeight:700,color:DS.gold,fontFamily:'Noto Serif,serif'}}>
+                    {shipments.length} shipment{shipments.length!==1?'s':''}
+                  </div>
+                  <div style={{fontSize:12,color:DS.sub,marginTop:2,fontFamily:'Manrope,sans-serif'}}>
+                    {shipments.filter(s=>s.status==='Delivered'||s.status==='Completed').length} delivered
+                    {' · '}
+                    {shipments.filter(s=>['In Transit','Out for Delivery','Booked'].includes(s.status)).length} in transit
+                  </div>
+                </div>
+              </div>
+
+              {/* Shipment cards */}
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                {shipments.map((s,idx)=>{
+                  const chip = STATUS_CHIP[s.status] || STATUS_CHIP['Pending'];
+                  const isDelivered = s.status==='Delivered'||s.status==='Completed';
+                  return (
+                    <GlassCard key={s._id||idx} delay={idx*0.04}
+                      style={{padding:isMobile?'16px 18px':'20px 24px',display:'flex',alignItems:isMobile?'flex-start':'center',gap:16,flexDirection:isMobile?'column':'row'}}>
+
+                      {/* Status indicator dot */}
+                      <div style={{width:10,height:10,borderRadius:'50%',background:chip.color,boxShadow:`0 0 8px ${chip.color}`,flexShrink:0,marginTop:isMobile?4:0}}/>
+
+                      {/* Recipient */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:700,fontSize:15,color:DS.text,fontFamily:'Manrope,sans-serif',marginBottom:2}}>{s.recipientName}</div>
+                        <div style={{fontSize:12,color:DS.sub,fontFamily:'Manrope,sans-serif',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                          {s.city&&<span>📍 {s.city}{s.state?`, ${s.state}`:''}</span>}
+                          {s.phone&&<span>· {s.phone}</span>}
+                        </div>
+                      </div>
+
+                      {/* Tracking ID + partner */}
+                      <div style={{textAlign:isMobile?'left':'center',flexShrink:0}}>
+                        {s.trackingId?(
+                          <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,color:DS.goldHi,background:'rgba(197,163,87,0.08)',padding:'4px 10px',borderRadius:7,marginBottom:4,display:'inline-block'}}>
+                            {s.trackingId}
+                          </div>
+                        ):(
+                          <div style={{fontSize:11,color:'rgba(255,255,255,0.2)',marginBottom:4,fontFamily:'Manrope,sans-serif'}}>Tracking pending</div>
+                        )}
+                        {s.shippingPartner&&(
+                          <div style={{fontSize:11,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>{s.shippingPartner}</div>
+                        )}
+                      </div>
+
+                      {/* Status badge */}
+                      <div style={{flexShrink:0}}>
+                        <span style={{fontSize:10,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.08em',padding:'5px 12px',borderRadius:20,background:chip.bg,color:chip.color,fontFamily:'Manrope,sans-serif'}}>
+                          {isDelivered?'✓ ':''}{s.status}
+                        </span>
+                        {s.lastTrackedAt&&(
+                          <div style={{fontSize:9,color:'rgba(255,255,255,0.2)',marginTop:4,textAlign:'center',fontFamily:'Manrope,sans-serif'}}>
+                            Updated {new Date(s.lastTrackedAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}
+                          </div>
+                        )}
+                      </div>
+                    </GlassCard>
+                  );
+                })}
               </div>
             </div>
           );

@@ -10,6 +10,8 @@ const cron = require('node-cron');
 const app = express();
 
 const whatsappService = require('./services/whatsappService');
+const { startScheduler } = require('./services/trendingProductService');
+const { startTrackingScheduler } = require('./services/shipmentTrackingService');
 
 /**
  * 1. CORS CONFIGURATION
@@ -25,7 +27,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.json());
 
-const authRoutes    = require('./routes/authRoutes');
+const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
 const clientRoutes = require('./routes/clientRoutes');
@@ -38,8 +40,11 @@ const SamplesProvided = require('./routes/samplesProvided');
 const SourcingHub = require('./routes/inquiryRoutes');
 const { router: paymentTracker, syncOutlookInvoices } = require('./routes/paymentTrackerRoutes');
 const activityLogger = require('./middleware/activityLogger');
-const logRoutes      = require('./routes/logRoutes');
+const logRoutes = require('./routes/logRoutes');
 const imageProcessing = require('./routes/imageProcessingRoutes');
+const trendingProductRoutes = require('./routes/trendingProductRoutes');
+const shipmentRoutes = require('./routes/shipmentRoutes');
+const shippingPartnerRoutes = require('./routes/shippingPartnerRoutes');
 /**
  * 2. STATIC FILE SERVING
  * This ensures that images uploaded by one person are visible to 
@@ -74,6 +79,9 @@ app.use('/api/inquiries', SourcingHub);
 app.use('/api/auth', authRoutes);
 app.use('/api/payment-tracker', paymentTracker);
 app.use('/api/image-processing', imageProcessing);
+app.use('/api/trending-products', trendingProductRoutes);
+app.use('/api/shipments', shipmentRoutes);
+app.use('/api/shipping-partners', shippingPartnerRoutes);
 
 // Client Portal routes
 const clientPortalRoutes = require('./routes/clientPortalRoutes');
@@ -93,13 +101,22 @@ app.use((req, res, next) => {
   const ua = req.headers['user-agent'] || '';
   const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
 
-  // Block mobile from all routes except /paymenttracker
-  if (isMobile && req.url !== '/paymenttracker' && !req.url.startsWith('/paymenttracker')) {
+  // Block mobile from all routes except /paymenttracker and public portal links (/p/)
+  const isMobileExempt = req.url.startsWith('/p/')       // client portal links
+    || req.url.startsWith('/respond/') // vendor response links
+    || req.url === '/paymenttracker'
+    || req.url.startsWith('/paymenttracker');
+  if (isMobile && !isMobileExempt) {
     return res.redirect(301, '/paymenttracker');
   }
 
   res.sendFile(path.join(buildPath, 'index.html'));
 });
+
+
+startScheduler(); // Start background scheduler (runs at 02:00 IST daily)
+startTrackingScheduler(); // Start the 2-hour background tracking scheduler:
+
 /**
  * 5. AUTOMATED TASKS (CRON)
  * Runs daily at 10:00 AM (IST) to sync Outlook invoices and 

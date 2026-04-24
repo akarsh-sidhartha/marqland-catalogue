@@ -5,34 +5,43 @@ import {
   RefreshCw, Trash2, Mail, Send, X, Link2
 } from 'lucide-react';
 
-const ROLES = ['admin', 'accounts', 'sales', 'inventory', 'viewer'];
+const ROLES = ['admin', 'accounts', 'sales', 'inventory', 'courier', 'viewer'];
 
 // ── All routes in the app — key = route name, path = used in ProtectedRoute ──
 // ⚠ KEEP IN SYNC WITH PATH_TO_ROUTE_KEY in App.js.
 // When you add a new page: 1) add it here, 2) add it to App.js PATH_TO_ROUTE_KEY.
+// ⚠ KEEP IN SYNC WITH PATH_TO_ROUTE_KEY in App.js.
+// Only routes that are actually registered in App.js should be listed here.
 const ALL_ROUTES = [
-  { key: 'Order Tracker',    path: '/'                },
-  { key: 'Sourcing Hub',     path: '/sourcinghub'     },
-  { key: 'Products',         path: '/products'        },
-  { key: 'Samples Provided', path: '/samplesprovided' },
-  { key: 'Saved Catalogues', path: '/savedcatalogues' },
-  { key: 'Payment Tracker',  path: '/paymenttracker'  },
-  { key: 'Vendors',          path: '/vendors'         },
-  { key: 'Clients',          path: '/clients'         },
-  { key: 'Letter Head',      path: '/MarqlandLetterHead' },
-  { key: 'Invoice Tracking', path: '/InvoiceTracking' },
-  { key: 'Property List',    path: '/properties'      },
-  { key: 'Saved Offsites',   path: '/saved-offsites'  },
-  { key: 'User Management',  path: '/admin/users'     },
-  { key: 'Activity Logs',    path: '/admin/logs'      },
+  // Management
+  { key: 'Order Tracker',       path: '/'                   },
+  { key: 'Courier Tracking',    path: '/courier-tracking'   },
+  { key: 'Sourcing Hub',        path: '/sourcinghub'        },
+  // Gifting
+  { key: 'Products',            path: '/products'           },
+  { key: 'Samples Provided',    path: '/samplesprovided'    },
+  { key: 'Saved Catalogues',    path: '/savedcatalogues'    },
+  { key: 'Trending Products',   path: '/trending-products'  },
+  // Documentation
+  { key: 'Payment Tracker',     path: '/paymenttracker'     },
+  { key: 'Vendors',             path: '/vendors'            },
+  { key: 'Clients',             path: '/clients'            },
+  { key: 'Letter Head',         path: '/MarqlandLetterHead' },
+  // Offsites
+  { key: 'Property List',       path: '/properties'         },
+  { key: 'Saved Offsites',      path: '/saved-offsites'     },
+  // Admin
+  { key: 'User Management',     path: '/admin/users'        },
+  { key: 'Activity Logs',       path: '/admin/logs'         },
 ];
 
 // Default routes per role — used when allowedRoutes is empty
 const ROLE_DEFAULTS = {
   admin:     ALL_ROUTES.map(r => r.key),
-  accounts:  ['Order Tracker','Payment Tracker','Vendors','Clients','Invoice Tracking'],
+  accounts:  ['Order Tracker','Payment Tracker','Vendors','Clients'],
   sales:     ['Order Tracker','Sourcing Hub','Products','Saved Catalogues','Clients','Property List','Saved Offsites'],
   inventory: ['Products','Samples Provided','Saved Catalogues','Sourcing Hub','Property List','Saved Offsites'],
+  courier:   ['Courier Tracking'],
   viewer:    ['Order Tracker'],
 };
 
