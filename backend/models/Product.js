@@ -9,6 +9,20 @@ const productSchema = new mongoose.Schema({
   purchasePrice: { type: Number, required: true },
   markupPercent: { type: Number, default: 10 },
   imageUrl: String,
+  // Additional product angles / lifestyle shots sourced from reverse image search
+  // or manually uploaded. Stored as local /uploads/... paths (downloaded + saved).
+  additionalImages: {
+    type: [String],
+    default: [],
+  },
+
+  // ── NEW: Product video ────────────────────────────────────────────────────
+  // YouTube URL, brand video URL, or any embeddable link.
+  // Shown as an embedded player in the client portal view.
+  videoUrl: {
+    type: String,
+    default: '',
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Product', productSchema);

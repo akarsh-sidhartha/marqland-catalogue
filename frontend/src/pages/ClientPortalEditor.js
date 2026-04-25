@@ -153,6 +153,7 @@ const ClientPortalEditor = ({ order, onClose }) => {
 
   const toggleCollapse = (cat) => setCollapsed(prev => ({ ...prev, [cat]: !prev[cat] }));
 
+
   if (loading) return (
     <div className="flex items-center justify-center flex-1 py-20">
       <RefreshCw className="animate-spin text-indigo-400" size={28} />
@@ -243,6 +244,7 @@ const ClientPortalEditor = ({ order, onClose }) => {
               )}
             </div>
 
+
             {/* Items — grouped by category (products) or flat (offsite) */}
             {items.length === 0 ? (
               <div className="text-center py-12 text-slate-400">
@@ -292,6 +294,18 @@ const ClientPortalEditor = ({ order, onClose }) => {
                               <div className="flex-1 min-w-0">
                                 <div className="font-bold text-sm text-slate-800 truncate">{item.name}</div>
                                 <div className="text-[11px] text-slate-500 mt-0.5">₹{Number(item.price||0).toLocaleString('en-IN')}</div>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  {(item.additionalImages||[]).length > 0 && (
+                                    <span className="text-[9px] bg-violet-100 text-violet-600 font-black px-1.5 py-0.5 rounded-full uppercase">
+                                      +{item.additionalImages.length} photos
+                                    </span>
+                                  )}
+                                  {item.videoUrl && (
+                                    <span className="text-[9px] bg-rose-100 text-rose-500 font-black px-1.5 py-0.5 rounded-full uppercase">
+                                      🎬 video
+                                    </span>
+                                  )}
+                                </div>
                                 {item.note && <div className="text-[10px] text-indigo-600 mt-1 italic">{item.note}</div>}
                               </div>
                               <div className="flex flex-col gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">

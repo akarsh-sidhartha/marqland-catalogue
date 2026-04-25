@@ -224,6 +224,88 @@ const YouTubeEmbed = ({ url, title }) => {
   );
 };
 
+// ── Product Image Carousel ────────────────────────────────────────────────────
+// Shows additionalImages as swipeable dots-nav carousel below primary image.
+// Only rendered when there are ≥1 additional images.
+const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
+  const all = [primaryUrl, ...images].filter(Boolean);
+  const [idx, setIdx] = React.useState(0);
+  if (all.length <= 1) return null;
+
+  const prev = (e) => { e.stopPropagation(); setIdx(i => (i - 1 + all.length) % all.length); };
+  const next = (e) => { e.stopPropagation(); setIdx(i => (i + 1) % all.length); };
+
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
+      {/* Main image */}
+      <div
+        onClick={() => onZoom({ src: all[idx], alt: productName })}
+        style={{ cursor: 'zoom-in', position: 'relative' }}
+      >
+        <img
+          src={all[idx]}
+          alt={`${productName} — image ${idx + 1}`}
+          style={{
+            width: '100%', display: 'block', objectFit: 'cover',
+            maxHeight: 280, minHeight: 180,
+            transition: 'opacity 0.25s ease',
+          }}
+        />
+        {/* Gradient */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(0deg,rgba(10,20,34,0.9),transparent)', pointerEvents: 'none' }} />
+      </div>
+
+      {/* Prev / Next arrows */}
+      <button onClick={prev} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(10,20,34,0.7)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: DS.muted, zIndex: 4, backdropFilter: 'blur(6px)' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button onClick={next} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(10,20,34,0.7)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: DS.muted, zIndex: 4, backdropFilter: 'blur(6px)' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+
+      {/* Counter badge */}
+      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(10,20,34,0.7)', color: 'rgba(255,255,255,0.55)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, backdropFilter: 'blur(4px)', fontFamily: 'Manrope,sans-serif', zIndex: 3 }}>
+        {idx + 1} / {all.length}
+      </div>
+
+      {/* Dot indicators */}
+      <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 4 }}>
+        {all.map((_, i) => (
+          <button
+            key={i}
+            onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+            style={{
+              width: i === idx ? 18 : 6, height: 6, borderRadius: 3, border: 'none',
+              background: i === idx ? DS.gold : 'rgba(255,255,255,0.3)',
+              cursor: 'pointer', padding: 0,
+              transition: 'all 0.25s ease',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Thumbnail strip — bottom of card, visible when many images */}
+      {all.length > 3 && (
+        <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: 'rgba(10,20,34,0.85)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {all.map((src, i) => (
+            <div
+              key={i}
+              onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+              style={{
+                width: 38, height: 38, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
+                border: `2px solid ${i === idx ? DS.gold : 'transparent'}`,
+                cursor: 'pointer', transition: 'border-color 0.2s',
+              }}
+            >
+              <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Property Attachment Chip (client-facing, in offsite cards) ─────────────────
 const PropAttachChip = ({ att }) => {
   const handleClick = async (e) => {
@@ -1142,115 +1224,151 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                         display:'flex', flexDirection:'column',
                         overflow:'hidden',
                       }}>
-
-                        {/* ── Image — fills to natural aspect ratio ── */}
+                        {/*
+                          Single onMouseLeave on the whole card — overlay only closes
+                          when the mouse leaves the card entirely, so scrolling inside
+                          the overlay never dismisses it.
+                        */}
                         <div
-                          style={{position:'relative',overflow:'hidden',borderRadius:'12px 12px 0 0',cursor:item.imageUrl?'zoom-in':'default'}}
-                          onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}
-                          onMouseEnter={()=>setHoveredId(item._id)}
+                          style={{display:'flex',flexDirection:'column',flex:1,position:'relative'}}
                           onMouseLeave={()=>setHoveredId(null)}
                         >
-                          {item.imageUrl
-                            ? <img
-                                src={item.imageUrl}
-                                alt={item.name}
-                                style={{width:'100%',display:'block',objectFit:'cover',transition:'transform .5s ease',maxHeight:isMobile?200:(span==='wide'?320:280),minHeight:isMobile?140:180}}
-                                onLoad={e=>handleImgLoad(item._id,e)}
+
+                          {/* ── Image area (carousel or single) ── */}
+                          <div style={{position:'relative',flexShrink:0,overflow:'hidden'}}>
+
+                            {/* Carousel or single image */}
+                            {(item.additionalImages || []).length > 0 ? (
+                              <ProductCarousel
+                                images={item.additionalImages}
+                                primaryUrl={item.imageUrl}
+                                productName={item.name}
+                                onZoom={onZoom}
                               />
-                            : <div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',background:DS.contHi,color:'rgba(255,255,255,0.15)',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
-                          }
-
-                          {/* Permanent bottom gradient */}
-                          <div style={{position:'absolute',bottom:0,left:0,right:0,height:'50%',background:'linear-gradient(0deg,rgba(10,20,34,0.9) 0%,transparent 100%)',pointerEvents:'none',transition:'opacity .3s',opacity:hoveredId===item._id?0:1}}/>
-
-                          {/* ── Hover overlay — slides up, scrollable for long descriptions ── */}
-                          {item.description&&(
-                            <div
-                              onClick={e=>e.stopPropagation()}
-                              style={{
-                                position:'absolute',
-                                bottom:0,left:0,right:0,
-                                // Cap height at 75% of image so image is still partially visible
-                                maxHeight:'75%',
-                                background:'rgba(10,20,34,0.95)',
-                                backdropFilter:'blur(12px)',
-                                WebkitBackdropFilter:'blur(12px)',
-                                overflowY: hoveredId===item._id ? 'auto' : 'hidden',
-                                transform: hoveredId===item._id ? 'translateY(0)' : 'translateY(100%)',
-                                transition:'transform .32s cubic-bezier(.4,0,.2,1)',
-                                pointerEvents: hoveredId===item._id ? 'auto' : 'none',
-                                cursor:'default',
-                                // Subtle top fade so image peeks above
-                                borderTop:'1px solid rgba(197,163,87,0.2)',
-                              }}
-                              className="desc-scroll"
-                            >
-                              {/* Thin gold line at top — visual anchor */}
-                              <div style={{position:'sticky',top:0,left:0,right:0,height:2,background:GOLD_GRAD,flexShrink:0}}/>
-                              <div style={{padding:'12px 14px 16px'}}>
-                                <p style={{
-                                  fontSize:12.5,
-                                  color:'rgba(240,232,214,0.92)',
-                                  lineHeight:1.7,
-                                  margin:0,
-                                  fontFamily:'Manrope,sans-serif',
-                                  fontWeight:400,
-                                  whiteSpace:'pre-wrap',
-                                  wordBreak:'break-word',
-                                }}>{item.description}</p>
+                            ) : (
+                              <div
+                                style={{position:'relative',overflow:'hidden',borderRadius:'12px 12px 0 0',cursor:item.imageUrl?'zoom-in':'default'}}
+                                onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}
+                              >
+                                {item.imageUrl
+                                  ? <img
+                                      src={item.imageUrl}
+                                      alt={item.name}
+                                      style={{width:'100%',display:'block',objectFit:'cover',maxHeight:isMobile?200:(span==='wide'?320:280),minHeight:isMobile?140:180}}
+                                      onLoad={e=>handleImgLoad(item._id,e)}
+                                    />
+                                  : <div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',background:DS.contHi,color:'rgba(255,255,255,0.15)',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
+                                }
+                                {/* Zoom hint */}
+                                {item.imageUrl&&(
+                                  <div style={{position:'absolute',top:10,right:10,background:'rgba(10,20,34,0.6)',color:'rgba(255,255,255,0.45)',borderRadius:6,padding:'4px 7px',display:'flex',alignItems:'center',gap:3,fontSize:9,backdropFilter:'blur(4px)',pointerEvents:'none'}}>
+                                    {Ic.zoom}
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          )}
+                            )}
 
-                          {/* Heart — top left */}
-                          <button
-                            onClick={e=>{e.stopPropagation();onToggleWish(String(item._id));}}
-                            title={loved?'Remove from shortlist':'Add to shortlist'}
-                            style={{
-                              position:'absolute',top:10,left:10,zIndex:3,
-                              background:loved?'rgba(220,53,69,0.9)':'rgba(10,20,34,0.6)',
-                              border:`1px solid ${loved?'rgba(220,53,69,0.5)':'rgba(255,255,255,0.2)'}`,
-                              borderRadius:8,width:32,height:32,
-                              cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
-                              color:loved?'#fff':'rgba(255,255,255,0.6)',
-                              backdropFilter:'blur(8px)',transition:'all .2s',
-                            }}>
-                            {loved?Ic.heart:Ic.heartO}
-                          </button>
+                            {/* Heart — always top-left over image/carousel */}
+                            <button
+                              onClick={e=>{e.stopPropagation();onToggleWish(String(item._id));}}
+                              title={loved?'Remove from shortlist':'Add to shortlist'}
+                              style={{
+                                position:'absolute',top:10,left:10,zIndex:10,
+                                background:loved?'rgba(220,53,69,0.9)':'rgba(10,20,34,0.6)',
+                                border:`1px solid ${loved?'rgba(220,53,69,0.5)':'rgba(255,255,255,0.2)'}`,
+                                borderRadius:8,width:32,height:32,
+                                cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+                                color:loved?'#fff':'rgba(255,255,255,0.6)',
+                                backdropFilter:'blur(8px)',transition:'all .2s',
+                              }}>
+                              {loved?Ic.heart:Ic.heartO}
+                            </button>
 
-                          {/* Zoom hint — top right, fades on hover */}
-                          {item.imageUrl&&(
-                            <div style={{position:'absolute',top:10,right:10,background:'rgba(10,20,34,0.6)',color:'rgba(255,255,255,0.45)',borderRadius:6,padding:'4px 7px',display:'flex',alignItems:'center',gap:3,fontSize:9,backdropFilter:'blur(4px)',pointerEvents:'none',transition:'opacity .2s',opacity:hoveredId===item._id?0:1}}>
-                              {Ic.zoom}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ── Info panel ── */}
-                        <div style={{padding:isMobile?'10px 12px 12px':'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
-
-                          {/* Row 1: Name + Price side by side */}
-                          <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
-                            <div style={{fontSize:isMobile?12:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>
-                              {item.name}
-                            </div>
-                            <div style={{fontSize:isMobile?13:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>
-                              {toINR(item.price)}
-                            </div>
+                            {/* Description overlay — absolutely positioned over the image.
+                                Slides up when hoveredId matches. Stays open while mouse
+                                is anywhere inside the card (onMouseLeave is on the card). */}
+                            {item.description&&(
+                              <div
+                                onClick={e=>e.stopPropagation()}
+                                style={{
+                                  position:'absolute',bottom:0,left:0,right:0,
+                                  maxHeight:'75%',
+                                  background:'rgba(10,20,34,0.95)',
+                                  backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',
+                                  overflowY: hoveredId===item._id ? 'auto' : 'hidden',
+                                  transform: hoveredId===item._id ? 'translateY(0)' : 'translateY(100%)',
+                                  transition:'transform .32s cubic-bezier(.4,0,.2,1)',
+                                  pointerEvents: hoveredId===item._id ? 'auto' : 'none',
+                                  cursor:'default',
+                                  borderTop:'1px solid rgba(197,163,87,0.2)',
+                                  zIndex:8,
+                                }}
+                                className="desc-scroll"
+                              >
+                                <div style={{position:'sticky',top:0,left:0,right:0,height:2,background:GOLD_GRAD,flexShrink:0}}/>
+                                <div style={{padding:'12px 14px 16px'}}>
+                                  <p style={{fontSize:12.5,color:'rgba(240,232,214,0.92)',lineHeight:1.7,margin:0,fontFamily:'Manrope,sans-serif',fontWeight:400,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{item.description}</p>
+                                </div>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Row 2: Description — full, no clamp on tall; 3 lines otherwise */}
-                          {item.description&&(
-                            <p style={{
-                              fontSize:12,color:DS.sub,lineHeight:1.6,margin:0,
-                              fontFamily:'Manrope,sans-serif',
-                              display:'-webkit-box',
-                              WebkitLineClamp: span==='wide' ? 4 : 3,
-                              WebkitBoxOrient:'vertical',
-                              overflow:'hidden',
-                            }}>{item.description}</p>
-                          )}
-                        </div>
+                          {/* ── Info panel ── */}
+                          <div style={{padding:isMobile?'10px 12px 12px':'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
+
+                            {/* Row 1: Name + Price */}
+                            <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
+                              <div style={{fontSize:isMobile?12:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>
+                                {item.name}
+                              </div>
+                              <div style={{fontSize:isMobile?13:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>
+                                {toINR(item.price)}
+                              </div>
+                            </div>
+
+                            {/* Row 2: Description — 3 lines, hover to open overlay over image */}
+                            {item.description&&(
+                              <p
+                                onMouseEnter={()=>setHoveredId(item._id)}
+                                style={{
+                                  fontSize:12,lineHeight:1.6,margin:0,
+                                  fontFamily:'Manrope,sans-serif',
+                                  display:'-webkit-box',
+                                  WebkitLineClamp:3,
+                                  WebkitBoxOrient:'vertical',
+                                  overflow:'hidden',
+                                  cursor:'default',
+                                  color: hoveredId===item._id ? DS.gold : DS.sub,
+                                  transition:'color .15s',
+                                }}
+                              >{item.description}</p>
+                            )}
+
+                            {/* ── Video embed (YouTube or direct link) ── */}
+                            {item.videoUrl && getYouTubeId(item.videoUrl) && (
+                              <div style={{marginTop:4}}>
+                                <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6,fontFamily:'Manrope,sans-serif'}}>🎬 Product Video</div>
+                                <YouTubeEmbed url={item.videoUrl} title={item.name}/>
+                              </div>
+                            )}
+                            {item.videoUrl && !getYouTubeId(item.videoUrl) && (
+                              <a
+                                href={item.videoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  display:'inline-flex',alignItems:'center',gap:6,marginTop:4,
+                                  padding:'7px 12px',borderRadius:8,textDecoration:'none',
+                                  background:'rgba(197,163,87,0.07)',border:'1px solid rgba(197,163,87,0.18)',
+                                  fontSize:11,fontWeight:700,color:DS.gold,fontFamily:'Manrope,sans-serif',
+                                }}
+                              >
+                                {Ic.play} Watch Brand Video
+                              </a>
+                            )}
+                          </div>
+
+                        </div>{/* end card onMouseLeave wrapper */}
                       </GlassCard>
                     );
                   })}

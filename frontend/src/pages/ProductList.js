@@ -3,9 +3,10 @@ import api from '../api';
 import {
   Plus, Check, FolderPlus, X, ChevronDown, Search, Trash2, Pencil,
   RotateCcw, Info, CheckSquare, Square, Sparkles, FileText, Download,
-  ImageIcon, AlertCircle, CheckCircle2, Loader2, Star
+  ImageIcon, AlertCircle, CheckCircle2, Loader2, Star, Images,
 } from 'lucide-react';
 import usePortalItems from '../hooks/usePortalItems';
+import ProductImageGallery from './ProductImageGallery'; // ← NEW: multi-image gallery + video
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Creatable Select
@@ -166,6 +167,9 @@ const ProductList = () => {
   const [showExtractModal, setShowExtractModal] = useState(false);
   const [extractFile, setExtractFile]   = useState(null);
   const [extractLoading, setExtractLoading] = useState(false);
+
+  // ── Image Gallery & Video modal ──────────────────────────────────────────────
+  const [galleryProduct, setGalleryProduct] = useState(null); // product object or null
 
   const getAssetUrl = (p) => p;
 
@@ -684,6 +688,7 @@ const ProductList = () => {
                           <div className="flex justify-between items-end mt-1">
                             <div><span className="text-gray-400 block font-bold uppercase text-[7px]">Sale Price</span><span className="text-sm font-black text-green-600">₹{calculateSellingPrice(p.purchasePrice, p.markupPercent)}</span></div>
                             <div className="flex gap-1">
+                              <button onClick={() => setGalleryProduct(p)} className="p-1.5 hover:bg-violet-50 text-violet-400 rounded transition" title="Image Gallery & Video"><Images size={13} /></button>
                               <button onClick={() => handleEditClick(p)} className="p-1.5 hover:bg-indigo-50 text-indigo-400 rounded transition" title="Edit"><Pencil size={13} /></button>
                               <button onClick={() => handleDelete(p._id)} className="p-1.5 hover:bg-red-50 text-red-400 rounded transition" title="Delete"><Trash2 size={13} /></button>
                             </div>
@@ -1253,6 +1258,17 @@ const ProductList = () => {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
+      {/* ════════════════════════════════════════════════════════════════════════
+          IMAGE GALLERY & VIDEO MODAL
+      ════════════════════════════════════════════════════════════════════════ */}
+      {galleryProduct && (
+        <ProductImageGallery
+          product={galleryProduct}
+          onClose={() => setGalleryProduct(null)}
+          onSaved={() => { fetchData(); }}
+        />
+      )}
+
       <PortalModal />
     </div>
   );

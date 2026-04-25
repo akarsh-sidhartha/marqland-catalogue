@@ -37,7 +37,7 @@ if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
 const pdfUpload = multer({
   dest: tmpDir,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB — product catalog PDFs can be large
   fileFilter: (req, file, cb) =>
     file.mimetype === 'application/pdf' ? cb(null, true) : cb(new Error('PDF files only')),
 });
@@ -178,105 +178,197 @@ function requireArchiver() {
 }
 
 /**
- * Extract embedded images from a PDF.
- * Falls back to page screenshots for scanned PDFs.
+ * Extract images from a PDF.
+ *
+ * Strategy (in order of reliability):
+ *   1. pdfjs-dist  — renders each page to a raw pixel buffer via canvas-like API
+ *      This works on ALL PDFs regardless of internal structure (embedded, scanned, vector).
+ *   2. pdf-lib fallback — direct XObject extraction for PDFs with embedded JPEG streams
+ *   3. Error with install hint if neither is available
+ *
+ * Install: npm install pdfjs-dist canvas
+ * (canvas is a native Node.js canvas needed by pdfjs-dist for rendering)
  */
 async function extractPdfPages(pdfPath) {
-  let PDFLib;
-  try { PDFLib = require('pdf-lib'); }
-  catch { throw new Error('pdf-lib not installed — run: npm install pdf-lib'); }
-
+  const sharp  = require('sharp');
   const outDir = path.join(tmpDir, `pdf_${Date.now()}`);
   fs.mkdirSync(outDir, { recursive: true });
+  const paths = [];
 
-  const bytes  = fs.readFileSync(pdfPath);
-  const doc    = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
-  const paths  = [];
-  let imgCount = 0;
+  // ── Strategy 1: pdfjs-dist page rendering (most reliable) ─────────────────
+  let pdfjsWorked = false;
+  try {
+    // pdfjs-dist v4+ removed the legacy path — try multiple entry points
+    let pdfjs;
+    const pdfjsPaths = [
+      'pdfjs-dist/legacy/build/pdf.js',   // v2/v3
+      'pdfjs-dist/build/pdf.js',           // v4+ commonjs
+      'pdfjs-dist',                         // v4+ main entry
+    ];
+    for (const p of pdfjsPaths) {
+      try { pdfjs = require(p); break; } catch {}
+    }
+    if (!pdfjs) throw new Error('pdfjs-dist not loadable — run: npm install pdfjs-dist');
 
-  console.log(`   PDF has ${doc.getPageCount()} pages — extracting embedded images...`);
+    // v4+ exports are nested under a default or named export
+    if (pdfjs.default) pdfjs = pdfjs.default;
+    if (!pdfjs.getDocument) throw new Error('pdfjs getDocument not found — unexpected module shape');
 
-  for (let pi = 0; pi < doc.getPageCount(); pi++) {
-    const page = doc.getPages()[pi];
-    const res  = page.node.get(PDFLib.PDFName.of('Resources'));
-    if (!res) continue;
-    const xobj = res.get(PDFLib.PDFName.of('XObject'));
-    if (!xobj) continue;
+    // Disable the worker (we are in Node, not a browser)
+    if (pdfjs.GlobalWorkerOptions) pdfjs.GlobalWorkerOptions.workerSrc = '';
 
-    for (const [key, ref] of xobj.entries()) {
+    // Support both 'canvas' (Linux/Mac) and '@napi-rs/canvas' (Windows, no build tools needed)
+    let canvas;
+    try { canvas = require('canvas'); }
+    catch { canvas = require('@napi-rs/canvas'); }
+
+    // Normalise API differences between canvas and @napi-rs/canvas
+    const createCanvas = canvas.createCanvas || canvas.Canvas
+      ? (w, h) => canvas.createCanvas(w, h)
+      : null;
+    if (!createCanvas) throw new Error('No compatible canvas module found');
+
+    const data    = new Uint8Array(fs.readFileSync(pdfPath));
+    const loadDoc = await pdfjs.getDocument({ data, disableFontFace: true }).promise;
+    console.log(`   pdfjs: ${loadDoc.numPages} pages`);
+
+    for (let pn = 1; pn <= loadDoc.numPages; pn++) {
       try {
-        const stream = doc.context.lookup(ref);
-        if (!stream || stream.constructor.name !== 'PDFRawStream') continue;
+        const page     = await loadDoc.getPage(pn);
+        const viewport = page.getViewport({ scale: 2.0 }); // 2x = ~150dpi
+        const cvs      = createCanvas(viewport.width, viewport.height);
+        const ctx      = cvs.getContext('2d');
 
-        const dict    = stream.dict;
-        const subtype = dict.get(PDFLib.PDFName.of('Subtype'));
-        if (!subtype || subtype.toString() !== '/Image') continue;
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+          canvasFactory: {
+            create:  (w, h) => { const c = createCanvas(w, h); return { canvas: c, context: c.getContext('2d') }; },
+            reset:   (obj, w, h) => { obj.canvas.width = w; obj.canvas.height = h; },
+            destroy: () => {},
+          },
+        }).promise;
 
-        const rawData = stream.getContents();
-        if (!rawData || rawData.length < 5000) continue;
+        // toBuffer works on both canvas implementations
+        const pngBuf  = typeof cvs.toBuffer === 'function'
+          ? cvs.toBuffer('image/png')
+          : Buffer.from(await cvs.encode('png'));
+        const webpBuf = await sharp(pngBuf)
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 })
+          .toBuffer();
 
-        const filter  = dict.get(PDFLib.PDFName.of('Filter'))?.toString() ?? '';
-        const width   = dict.get(PDFLib.PDFName.of('Width'))?.value?.()   ?? 0;
-        const height  = dict.get(PDFLib.PDFName.of('Height'))?.value?.()  ?? 0;
-
-        let buf, ext;
-
-        if (filter.includes('DCTDecode')) {
-          buf = Buffer.from(rawData);
-          ext = 'jpg';
-        } else if (filter.includes('JPXDecode')) {
-          buf = Buffer.from(rawData);
-          ext = 'jp2';
-        } else {
-          if (width < 20 || height < 20) continue;
-          const csObj    = dict.get(PDFLib.PDFName.of('ColorSpace'));
-          const csName   = csObj?.toString() ?? '/DeviceRGB';
-          const channels = csName.includes('Gray') ? 1 : csName.includes('CMYK') ? 4 : 3;
-          try {
-            buf = await require('sharp')(Buffer.from(rawData), {
-              raw: { width, height, channels },
-            }).png().toBuffer();
-            ext = 'png';
-          } catch { continue; }
-        }
-
-        if (!buf || buf.length < 1000) continue;
-
-        imgCount++;
-        const outPath = path.join(outDir, `img-p${pi+1}-${imgCount}.${ext}`);
-        fs.writeFileSync(outPath, buf);
+        const outPath = path.join(outDir, `page-${pn}.webp`);
+        fs.writeFileSync(outPath, webpBuf);
         paths.push(outPath);
-        console.log(`   ✅ Image ${imgCount}: page ${pi+1} | ${key} | ${width}x${height} | ${Math.round(buf.length/1024)}KB`);
-
-      } catch (e) {
-        console.warn(`   ⚠ Skipping ${key} on page ${pi+1}: ${e.message}`);
+        console.log(`   ✅ Rendered page ${pn} (${Math.round(webpBuf.length/1024)}KB)`);
+      } catch (pageErr) {
+        console.warn(`   ⚠ Page ${pn} render failed: ${pageErr.message}`);
       }
     }
+
+    if (paths.length > 0) pdfjsWorked = true;
+  } catch (e) {
+    console.warn(`   pdfjs-dist not available or failed: ${e.message}`);
+  }
+
+  if (pdfjsWorked) {
+    console.log(`   Total pages rendered: ${paths.length}`);
+    return { imagePaths: paths, outDir };
+  }
+
+  // ── Strategy 2: pdf-lib direct JPEG XObject extraction ────────────────────
+  // Works only for PDFs that embed JPEG images directly (product catalogs, etc.)
+  console.log('   Falling back to pdf-lib XObject extraction...');
+  let PDFLib;
+  try { PDFLib = require('pdf-lib'); }
+  catch { throw new Error('Neither pdfjs-dist nor pdf-lib is installed.\nRun: npm install pdfjs-dist canvas'); }
+
+  try {
+    const bytes  = fs.readFileSync(pdfPath);
+    const doc    = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    let imgCount = 0;
+
+    for (let pi = 0; pi < doc.getPageCount(); pi++) {
+      const page = doc.getPages()[pi];
+      let xobj;
+      try {
+        const resRef  = page.node.get(PDFLib.PDFName.of('Resources'));
+        if (!resRef) continue;
+        const res     = doc.context.lookupMaybe(resRef) ?? resRef;
+        const xobjRef = res.get?.(PDFLib.PDFName.of('XObject'));
+        if (!xobjRef) continue;
+        xobj = doc.context.lookupMaybe(xobjRef) ?? xobjRef;
+        if (!xobj?.entries) continue;
+      } catch { continue; }
+
+      for (const [key, ref] of xobj.entries()) {
+        try {
+          const obj  = doc.context.lookupMaybe(ref) ?? ref;
+          if (!obj) continue;
+          const dict = obj.dict ?? obj;
+          if (!dict?.get) continue;
+
+          const subtype = dict.get(PDFLib.PDFName.of('Subtype'));
+          if (subtype?.toString() !== '/Image') continue;
+
+          // pdf-lib stores raw bytes on .contents (Uint8Array)
+          const rawData = obj.contents;
+          if (!rawData || rawData.length < 1000) continue;
+
+          const filter = dict.get(PDFLib.PDFName.of('Filter'))?.toString() ?? '';
+
+          // Only handle JPEG — other formats need full decompression we can't do here
+          if (!filter.includes('DCTDecode')) continue;
+
+          const wVal = dict.get(PDFLib.PDFName.of('Width'));
+          const hVal = dict.get(PDFLib.PDFName.of('Height'));
+          const w = typeof wVal?.asNumber === 'function' ? wVal.asNumber() : (wVal?.value?.() ?? 0);
+          const h = typeof hVal?.asNumber === 'function' ? hVal.asNumber() : (hVal?.value?.() ?? 0);
+          if (w < 80 || h < 80) continue;
+
+          // Validate it's real JPEG (starts with FF D8)
+          if (rawData[0] !== 0xFF || rawData[1] !== 0xD8) continue;
+
+          const webpBuf = await sharp(Buffer.from(rawData))
+            .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 90 })
+            .toBuffer();
+
+          imgCount++;
+          const outPath = path.join(outDir, `img-p${pi+1}-${imgCount}.webp`);
+          fs.writeFileSync(outPath, webpBuf);
+          paths.push(outPath);
+          console.log(`   ✅ JPEG XObject ${imgCount}: page ${pi+1} | ${w}x${h}`);
+        } catch { /* skip this xobj */ }
+      }
+    }
+  } catch (e) {
+    console.warn(`   pdf-lib extraction error: ${e.message}`);
   }
 
   if (paths.length === 0) {
-    console.warn('   No embedded images found — falling back to page screenshots');
-    try {
-      const pdfToImg = require('pdf-to-img');
-      const pdfDoc   = await pdfToImg.pdf(pdfPath, { scale: 2 });
-      let pn = 1;
-      for await (const pb of pdfDoc) {
-        const op = path.join(outDir, `page-${pn}.png`);
-        fs.writeFileSync(op, pb);
-        paths.push(op);
-        pn++;
-      }
-    } catch (e) {
-      throw new Error('No embedded images in PDF. Install pdf-to-img for fallback: npm install pdf-to-img');
-    }
+    throw new Error(
+      'No images could be extracted from this PDF.\n' +
+      'Install PDF support:\n' +
+      '  Linux/Mac: npm install pdfjs-dist canvas\n' +
+      '  Windows:   npm install pdfjs-dist @napi-rs/canvas'
+    );
   }
 
-  console.log(`   Total images ready: ${paths.length}`);
+  console.log(`   Total images extracted: ${paths.length}`);
   return { imagePaths: paths, outDir };
 }
-
 // ── PDF: Same category — process with AI, save as draft products ──────────────
-router.post('/pdf/same-category', adminOnly, pdfUpload.single('pdf'), async (req, res) => {
+router.post('/pdf/same-category', adminOnly, (req, res, next) => {
+  pdfUpload.single('pdf')(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: `PDF too large. Maximum allowed size is 200 MB.` });
+    }
+    if (err) return res.status(400).json({ message: err.message });
+    next();
+  });
+}, async (req, res) => {
   const tmpPdf = req.file?.path;
   let outDir;
   try {
@@ -319,7 +411,15 @@ router.post('/pdf/same-category', adminOnly, pdfUpload.single('pdf'), async (req
 });
 
 // ── PDF: Extract raw images only — download as ZIP, no AI ────────────────────
-router.post('/pdf/extract', adminOnly, pdfUpload.single('pdf'), async (req, res) => {
+router.post('/pdf/extract', adminOnly, (req, res, next) => {
+  pdfUpload.single('pdf')(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: `PDF too large. Maximum allowed size is 200 MB. Your file: ${err.field || 'unknown'}.` });
+    }
+    if (err) return res.status(400).json({ message: err.message });
+    next();
+  });
+}, async (req, res) => {
   const tmpPdf = req.file?.path;
   let outDir;
   try {

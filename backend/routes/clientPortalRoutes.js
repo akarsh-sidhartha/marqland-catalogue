@@ -201,6 +201,38 @@ router.get('/order/:orderId', async (req, res) => {
   try {
     const portal = await ClientPortal.findOne({ orderId: req.params.orderId });
     if (!portal) return res.status(404).json({ message: 'No portal for this order yet.' });
+
+    // Auto-sync product gallery images + video on every load — no manual step needed
+    if (portal.type === 'product' && (portal.productItems || []).length > 0) {
+      try {
+        const ids = portal.productItems.map(i => i.productId).filter(Boolean);
+        const products = await Product.find({ _id: { $in: ids } }).lean();
+        const pMap = new Map(products.map(p => [p._id.toString(), p]));
+        const calcSell = (pur, mk) => Math.round(parseFloat(pur||0) * (1 + parseFloat(mk||0)/100));
+        let dirty = false;
+        portal.productItems = portal.productItems.map(item => {
+          const src = pMap.get(item.productId);
+          if (!src) return item;
+          const newExtra = src.additionalImages || [];
+          const newVideo = src.videoUrl || '';
+          // Only mark dirty if something actually changed
+          const changed =
+            JSON.stringify(item.additionalImages || []) !== JSON.stringify(newExtra) ||
+            (item.videoUrl || '') !== newVideo;
+          if (!changed) return item;
+          dirty = true;
+          const obj = item.toObject ? item.toObject() : { ...item };
+          return { ...obj, additionalImages: newExtra, videoUrl: newVideo,
+            imageUrl: src.imageUrl || item.imageUrl,
+            price: src.price != null ? Number(src.price) : calcSell(src.purchasePrice, src.markupPercent),
+          };
+        });
+        if (dirty) await portal.save();
+      } catch (syncErr) {
+        console.warn('[portal auto-sync] skipped:', syncErr.message);
+      }
+    }
+
     res.json(portal);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -222,6 +254,31 @@ router.put('/:slug/items', async (req, res) => {
     if (portal.type === 'offsite' && offsiteItems) portal.offsiteItems = offsiteItems;
 
     await portal.save();
+
+    // Auto-sync: immediately enrich new product items with gallery + video
+    if (portal.type === 'product' && (portal.productItems || []).length > 0) {
+      try {
+        const ids = portal.productItems.map(i => i.productId).filter(Boolean);
+        const products = await Product.find({ _id: { $in: ids } }).lean();
+        const pMap = new Map(products.map(p => [p._id.toString(), p]));
+        const calcSell = (pur, mk) => Math.round(parseFloat(pur||0) * (1 + parseFloat(mk||0)/100));
+        portal.productItems = portal.productItems.map(item => {
+          const src = pMap.get(item.productId);
+          if (!src) return item;
+          const obj = item.toObject ? item.toObject() : { ...item };
+          return { ...obj,
+            additionalImages: src.additionalImages || [],
+            videoUrl:         src.videoUrl || '',
+            imageUrl:         src.imageUrl || item.imageUrl,
+            price: src.price != null ? Number(src.price) : calcSell(src.purchasePrice, src.markupPercent),
+          };
+        });
+        await portal.save();
+      } catch (syncErr) {
+        console.warn('[items PUT auto-sync] skipped:', syncErr.message);
+      }
+    }
+
     res.json(portal);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -626,6 +683,69 @@ router.get('/unread-counts', async (req, res) => {
 
     res.json(result);
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+/**
+ * POST /api/portal/:slug/sync-products
+ *
+ * Re-fetches each productItem from the Product collection and updates
+ * the portal snapshot with the latest: additionalImages, videoUrl,
+ * imageUrl, description, name, price.
+ *
+ * Only fields that can change after a product is added to a portal are
+ * refreshed — orderId / slug / type / messages are untouched.
+ */
+router.post('/:slug/sync-products', async (req, res) => {
+  try {
+    const portal = await ClientPortal.findOne({ slug: req.params.slug });
+    if (!portal) return res.status(404).json({ message: 'Portal not found.' });
+    if (portal.type !== 'product') {
+      return res.status(400).json({ message: 'Sync only applies to product portals.' });
+    }
+
+    const items = portal.productItems || [];
+    if (items.length === 0) return res.json({ synced: 0, portal });
+
+    // Collect all productIds that exist
+    const ids = items.map(i => i.productId).filter(Boolean);
+    const products = await Product.find({ _id: { $in: ids } }).lean();
+    const productMap = new Map(products.map(p => [p._id.toString(), p]));
+
+    let synced = 0;
+    const calcSell = (purchase, markup) => {
+      const p = parseFloat(purchase || 0);
+      const m = parseFloat(markup || 0);
+      return Math.round(p + p * m / 100);
+    };
+
+    portal.productItems = items.map(item => {
+      const src = productMap.get(item.productId);
+      if (!src) return item; // product deleted — keep existing snapshot
+
+      synced++;
+      return {
+        ...item.toObject ? item.toObject() : item,
+        // Always refresh these fields from the live product
+        name:             src.name             || item.name,
+        description:      src.description      || item.description,
+        imageUrl:         src.imageUrl         || item.imageUrl,
+        additionalImages: src.additionalImages  || [],
+        videoUrl:         src.videoUrl          || '',
+        price:            src.price != null
+          ? Number(src.price)
+          : calcSell(src.purchasePrice, src.markupPercent),
+        category:         src.category    || item.category,
+        subCategory:      src.subCategory || item.subCategory,
+      };
+    });
+
+    await portal.save();
+    res.json({ synced, total: items.length, portal });
+  } catch (err) {
+    console.error('[sync-products] error:', err.message);
     res.status(500).json({ message: err.message });
   }
 });

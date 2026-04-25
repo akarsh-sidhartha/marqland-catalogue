@@ -75,17 +75,21 @@ const calcSell = (purchase, markup) => {
 };
 
 const mapProductToItem = (p) => ({
-  productId:   p._id?.toString() || '',
-  name:        p.name            || '',
-  description: p.description     || '',
-  imageUrl:    p.imageUrl        || '',
-  price:       p.price != null
+  productId:        p._id?.toString() || '',
+  name:             p.name            || '',
+  description:      p.description     || '',
+  imageUrl:         p.imageUrl        || '',
+  // Additional gallery angles — shown as a carousel in the client portal
+  additionalImages: Array.isArray(p.additionalImages) ? p.additionalImages : [],
+  // Video URL (YouTube / brand link) — embedded player in client portal
+  videoUrl:         p.videoUrl        || '',
+  price:            p.price != null
     ? Number(p.price)
     : calcSell(p.purchasePrice, p.markupPercent),
-  category:    p.category    || '',
-  subCategory: p.subCategory || '',
-  note:        p.note        || '',
-  order:       p.order       || 0,
+  category:         p.category    || '',
+  subCategory:      p.subCategory || '',
+  note:             p.note        || '',
+  order:            p.order       || 0,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,6 +149,13 @@ const usePortalItems = (type) => {
       }
 
       await api.put(`/portal/${portal.slug}/items`, mapped);
+
+      // Auto-sync: pull latest additionalImages + videoUrl from Product docs
+      // so the client portal immediately shows gallery images and video.
+      if (type === 'product') {
+        try { await api.post(`/portal/${portal.slug}/sync-products`); } catch {}
+      }
+
       setSaved(true);
       setTimeout(() => { setOpen(false); setSaved(false); }, 1500);
     } catch (err) {

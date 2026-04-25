@@ -31,16 +31,19 @@ const messageSchema = new mongoose.Schema({
 
 // ── Product item (gifting/merchandise) ────────────────────────────────────────
 const productItemSchema = new mongoose.Schema({
-  productId:   { type: String },
-  name:        { type: String, required: true },
-  description: { type: String, default: '' },
-  imageUrl:    { type: String, default: '' },
-  videoUrl:    { type: String, default: '' },
-  price:       { type: Number, default: 0 },
-  category:    { type: String, default: '' },
-  subCategory: { type: String, default: '' },
-  note:        { type: String, default: '' },
-  order:       { type: Number, default: 0 },
+  productId:        { type: String },
+  name:             { type: String, required: true },
+  description:      { type: String, default: '' },
+  imageUrl:         { type: String, default: '' },
+  // Additional gallery images (different angles, lifestyle shots)
+  additionalImages: { type: [String], default: [] },
+  // YouTube or brand video URL — embedded in client portal card
+  videoUrl:         { type: String, default: '' },
+  price:            { type: Number, default: 0 },
+  category:         { type: String, default: '' },
+  subCategory:      { type: String, default: '' },
+  note:             { type: String, default: '' },
+  order:            { type: Number, default: 0 },
 }, { _id: true });
 
 // ── Offsite item (property) ────────────────────────────────────────────────────
