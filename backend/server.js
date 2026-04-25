@@ -35,7 +35,7 @@ const catalogueRoutes = require('./routes/catalogueRoutes');
 const propertyRoutes = require('./routes/propertyRoutes');
 const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
 //const invoiceRoutes = require('./routes/invoiceRoute');
-const orderInquiry = require('./routes/orderInquiry');
+const orderInquiry = require('./routes/orderInquiryRoute');
 const SamplesProvided = require('./routes/samplesProvided');
 const SourcingHub = require('./routes/inquiryRoutes');
 const { router: paymentTracker, syncOutlookInvoices } = require('./routes/paymentTrackerRoutes');
@@ -97,17 +97,18 @@ app.use((req, res, next) => {
     return next();
   }
 
+  // Public portal and vendor links — always serve React regardless of device
+  if (req.url.startsWith('/p/') || req.url.startsWith('/respond/')) {
+    return res.sendFile(path.join(buildPath, 'index.html'));
+  }
+
   // Detect mobile User-Agent
   const ua = req.headers['user-agent'] || '';
   const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
 
-  // Block mobile from all routes except /paymenttracker and public portal links (/p/)
-  const isMobileExempt = req.url.startsWith('/p/')       // client portal links
-    || req.url.startsWith('/respond/') // vendor response links
-    || req.url === '/paymenttracker'
-    || req.url.startsWith('/paymenttracker');
-  if (isMobile && !isMobileExempt) {
-    return res.redirect(301, '/paymenttracker');
+  // Block mobile from all routes except /paymenttracker (302 = not cached by browser)
+  if (isMobile && req.url !== '/paymenttracker' && !req.url.startsWith('/paymenttracker')) {
+    return res.redirect(302, '/paymenttracker');
   }
 
   res.sendFile(path.join(buildPath, 'index.html'));

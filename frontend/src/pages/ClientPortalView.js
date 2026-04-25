@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import { initNotifications, requestNotifPermission, pushNotif, subscribeToPortalPush } from '../utils/portalNotifications';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM — "The Digital Concierge" (DESIGN.md)
@@ -51,6 +52,7 @@ const Ic = {
   zoom:   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>,
   heart:  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
   heartO: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
+  play:   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
 };
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -171,7 +173,195 @@ const PBox = ({ label, value, sub, amber }) => (
   </div>
 );
 
-// ── Toast — Obsidian surface per DESIGN.md ────────────────────────────────────
+// ── YouTube Embed ─────────────────────────────────────────────────────────────
+// Extracts video ID from various YouTube URL formats and renders an embed
+const getYouTubeId = (url) => {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+};
+
+const YouTubeEmbed = ({ url, title }) => {
+  const [show, setShow] = React.useState(false);
+  const videoId = getYouTubeId(url);
+  if (!videoId) return null;
+  const thumb = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  return (
+    <div style={{borderRadius:10,overflow:'hidden',background:DS.base,border:`1px solid rgba(255,255,255,0.08)`,marginTop:12}}>
+      {!show ? (
+        <div style={{position:'relative',cursor:'pointer',aspectRatio:'16/9'}} onClick={()=>setShow(true)}>
+          <img src={thumb} alt={title||'Video'} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+          <div style={{position:'absolute',inset:0,background:'rgba(5,10,20,0.5)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div style={{width:54,height:54,background:'rgba(197,163,87,0.92)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(197,163,87,0.4)',transition:'transform .2s'}}
+              onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'}
+              onMouseLeave={e=>e.currentTarget.style.transform='none'}>
+              <span style={{color:DS.onGold,marginLeft:3}}>{Ic.play}</span>
+            </div>
+          </div>
+          <div style={{position:'absolute',bottom:10,left:12,fontSize:11,fontWeight:600,color:'rgba(255,255,255,0.8)',fontFamily:'Manrope,sans-serif',textShadow:'0 1px 4px rgba(0,0,0,0.7)',maxWidth:'70%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{title||'Watch Video'}</div>
+        </div>
+      ) : (
+        <div style={{aspectRatio:'16/9'}}>
+          <iframe
+            width="100%" height="100%"
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+            title={title||'Video'}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{display:'block'}}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Property Attachment Chip (client-facing, in offsite cards) ─────────────────
+const PropAttachChip = ({ att }) => {
+  const handleClick = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(att.url);
+      if (!res.ok) throw new Error('Not found');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = att.name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch { window.open(att.url, '_blank'); }
+  };
+  return (
+    <a href={att.url} target="_blank" rel="noreferrer" onClick={handleClick}
+      style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',background:'rgba(197,163,87,0.07)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,textDecoration:'none',cursor:'pointer',transition:'background .15s'}}
+      onMouseEnter={e=>e.currentTarget.style.background='rgba(197,163,87,0.13)'}
+      onMouseLeave={e=>e.currentTarget.style.background='rgba(197,163,87,0.07)'}>
+      <span style={{color:DS.gold}}>{Ic.file}</span>
+      <span style={{fontSize:11,fontWeight:600,color:DS.text,maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
+      {att.size>0&&<span style={{fontSize:10,color:'rgba(255,255,255,0.25)'}}>{fmtSz(att.size)}</span>}
+      <span style={{color:'rgba(255,255,255,0.35)'}}>{Ic.dl}</span>
+    </a>
+  );
+};
+
+// ── Smart Description — AI-structured property details ───────────────────────
+const SECTION_ICONS = {
+  travel:'🚗', highlights:'✨', amenities:'🏊', food:'🍽️',
+  rooms:'🛏️', policies:'📋', activities:'🎯', info:'ℹ️',
+};
+
+const SmartDescription = ({ text, itemId }) => {
+  const [state, setState]     = React.useState('idle');
+  const [sections, setSections] = React.useState(null);
+  const [expanded, setExpanded] = React.useState(false);
+  const cacheKey = `sd_${itemId}`;
+
+  React.useEffect(() => {
+    if (!text || text.length < 80) return;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try { setSections(JSON.parse(cached)); setState('done'); } catch {}
+      return;
+    }
+    parse();
+  }, []);
+
+  const parse = async () => {
+    setState('loading');
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content:
+`You are a hospitality content formatter. Parse this property description into structured sections. Return ONLY valid JSON, no markdown, no explanation.
+
+Property description:
+"""
+${text}
+"""
+
+Return this exact JSON shape (only include sections that have relevant content, max 5 sections):
+{"sections":[{"type":"travel","title":"Getting There","points":["..."]},{"type":"highlights","title":"Highlights","points":["..."]},{"type":"amenities","title":"Amenities","points":["..."]},{"type":"food","title":"Food & Drinks","points":["..."]},{"type":"rooms","title":"Rooms","points":["..."]},{"type":"activities","title":"Activities","points":["..."]},{"type":"policies","title":"Policies","points":["..."]},{"type":"info","title":"Good to Know","points":["..."]}]}
+
+Rules: Each point max 12 words. Distance/travel info → "travel". Never duplicate across sections. 2-5 points per section.` }],
+        }),
+      });
+      const data = await response.json();
+      const raw  = (data.content||[]).map(b=>b.text||'').join('');
+      const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+      if (parsed.sections?.length > 0) {
+        setSections(parsed.sections);
+        setState('done');
+        sessionStorage.setItem(cacheKey, JSON.stringify(parsed.sections));
+      } else { setState('error'); }
+    } catch { setState('error'); }
+  };
+
+  if (!text) return null;
+
+  // Very short — plain text
+  if (text.length < 80) {
+    return <p style={{fontSize:12,color:DS.sub,lineHeight:1.65,fontFamily:'Manrope,sans-serif'}}>{text}</p>;
+  }
+
+  // Loading shimmer
+  if (state==='loading') return (
+    <div style={{display:'flex',flexDirection:'column',gap:7,marginTop:6}}>
+      {[75,55,85,60].map((w,i)=>(
+        <div key={i} style={{height:9,borderRadius:5,background:'rgba(255,255,255,0.07)',width:`${w}%`,animation:'pulse 1.5s ease infinite',animationDelay:`${i*0.15}s`}}/>
+      ))}
+    </div>
+  );
+
+  // Fallback — plain text with expand/collapse
+  if (state==='error'||state==='idle') {
+    const lines = text.split('\n').filter(Boolean);
+    return (
+      <div>
+        <p style={{fontSize:12,color:DS.sub,lineHeight:1.75,fontFamily:'Manrope,sans-serif',whiteSpace:'pre-line'}}>
+          {(expanded||lines.length<=3) ? text : lines.slice(0,3).join('\n')+'…'}
+        </p>
+        {lines.length>3&&(
+          <button onClick={()=>setExpanded(e=>!e)}
+            style={{marginTop:5,fontSize:11,color:DS.gold,fontWeight:700,background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'Manrope,sans-serif'}}>
+            {expanded?'▲ Show less':'▼ Show more'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Structured AI sections
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:6}}>
+      {sections.map((sec,si)=>(
+        <div key={si} style={{borderRadius:8,padding:'9px 12px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}>
+          <div style={{fontSize:9,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6,fontFamily:'Manrope,sans-serif',display:'flex',alignItems:'center',gap:5}}>
+            <span>{SECTION_ICONS[sec.type]||'ℹ️'}</span>{sec.title}
+          </div>
+          {(sec.points||[]).map((pt,pi)=>(
+            <div key={pi} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:DS.sub,lineHeight:1.55,marginBottom:3,fontFamily:'Manrope,sans-serif'}}>
+              <span style={{color:DS.gold,flexShrink:0,fontSize:10,marginTop:2}}>›</span>
+              <span>{pt}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Toast = ({ toasts }) => (
   <div style={{position:'fixed',bottom:28,right:28,zIndex:9998,display:'flex',flexDirection:'column',gap:10,pointerEvents:'none'}}>
     {toasts.map(t => (
@@ -242,10 +432,10 @@ const ClientPortalView = () => {
   });
 
   useEffect(()=>{
+    initNotifications(); // register SW, no permission prompt yet
     load();
     fetch(`/api/portal/public/${slug}/view`,{method:'POST'}).catch(()=>{});
-    if(window.Notification?.permission==='default') window.Notification.requestPermission();
-    pollTimer.current = setInterval(()=>load(true), 15000);
+    pollTimer.current = setInterval(()=>load(true), 12000);
     return ()=>clearInterval(pollTimer.current);
   },[slug]);
 
@@ -271,7 +461,7 @@ const ClientPortalView = () => {
           const newest=teamMsgs[teamMsgs.length-1];
           const preview=newest.text?newest.text.slice(0,55)+(newest.text.length>55?'…':''):newest.attachments?.length?`📎 ${newest.attachments[0].name}`:'New message';
           showToast('Marqland Team',preview,'💬');
-          if(window.Notification?.permission==='granted') new window.Notification('Marqland Studios',{body:preview,icon:'/favicon.ico',tag:'portal-msg'});
+          pushNotif('Marqland Studios — New Message', preview, 'portal-team-msg');
         }
         prevMsgCount.current=(data.messages||[]).filter(m=>m.sender==='team').length;
       } else {
@@ -286,6 +476,9 @@ const ClientPortalView = () => {
 
   const send = async () => {
     if((!msg.trim()&&files.length===0)||sending) return;
+    // Ask for permission on first send — highest grant rate on user gesture
+    const perm = await requestNotifPermission();
+    if (perm === 'granted') subscribeToPortalPush(fetch); // register for server-side push
     const sender=clientName?.trim()||portal?.orderPlacedBy||portal?.clientName||'Client';
     setSending(true);
     try{
@@ -416,7 +609,7 @@ const ClientPortalView = () => {
           {[
             {k:'catalogue',l:'Catalogue Options', b:items.length},
             ...(portal.type==='product' ? [{k:'selected', l:'Selected Items', b:wishlisted.size||null}] : []),
-            ...(portal.type==='product' ? [{k:'shipments',l:'Shipment Tracking', b:null}] : []),
+            ...(portal.type==='product' && !isMobile ? [{k:'shipments',l:'Shipment Tracking', b:null}] : []),
             {k:'chat',     l:'Message Board',     b:newMsgs||null},
           ].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)}
@@ -1081,11 +1274,44 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
 // ─────────────────────────────────────────────────────────────────────────────
 const OffsiteCards = ({ items, onZoom }) => {
   const isMobile = useMobile();
+  const [typeFilter, setTypeFilter] = React.useState('all');
+
+  const hasDay   = items.some(i => i.type !== 'Night Stay');
+  const hasNight = items.some(i => i.type === 'Night Stay');
+  const hasBoth  = hasDay && hasNight;
+
+  const visible = typeFilter === 'all' ? items
+    : typeFilter === 'day'   ? items.filter(i => i.type !== 'Night Stay')
+    : items.filter(i => i.type === 'Night Stay');
+
   return (
   <div>
-    <p style={{fontSize:12,color:DS.sub,marginBottom:24,fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{items.length} propert{items.length!==1?'ies':'y'} selected for you</p>
+    {/* Type filter — only shown when both types are present */}
+    {hasBoth&&(
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:20,padding:'12px 16px',background:DS.cont,borderRadius:12,flexWrap:'wrap'}}>
+        <span style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',fontFamily:'Manrope,sans-serif',marginRight:4}}>Filter</span>
+        {[
+          {k:'all',   l:`All (${items.length})`},
+          {k:'day',   l:`☀️ Day Outing (${items.filter(i=>i.type!=='Night Stay').length})`},
+          {k:'night', l:`🌙 Night Stay (${items.filter(i=>i.type==='Night Stay').length})`},
+        ].map(opt=>(
+          <button key={opt.k} onClick={()=>setTypeFilter(opt.k)}
+            style={{
+              padding:'6px 16px',borderRadius:20,border:'none',cursor:'pointer',
+              fontSize:11,fontWeight:700,fontFamily:'Manrope,sans-serif',transition:'all .18s',
+              background: typeFilter===opt.k ? GOLD_GRAD : 'transparent',
+              color:      typeFilter===opt.k ? DS.onGold  : DS.sub,
+              boxShadow:  typeFilter===opt.k ? '0 4px 16px rgba(197,163,87,0.3)' : 'none',
+              outline:    typeFilter===opt.k ? 'none' : '1px solid rgba(255,255,255,0.12)',
+            }}>
+            {opt.l}
+          </button>
+        ))}
+      </div>
+    )}
+    <p style={{fontSize:12,color:DS.sub,marginBottom:20,fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{visible.length} propert{visible.length!==1?'ies':'y'} selected for you</p>
     <div style={{display:'flex',flexDirection:'column',gap:20}}>
-      {items.map((item,idx)=>{
+      {visible.map((item,idx)=>{
         const isDayOut   = item.type !== 'Night Stay';
         const hasPackages = isDayOut && item.dayPackages?.length > 0;
         return (
@@ -1122,11 +1348,9 @@ const OffsiteCards = ({ items, onZoom }) => {
                     </a>
                   )}
                 </div>
-                {/* Details — clamp for Night Stay, full text for Day Outing */}
+                {/* Details — AI-structured via SmartDescription */}
                 {item.details&&(
-                  isDayOut
-                    ? <p style={{fontSize:12,color:DS.sub,lineHeight:1.65,fontFamily:'Manrope,sans-serif'}}>{item.details}</p>
-                    : <p style={{fontSize:12,color:DS.sub,lineHeight:1.65,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden',fontFamily:'Manrope,sans-serif'}}>{item.details}</p>
+                  <SmartDescription text={item.details} itemId={String(item._id||idx)}/>
                 )}
               </div>
               {/* Night Stay prices */}
@@ -1135,9 +1359,14 @@ const OffsiteCards = ({ items, onZoom }) => {
                   {item.singlePrice>0&&<PBox label="Single" value={item.singlePrice} sub="per night"/>}
                   {item.doublePrice>0&&<PBox label="Double" value={item.doublePrice} sub="per night"/>}
                   {item.triplePrice>0&&<PBox label="Triple" value={item.triplePrice} sub="per night"/>}
+                  {item.quadPrice>0&&<PBox label="Quad" value={item.quadPrice} sub="per night"/>}
                   {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.licenseFeeDJ>0&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
                   {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
                   {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
+                  {(item.adhocAddons||[]).filter(a=>a.sellingPrice>0).map((a,ai)=>(
+                    <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
+                  ))}
                 </div>
               )}
               {/* Day Outing: show flat price only if no packages */}
@@ -1145,14 +1374,24 @@ const OffsiteCards = ({ items, onZoom }) => {
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {item.packagePrice>0&&<PBox label="Day package" value={item.packagePrice} sub="per person"/>}
                   {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.licenseFeeDJ>0&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
                   {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
+                  {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
+                  {(item.adhocAddons||[]).filter(a=>a.sellingPrice>0).map((a,ai)=>(
+                    <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
+                  ))}
                 </div>
               )}
               {/* Day Outing with packages: show add-ons only (packages shown below) */}
-              {isDayOut&&hasPackages&&(item.djCost>0||item.cocktailSnacks>0)&&(
+              {isDayOut&&hasPackages&&(item.djCost>0||item.licenseFeeDJ>0||item.cocktailSnacks>0||item.banquetHall>0||(item.adhocAddons||[]).length>0)&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.licenseFeeDJ>0&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
                   {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
+                  {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
+                  {(item.adhocAddons||[]).filter(a=>a.sellingPrice>0).map((a,ai)=>(
+                    <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
+                  ))}
                 </div>
               )}
             </div>
@@ -1201,6 +1440,24 @@ const OffsiteCards = ({ items, onZoom }) => {
           {!isDayOut&&item.note&&(
             <div style={{padding:'0 24px 18px',background:DS.cont}}>
               <div style={{background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>
+            </div>
+          )}
+
+          {/* YouTube video embed */}
+          {item.youtubeUrl&&getYouTubeId(item.youtubeUrl)&&(
+            <div style={{padding:'0 24px 20px',background:DS.cont}}>
+              <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>🎬 Property Video</div>
+              <YouTubeEmbed url={item.youtubeUrl} title={item.name}/>
+            </div>
+          )}
+
+          {/* Property attachments */}
+          {(item.attachments||[]).length>0&&(
+            <div style={{padding:'0 24px 20px',background:DS.cont}}>
+              <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>📎 Documents & Files</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {item.attachments.map((att,ai)=><PropAttachChip key={ai} att={att}/>)}
+              </div>
             </div>
           )}
         </GlassCard>

@@ -6,6 +6,7 @@ import {
   Package, MapPin, ChevronUp, ChevronDown, ChevronRight,
   ExternalLink, RefreshCw, Copy, Eye, Paperclip, Download,
 } from 'lucide-react';
+import { requestNotifPermission, pushNotif, subscribeToPortalPush } from '../utils/portalNotifications';
 
 /**
  * ClientPortalEditor
@@ -26,28 +27,54 @@ const ClientPortalEditor = ({ order, onClose }) => {
   const [editNote, setEditNote]     = useState(false);
   const [noteText, setNoteText]     = useState('');
   const [collapsed, setCollapsed]   = useState({}); // { [category]: true/false }
-  const chatEndRef  = useRef(null);
-  const chatFileRef = useRef(null);
+  const chatEndRef         = useRef(null);
+  const chatFileRef        = useRef(null);
+  const pollTimer          = useRef(null);
+  const prevClientMsgCount = useRef(0);
 
   const fallbackSlug = order.refNumber?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const portalUrl = portal?.slug
     ? `${window.location.origin}/p/${portal.slug}`
     : `${window.location.origin}/p/${fallbackSlug}`;
 
-  useEffect(() => { loadPortal(); }, [order._id]);
+  useEffect(() => {
+    requestNotifPermission();
+    loadPortal();
+    // Poll every 12 seconds for new client messages while the editor is open
+    pollTimer.current = setInterval(() => loadPortal(true), 12000);
+    return () => clearInterval(pollTimer.current);
+  }, [order._id]);
   useEffect(() => {
     if (tab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [portal?.messages, tab]);
 
-  const loadPortal = async () => {
-    setLoading(true);
+  const loadPortal = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await api.get(`/portal/order/${order._id}`);
-      setPortal(res.data);
-      setNoteText(res.data.teamNote || '');
+      const data = res.data;
+
+      // ── Detect new CLIENT messages and push a browser notification ──────────
+      if (silent) {
+        const clientMsgs = (data.messages || []).filter(m => m.sender === 'client');
+        if (prevClientMsgCount.current > 0 && clientMsgs.length > prevClientMsgCount.current) {
+          const newest = clientMsgs[clientMsgs.length - 1];
+          const preview = newest.text
+            ? newest.text.slice(0, 60) + (newest.text.length > 60 ? '…' : '')
+            : newest.attachments?.length ? `📎 ${newest.attachments[0].name}` : 'New message';
+          const senderLabel = newest.senderName || data.clientName || 'Client';
+          pushNotif(`${senderLabel} sent a message`, preview, `portal-client-msg-${data.slug}`);
+        }
+        prevClientMsgCount.current = (data.messages || []).filter(m => m.sender === 'client').length;
+      } else {
+        prevClientMsgCount.current = (data.messages || []).filter(m => m.sender === 'client').length;
+      }
+
+      setPortal(data);
+      setNoteText(data.teamNote || '');
     } catch (err) {
       if (err.response?.status === 404) await createPortal();
-    } finally { setLoading(false); }
+    } finally { if (!silent) setLoading(false); }
   };
 
   const createPortal = async () => {
@@ -90,6 +117,8 @@ const ClientPortalEditor = ({ order, onClose }) => {
 
   const sendMessage = async () => {
     if ((!msg.trim() && chatFiles.length === 0) || sendingMsg) return;
+    const perm = await requestNotifPermission();
+    if (perm === 'granted') subscribeToPortalPush(fetch); // register for server-side push
     setSendingMsg(true);
     try {
       const fd = new FormData();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../api';
 import ClientPortalEditor from './ClientPortalEditor';
+import { initNotifications, requestNotifPermission, pushNotif } from '../utils/portalNotifications';
 import CreatableSelect from 'react-select/creatable';
 import {
   Plus, ArrowRight, CheckCircle, Clock, FileText, Image as ImageIcon,
@@ -252,9 +253,58 @@ export default function App() {
   //   mode: 'add-contact' — client exists but contact is new
   const [clientCheckModal, setClientCheckModal] = useState(null);
 
+  // ── Unread client message counts per orderId ─────────────────────────────
+  // { [orderId]: number }  — shown as badge on the portal chat button
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const unreadPollTimer = useRef(null);
+  // Track last-seen client message counts so we can detect new ones for notifs
+  const prevClientCounts = useRef({});
+
+  // ── Poll portals for unread client messages ─────────────────────────────
+  // "Unread" = client messages received AFTER the team last opened that chat.
+  // We persist the "seen count" per orderId in localStorage so it survives refresh.
+  const getSeenCount = (orderId) => parseInt(localStorage.getItem(`seen_${orderId}`) || '0', 10);
+  const setSeenCount = (orderId, n) => localStorage.setItem(`seen_${orderId}`, String(n));
+
+  const pollUnreadMessages = async () => {
+    try {
+      const countRes = await api.get('/portal/unread-counts').catch(() => ({ data: {} }));
+      const counts = countRes.data || {};
+
+      const badges = {};
+      Object.entries(counts).forEach(([orderId, data]) => {
+        const total  = data.clientCount || 0;
+        const seen   = getSeenCount(orderId);
+        const unread = Math.max(0, total - seen);
+        badges[orderId] = { ...data, unread };
+
+        // Fire push notif if new messages arrived since last poll
+        const prev = prevClientCounts.current[orderId] || 0;
+        if (total > prev && prev > 0) {
+          const order = orders.find(o => o._id === orderId);
+          const label = order ? `${order.clientName}` : 'A client';
+          pushNotif(
+            `${label} sent a message`,
+            data.lastClientMessage || 'New message in portal',
+            '/orders',
+            `portal-client-${orderId}`
+          );
+        }
+        prevClientCounts.current[orderId] = total;
+      });
+
+      setUnreadCounts(badges);
+    } catch {}
+  };
+
   useEffect(() => {
+    initNotifications();
     fetchOrders();
     fetchClients();
+    // Start polling for unread messages every 15 seconds
+    unreadPollTimer.current = setInterval(pollUnreadMessages, 15000);
+    pollUnreadMessages(); // run immediately
+    return () => clearInterval(unreadPollTimer.current);
   }, []);
 
   // ── Load clients from the /clients API ──────────────────────────────────────
@@ -614,8 +664,21 @@ export default function App() {
     return <FileText size={14} className="text-slate-400" />;
   };
 
+  const loadOrderAttachments = async (order) => {
+    // Show the modal immediately with stored metadata, then fetch live OneDrive links
+    setEditOrder(order);
+    try {
+      const res = await api.get(`/orders/${order._id}/attachments`);
+      if (Array.isArray(res.data)) {
+        setEditOrder(prev => prev?._id === order._id ? { ...prev, attachments: res.data } : prev);
+      }
+    } catch {
+      // Non-fatal — stored attachment metadata already shown
+    }
+  };
+
   const OrderRow = ({ order }) => (
-    <tr onClick={() => setEditOrder(order)}
+    <tr onClick={() => loadOrderAttachments(order)}
       className="hover:bg-slate-50/80 cursor-pointer transition-colors border-b border-slate-100 last:border-0">
       <td className="px-6 py-4">
         <div className="flex flex-col gap-1">
@@ -684,12 +747,35 @@ export default function App() {
               <CheckCircle size={18} className={loading ? 'animate-pulse' : ''} />
             </button>
           )}
-          {(order.status === 'inquiry' || order.status === 'ongoing') && (
-            <button onClick={(e) => { e.stopPropagation(); setChatOrder(order); }}
-              className="p-2 text-violet-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors" title="Open portal chat">
-              <Link2 size={16} />
-            </button>
-          )}
+          {(order.status === 'inquiry' || order.status === 'ongoing') && (() => {
+            const ordData   = unreadCounts[order._id];
+            const unread    = ordData?.unread || 0;
+            const hasUnread = unread > 0;
+            return (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await requestNotifPermission();
+                  // Mark all messages as seen — persists in localStorage, clears badge
+                  const total = ordData?.clientCount || 0;
+                  setSeenCount(order._id, total);
+                  setUnreadCounts(prev => ({
+                    ...prev,
+                    [order._id]: { ...(prev[order._id] || {}), unread: 0 },
+                  }));
+                  setChatOrder(order);
+                }}
+                className={`relative p-2 rounded-lg transition-colors ${hasUnread ? 'text-violet-600 bg-violet-50' : 'text-violet-400 hover:text-violet-600 hover:bg-violet-50'}`}
+                title={hasUnread ? `${unread} new client message${unread !== 1 ? 's' : ''}` : 'Open portal chat'}>
+                <Link2 size={16} />
+                {hasUnread && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 leading-none shadow-sm">
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
           {(order.status === 'inquiry' || order.status === 'ongoing') && (() => {
             const slug      = order.refNumber?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
             const portalUrl = `${window.location.origin}/p/${slug}`;

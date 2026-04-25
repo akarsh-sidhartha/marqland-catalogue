@@ -15,36 +15,45 @@ const {
   getFinancialYear,
 } = require('../services/msGraphService');
 
-// ── GET all orders (with live OneDrive attachment links) ──────────────────────
+// ── GET all orders ────────────────────────────────────────────────────────────
+// FAST path: returns MongoDB data immediately, NO OneDrive calls.
+// Attachments are stored as metadata in the DB (name, type, size + webUrl).
+// The frontend loads the live OneDrive folder only when an order is opened.
 router.get('/', async (req, res) => {
   try {
     const orders = await OrderInquiry.find().sort({ updatedAt: -1 }).lean();
-
-    const enhanced = await Promise.all(orders.map(async (order) => {
-      if (!order.oneDriveFolderUrl) return { ...order, attachments: [] };
-      try {
-        const folderId = await getFolderIdFromUrl(order.oneDriveFolderUrl);
-        if (!folderId) return { ...order, attachments: [] };
-        const files = await listFolderContents(folderId);
-        return {
-          ...order,
-          attachments: files.map((f) => ({
-            name: f.name,
-            size: f.size,
-            webUrl: f.webUrl,
-            downloadUrl: f['@microsoft.graph.downloadUrl'],
-            isOneDrive: true,
-          })),
-        };
-      } catch {
-        return { ...order, attachments: [] };
-      }
-    }));
-
-    res.json(enhanced);
+    // Return stored attachment metadata (name, type, webUrl) without hitting OneDrive.
+    // webUrl is persisted on the DB record from the time of upload, so links still work.
+    res.json(orders.map(o => ({ ...o, attachments: o.attachments || [] })));
   } catch (err) {
     console.error('Order GET error:', err.message);
     res.status(500).json([]);
+  }
+});
+
+// ── GET /api/orders/:id/attachments ──────────────────────────────────────────
+// Lazy: called only when a specific order is opened in the edit modal.
+// Fetches live OneDrive listing for that one order only.
+router.get('/:id/attachments', async (req, res) => {
+  try {
+    const order = await OrderInquiry.findById(req.params.id).lean();
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (!order.oneDriveFolderUrl) return res.json([]);
+
+    const folderId = await getFolderIdFromUrl(order.oneDriveFolderUrl).catch(() => null);
+    if (!folderId) return res.json(order.attachments || []);
+
+    const files = await listFolderContents(folderId);
+    res.json(files.map(f => ({
+      name:        f.name,
+      size:        f.size,
+      webUrl:      f.webUrl,
+      downloadUrl: f['@microsoft.graph.downloadUrl'],
+      isOneDrive:  true,
+    })));
+  } catch (err) {
+    console.error('Attachment fetch error:', err.message);
+    res.json([]); // non-fatal — return empty rather than 500
   }
 });
 
@@ -57,7 +66,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Client Name and Contact Person are required.' });
     }
 
-    // Create OneDrive folder and upload attachments
+    // Create OneDrive folder and upload attachments (non-blocking on failure)
     const folderLink = await (async () => {
       try {
         const { folderId, folderUrl } = await buildOrderFolderHierarchy(req.body);
@@ -84,17 +93,8 @@ router.post('/', async (req, res) => {
 
     await order.save();
 
-
-    // ── Auto-create ClientPortal when order is created ───────────────────────
-    // This ensures the portal exists immediately so ProductList / PropertyList
-    // can add items to it via usePortalItems hook without waiting for a manual step.
+    // ── Auto-create ClientPortal ─────────────────────────────────────────────
     try {
-      /*
-      const slug = (order.refNumber || order._id.toString())
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-        */
       const genToken = () => {
         const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         let t = '';
@@ -102,9 +102,7 @@ router.post('/', async (req, res) => {
         return t;
       };
       const baseSlug = (order.refNumber || order._id.toString())
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       const slug = `${genToken()}-${baseSlug}`;
       console.log('🔵 Portal slug created:', slug);
       await ClientPortal.create({
@@ -117,7 +115,6 @@ router.post('/', async (req, res) => {
         title: order.title || '',
       });
     } catch (portalErr) {
-      // Don't fail the order creation if portal creation fails (e.g. duplicate)
       console.warn('Portal auto-create skipped:', portalErr.message);
     }
 
@@ -129,32 +126,29 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ── PATCH update order + handle attachment sync ───────────────────────────────
+// ── PATCH update order ────────────────────────────────────────────────────────
 router.patch('/:id', async (req, res) => {
   try {
     const { attachments, ...updateData } = req.body;
     const existing = await OrderInquiry.findById(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Order not found' });
 
-    // ── OneDrive operations ──
     if (existing.oneDriveFolderUrl) {
       const folderId = await getFolderIdFromUrl(existing.oneDriveFolderUrl).catch(() => null);
 
       if (folderId) {
-        // Rename folder if refNumber changed
         if (updateData.refNumber && updateData.refNumber !== existing.refNumber) {
           const newFolderName = updateData.refNumber.replace(/\//g, '-').trim();
           const newUrl = await renameItem(folderId, newFolderName).catch(() => null);
           if (newUrl) updateData.oneDriveFolderUrl = newUrl;
         }
 
-        // Sync attachments: delete removed, upload new
         if (attachments) {
           const currentFiles = await listFolderContents(folderId).catch(() => []);
-          const filesToDelete = currentFiles.filter((f) => !attachments.some((a) => a.name === f.name));
-          for (const f of filesToDelete) await deleteFile(f.id).catch(() => { });
+          const filesToDelete = currentFiles.filter(f => !attachments.some(a => a.name === f.name));
+          for (const f of filesToDelete) await deleteFile(f.id).catch(() => {});
 
-          const newUploads = attachments.filter((a) => a.base64);
+          const newUploads = attachments.filter(a => a.base64);
           if (newUploads.length) await uploadFiles(folderId, newUploads);
         }
       }
@@ -178,12 +172,11 @@ router.delete('/:id', async (req, res) => {
     const order = await OrderInquiry.findById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // Delete the OneDrive folder
     if (order.clientName && order.refNumber) {
       const orderDate = new Date(order.createdAt || order.updatedAt || new Date());
       const mo = orderDate.getMonth() + 1;
-      const y = orderDate.getFullYear();
-      const sh = (n) => String(n).slice(-2).padStart(2, '0');
+      const y  = orderDate.getFullYear();
+      const sh = n => String(n).slice(-2).padStart(2, '0');
       const fy = mo >= 4 ? `${sh(y)}-${sh(y + 1)}` : `${sh(y - 1)}-${sh(y)}`;
 
       await deleteFolderByPath([
@@ -192,7 +185,7 @@ router.delete('/:id', async (req, res) => {
         fy,
         (order.orderPlacedBy || 'General').trim(),
         order.refNumber.replace(/\//g, '-').trim(),
-      ]).catch((err) => console.error('OneDrive delete error:', err.message));
+      ]).catch(err => console.error('OneDrive delete error:', err.message));
     }
 
     await OrderInquiry.findByIdAndDelete(req.params.id);

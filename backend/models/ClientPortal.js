@@ -14,10 +14,10 @@ const mongoose = require('mongoose');
 
 // ── File attachment in a message ─────────────────────────────────────────────
 const msgAttachmentSchema = new mongoose.Schema({
-  name:        { type: String, required: true },
-  url:         { type: String, required: true }, // /uploads/... path
-  mimeType:    { type: String, default: 'application/octet-stream' },
-  size:        { type: Number, default: 0 },
+  name:     { type: String, required: true },
+  url:      { type: String, required: true }, // /uploads/... path
+  mimeType: { type: String, default: 'application/octet-stream' },
+  size:     { type: Number, default: 0 },
 }, { _id: false });
 
 // ── Chat message ──────────────────────────────────────────────────────────────
@@ -31,19 +31,20 @@ const messageSchema = new mongoose.Schema({
 
 // ── Product item (gifting/merchandise) ────────────────────────────────────────
 const productItemSchema = new mongoose.Schema({
-  productId:   { type: String },              // ref to products collection (optional)
+  productId:   { type: String },
   name:        { type: String, required: true },
   description: { type: String, default: '' },
   imageUrl:    { type: String, default: '' },
-  videoUrl:    { type: String, default: '' }, // optional video
+  videoUrl:    { type: String, default: '' },
   price:       { type: Number, default: 0 },
   category:    { type: String, default: '' },
   subCategory: { type: String, default: '' },
-  note:        { type: String, default: '' }, // team note shown under item
-  order:       { type: Number, default: 0 },  // display order
+  note:        { type: String, default: '' },
+  order:       { type: Number, default: 0 },
 }, { _id: true });
 
 // ── Offsite item (property) ────────────────────────────────────────────────────
+
 // Day package inside an offsite portal item
 const portalDayPkgSchema = new mongoose.Schema({
   name:         { type: String, default: '' },
@@ -51,56 +52,85 @@ const portalDayPkgSchema = new mongoose.Schema({
   sellingPrice: { type: Number, default: 0 },
 }, { _id: false });
 
+// Adhoc add-on carried from Property into the portal snapshot
+const portalAddonSchema = new mongoose.Schema({
+  name:         { type: String, required: true },
+  sellingPrice: { type: Number, default: 0 },
+}, { _id: false });
+
+// Property-level attachment shown to client (itinerary PDFs, brochures)
+const portalAttachmentSchema = new mongoose.Schema({
+  name:     { type: String, required: true },
+  url:      { type: String, required: true },
+  mimeType: { type: String, default: 'application/octet-stream' },
+  size:     { type: Number, default: 0 },
+}, { _id: false });
+
 const offsiteItemSchema = new mongoose.Schema({
-  propertyId:      { type: String },
-  name:            { type: String, required: true },
-  location:        { type: String, default: '' },   // "Lonavala, Maharashtra"
-  imageUrl:        { type: String, default: '' },
-  website:         { type: String, default: '' },
-  details:         { type: String, default: '' },
-  type:            { type: String, default: 'Night Stay' }, // Night Stay | Day Outing
-  singlePrice:     { type: Number, default: 0 },
-  doublePrice:     { type: Number, default: 0 },
-  triplePrice:     { type: Number, default: 0 },
-  packagePrice:    { type: Number, default: 0 },   // day outing
-  djCost:          { type: Number, default: 0 },
-  licenseFeeDJ:    { type: Number, default: 0 },
-  cocktailSnacks:  { type: Number, default: 0 },
-  banquetHall:     { type: Number, default: 0 },
-  dayPackages:     [portalDayPkgSchema],
-  note:            { type: String, default: '' },
-  order:           { type: Number, default: 0 },
+  propertyId:     { type: String },
+  name:           { type: String, required: true },
+  location:       { type: String, default: '' },   // "Lonavala, Maharashtra"
+  imageUrl:       { type: String, default: '' },
+  website:        { type: String, default: '' },
+
+  // YouTube video URL — embedded player in client portal
+  youtubeUrl:     { type: String, default: '' },
+
+  details:        { type: String, default: '' },
+  type:           { type: String, default: 'Night Stay' }, // Night Stay | Day Outing
+
+  // Night Stay room pricing (selling prices only — no purchase data sent to client)
+  singlePrice:    { type: Number, default: 0 },
+  doublePrice:    { type: Number, default: 0 },
+  triplePrice:    { type: Number, default: 0 },
+  quadPrice:      { type: Number, default: 0 },   // NEW — quad occupancy
+
+  // Day Outing flat price
+  packagePrice:   { type: Number, default: 0 },
+
+  // Standard add-ons (selling prices)
+  djCost:         { type: Number, default: 0 },
+  licenseFeeDJ:   { type: Number, default: 0 },
+  cocktailSnacks: { type: Number, default: 0 },
+  banquetHall:    { type: Number, default: 0 },
+
+  // Dynamic adhoc add-ons
+  adhocAddons:    [portalAddonSchema],
+
+  // Property attachments visible to client
+  attachments:    [portalAttachmentSchema],
+
+  dayPackages:    [portalDayPkgSchema],
+  note:           { type: String, default: '' },
+  order:          { type: Number, default: 0 },
 }, { _id: true });
 
 // ── Main portal schema ────────────────────────────────────────────────────────
 const clientPortalSchema = new mongoose.Schema({
-  orderId:      { type: mongoose.Schema.Types.ObjectId, ref: 'OrderInquiry', required: true },
-  slug:         { type: String, required: true, unique: true, lowercase: true, trim: true },
-  type:         { type: String, enum: ['product', 'offsite'], required: true },
-  orderRef:     { type: String },   // e.g. "INQ-25-26-002" — display only
-  clientName:   { type: String },
-  orderPlacedBy:{ type: String },   // contact person — shown as chat name on client side
-  clientEmail:  { type: String },
-  title:        { type: String },   // order title shown at top of client view
-  teamNote:     { type: String, default: '' }, // intro note from team to client
+  orderId:       { type: mongoose.Schema.Types.ObjectId, ref: 'OrderInquiry', required: true },
+  slug:          { type: String, required: true, unique: true, lowercase: true, trim: true },
+  type:          { type: String, enum: ['product', 'offsite'], required: true },
+  orderRef:      { type: String },
+  clientName:    { type: String },
+  orderPlacedBy: { type: String },
+  clientEmail:   { type: String },
+  title:         { type: String },
+  teamNote:      { type: String, default: '' },
 
-  productItems: [productItemSchema],
-  offsiteItems: [offsiteItemSchema],
+  productItems:  [productItemSchema],
+  offsiteItems:  [offsiteItemSchema],
 
-  messages:     [messageSchema],
+  messages:      [messageSchema],
 
-  status:       { type: String, enum: ['active', 'completed'], default: 'active' },
-  completedAt:  { type: Date },
+  status:        { type: String, enum: ['active', 'completed'], default: 'active' },
+  completedAt:   { type: Date },
 
-  // Tracking
-  lastViewedAt:    { type: Date },  // when client last opened the page
-  viewCount:       { type: Number, default: 0 },
+  lastViewedAt:  { type: Date },
+  viewCount:     { type: Number, default: 0 },
 
-  // Google review / feedback link shown on completion screen
-  reviewLink:   { type: String, default: '' },
+  reviewLink:    { type: String, default: '' },
 }, {
   timestamps: true,
 });
-
 
 module.exports = mongoose.model('ClientPortal', clientPortalSchema);

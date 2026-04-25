@@ -22,11 +22,70 @@
 const express        = require('express');
 const router         = express.Router();
 const ClientPortal   = require('../models/ClientPortal');
-const OrderInquiry   = require('../models/orderInquiry'); // needed for .populate('orderId') to resolve
-const Product        = require('../models/product'); // for category enrichment
+const OrderInquiry   = require('../models/orderInquiry');
+const Product        = require('../models/product');
 const multer         = require('multer');
 const path           = require('path');
 const fs             = require('fs');
+const mongoose       = require('mongoose');
+
+// ── Web Push setup ────────────────────────────────────────────────────────────
+// Requires: npm install web-push
+// Generate keys once: npx web-push generate-vapid-keys  → paste into .env
+let webpush = null;
+try {
+  webpush = require('web-push');
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      process.env.VAPID_CONTACT || 'mailto:info@marqland.com',
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
+  } else {
+    console.warn('[Push] VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY not set — push disabled');
+    webpush = null;
+  }
+} catch {
+  console.warn('[Push] web-push not installed — run: npm install web-push');
+}
+
+// ── PushSubscription model (inline, lightweight) ──────────────────────────────
+// Stores each browser's push subscription endpoint.
+// userId is optional — if you add auth later you can scope per team member.
+const pushSubSchema = new mongoose.Schema({
+  endpoint:   { type: String, required: true, unique: true },
+  keys:       { p256dh: String, auth: String },
+  userAgent:  { type: String },
+  createdAt:  { type: Date, default: Date.now },
+});
+const PushSubscription = mongoose.models.PushSubscription
+  || mongoose.model('PushSubscription', pushSubSchema);
+
+// ── Helper: send a push to ALL stored subscriptions ──────────────────────────
+const sendPushToAll = async (payload) => {
+  if (!webpush) return;
+  try {
+    const subs = await PushSubscription.find().lean();
+    const results = await Promise.allSettled(
+      subs.map(sub =>
+        webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          JSON.stringify(payload)
+        )
+      )
+    );
+    // Clean up expired/invalid subscriptions (410 Gone)
+    const toRemove = [];
+    results.forEach((r, i) => {
+      if (r.status === 'rejected' && [404, 410].includes(r.reason?.statusCode)) {
+        toRemove.push(subs[i].endpoint);
+      }
+    });
+    if (toRemove.length) await PushSubscription.deleteMany({ endpoint: { $in: toRemove } });
+  } catch (err) {
+    console.warn('[Push] sendPushToAll error:', err.message);
+  }
+};
 
 // ── File upload for message attachments ────────────────────────────────────────
 const msgStorage = multer.diskStorage({
@@ -218,7 +277,17 @@ router.post('/:slug/message/team', uploadMsg.array('files', 5), async (req, res)
       { new: true }
     );
     if (!portal) return res.status(404).json({ message: 'Portal not found.' });
-    res.json(portal.messages[portal.messages.length - 1]);
+
+    // Push notification to client's browser (if they subscribed)
+    const newMsg = portal.messages[portal.messages.length - 1];
+    sendPushToAll({
+      title: `Marqland Studios — ${portal.clientName || 'Your Portal'}`,
+      body:  newMsg.text?.slice(0, 80) || (newMsg.attachments?.length ? `📎 ${newMsg.attachments[0].name}` : 'New message from the team'),
+      tag:   `portal-team-${portal.slug}`,
+      url:   `/p/${portal.slug}`,
+    });
+
+    res.json(newMsg);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -378,7 +447,18 @@ router.post('/public/:slug/message', uploadMsg.array('files', 5), async (req, re
       attachments,
     });
     await portal.save();
-    res.json(portal.messages[portal.messages.length - 1]);
+    const savedMsg = portal.messages[portal.messages.length - 1];
+
+    // Push notification to team's browser(s)
+    const clientLabel = senderName || portal.clientName || 'Client';
+    sendPushToAll({
+      title: `${clientLabel} sent a message`,
+      body:  savedMsg.text?.slice(0, 80) || (savedMsg.attachments?.length ? `📎 ${savedMsg.attachments[0].name}` : 'New message'),
+      tag:   `portal-client-${portal.slug}`,
+      url:   `/orders`,
+    });
+
+    res.json(savedMsg);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -489,6 +569,63 @@ router.post('/send-email', async (req, res) => {
     res.json({ ok: true, sentTo: clientEmail, url });
   } catch (err) {
     console.error('Portal send-email error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── POST /api/portal/push-subscribe ─────────────────────────────────────────
+// Saves a browser's Web Push subscription (called from portalNotifications.js).
+// Accepts the standard PushSubscription JSON object from the browser.
+router.post('/push-subscribe', async (req, res) => {
+  try {
+    const { endpoint, keys, userAgent } = req.body;
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ message: 'Invalid subscription object.' });
+    }
+    await PushSubscription.findOneAndUpdate(
+      { endpoint },
+      { endpoint, keys, userAgent: userAgent || req.headers['user-agent'] || '' },
+      { upsert: true, new: true }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── GET /api/portal/vapid-public-key ─────────────────────────────────────────
+// Frontend fetches the VAPID public key to set up the push subscription.
+router.get('/vapid-public-key', (req, res) => {
+  const key = process.env.VAPID_PUBLIC_KEY;
+  if (!key) return res.status(503).json({ message: 'Push not configured.' });
+  res.json({ publicKey: key });
+});
+
+// ── GET /api/portal/unread-counts ────────────────────────────────────────────
+// Returns { [orderId]: { clientCount, lastClientMessage } } for all active portals.
+router.get('/unread-counts', async (req, res) => {
+  try {
+    const portals = await ClientPortal.find({ status: 'active' }, {
+      orderId: 1, messages: 1,
+    }).lean();
+
+    const result = {};
+    portals.forEach(portal => {
+      const orderId = portal.orderId?.toString();
+      if (!orderId) return;
+      const clientMsgs = (portal.messages || []).filter(m => m.sender === 'client');
+      const last = clientMsgs[clientMsgs.length - 1];
+      result[orderId] = {
+        clientCount:        clientMsgs.length,
+        lastClientMessage:  last
+          ? (last.text?.slice(0, 80) || (last.attachments?.length ? `📎 ${last.attachments[0].name}` : ''))
+          : '',
+        lastClientAt: last?.createdAt || null,
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });

@@ -4,7 +4,7 @@ import api from '../api';
 import {
   Plus, Trash2, Pencil, X, Search, RotateCcw,
   MapPin, Globe, Check, Square, CheckSquare,
-  Moon, Sun, Link2, FileText,
+  Moon, Sun, Link2, FileText, Upload, Paperclip, Youtube,
 } from 'lucide-react';
 import usePortalItems from '../hooks/usePortalItems';
 
@@ -90,14 +90,25 @@ const Price = ({ value }) => (
 
 const EMPTY_FORM = {
   propertyName: '', state: '', place: '', website: '', imageUrl: '',
+  youtubeUrl: '',
   type: 'Night Stay', details: '',
   // Night Stay
   purchasePriceSingle: '', marginSingle: 15, singlePrice: '',
   purchasePriceDouble: '', marginDouble: 15, doublePrice: '',
   purchasePriceTriple: '', marginTriple: 15, triplePrice: '',
-  djCost: '', licenseFeeDJ: '', cocktailSnacks: '', banquetHall: '',
+  purchasePriceQuad:   '', marginQuad:   15, quadPrice:   '',
+  // Shared add-on margin (applies to all 4 standard add-ons + adhoc)
+  addonMargin:            15,
+  purchaseDJ:             '', djCost:         '',
+  purchaseLicenseFeeDJ:   '', licenseFeeDJ:   '',
+  purchaseCocktailSnacks: '', cocktailSnacks: '',
+  purchaseBanquetHall:    '', banquetHall:    '',
+  // Adhoc add-ons — unlimited extras
+  adhocAddons: [],
   // Day Outing — multi-package
   dayPackages: [{ name: '', activities: '', purchasePrice: '', margin: 15, sellingPrice: '' }],
+  // Attachments (populated after upload)
+  attachments: [],
 };
 
 // Auto-calculate sell price from cost + margin
@@ -119,6 +130,33 @@ const PropertyList = () => {
   const [typeFilter, setTypeFilter]   = useState('');
   const [searchTerm, setSearchTerm]   = useState('');
   const [selected, setSelected]       = useState([]);
+
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const attachmentInputRef = React.useRef(null);
+
+  const handleAttachmentUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploadingAttachment(true);
+    try {
+      const uploaded = [];
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await api.post('/properties/upload-attachment', fd);
+        uploaded.push({
+          name:     file.name,
+          url:      res.data.url,
+          mimeType: file.type || 'application/octet-stream',
+          size:     file.size,
+        });
+      }
+      setFormData(prev => ({ ...prev, attachments: [...(prev.attachments || []), ...uploaded] }));
+    } catch (err) {
+      alert('Attachment upload failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
 
   const { addToPortal, PortalModal } = usePortalItems('offsite');
   const navigate = useNavigate();
@@ -157,10 +195,25 @@ const PropertyList = () => {
         purchasePriceTriple:  Number(formData.purchasePriceTriple)  || 0,
         marginTriple:         Number(formData.marginTriple)         || 15,
         triplePrice:          Number(formData.triplePrice)          || 0,
-        djCost:               Number(formData.djCost)               || 0,
-        licenseFeeDJ:         Number(formData.licenseFeeDJ)         || 0,
-        cocktailSnacks:       Number(formData.cocktailSnacks)       || 0,
-        banquetHall:          Number(formData.banquetHall)          || 0,
+        purchasePriceQuad:    Number(formData.purchasePriceQuad)    || 0,
+        marginQuad:           Number(formData.marginQuad)           || 15,
+        quadPrice:            Number(formData.quadPrice)            || 0,
+        addonMargin:          Number(formData.addonMargin)          || 15,
+        purchaseDJ:             Number(formData.purchaseDJ)             || 0,
+        djCost:                 Number(formData.djCost)                 || 0,
+        purchaseLicenseFeeDJ:   Number(formData.purchaseLicenseFeeDJ)   || 0,
+        licenseFeeDJ:           Number(formData.licenseFeeDJ)           || 0,
+        purchaseCocktailSnacks: Number(formData.purchaseCocktailSnacks) || 0,
+        cocktailSnacks:         Number(formData.cocktailSnacks)         || 0,
+        purchaseBanquetHall:    Number(formData.purchaseBanquetHall)    || 0,
+        banquetHall:            Number(formData.banquetHall)            || 0,
+        adhocAddons: (formData.adhocAddons || [])
+          .filter(a => a.name.trim())
+          .map(a => ({
+            name:          a.name.trim(),
+            purchasePrice: Number(a.purchasePrice) || 0,
+            sellingPrice:  Number(a.sellingPrice)  || 0,
+          })),
         dayPackages: (formData.dayPackages || [])
           .filter(pkg => pkg.name || pkg.purchasePrice)
           .map(pkg => ({
@@ -170,6 +223,8 @@ const PropertyList = () => {
             margin:        Number(pkg.margin)        || 15,
             sellingPrice:  Number(pkg.sellingPrice)  || 0,
           })),
+        youtubeUrl:  formData.youtubeUrl  || '',
+        attachments: formData.attachments || [],
       };
       if (isEditing) {
         await api.put(`/properties/${currentId}`, payload);
@@ -215,10 +270,23 @@ const PropertyList = () => {
       purchasePriceTriple:  p.purchasePriceTriple  || '',
       marginTriple:         p.marginTriple         ?? 15,
       triplePrice:          p.triplePrice          || '',
-      djCost:               p.djCost               || '',
-      licenseFeeDJ:         p.licenseFeeDJ         || '',
-      cocktailSnacks:       p.cocktailSnacks        || '',
-      banquetHall:          p.banquetHall           || '',
+      purchasePriceQuad:    p.purchasePriceQuad    || '',
+      marginQuad:           p.marginQuad           ?? 15,
+      quadPrice:            p.quadPrice            || '',
+      addonMargin:          p.addonMargin          ?? 15,
+      purchaseDJ:             p.purchaseDJ             || '',
+      djCost:                 p.djCost                 || '',
+      purchaseLicenseFeeDJ:   p.purchaseLicenseFeeDJ   || '',
+      licenseFeeDJ:           p.licenseFeeDJ           || '',
+      purchaseCocktailSnacks: p.purchaseCocktailSnacks || '',
+      cocktailSnacks:         p.cocktailSnacks         || '',
+      purchaseBanquetHall:    p.purchaseBanquetHall    || '',
+      banquetHall:            p.banquetHall            || '',
+      adhocAddons: (p.adhocAddons || []).map(a => ({
+        name:          a.name          || '',
+        purchasePrice: String(a.purchasePrice || ''),
+        sellingPrice:  String(a.sellingPrice  || ''),
+      })),
       dayPackages: (p.dayPackages && p.dayPackages.length > 0)
         ? p.dayPackages.map(pkg => ({
             name:          pkg.name          || '',
@@ -228,6 +296,8 @@ const PropertyList = () => {
             sellingPrice:  String(pkg.sellingPrice  || ''),
           }))
         : [{ name: '', activities: '', purchasePrice: '', margin: 15, sellingPrice: '' }],
+      youtubeUrl:  p.youtubeUrl  || '',
+      attachments: p.attachments || [],
     });
     setShowModal(true);
   };
@@ -362,6 +432,12 @@ const PropertyList = () => {
                                 <Price value={p.triplePrice} />
                               </div>
                             )}
+                            {p.quadPrice > 0 && (
+                              <div className="bg-slate-50 rounded-lg p-1.5 text-center">
+                                <div className="text-[8px] font-black text-slate-400 uppercase">Quad</div>
+                                <Price value={p.quadPrice} />
+                              </div>
+                            )}
                           </div>
                         ) : (
                           (p.dayPackages && p.dayPackages.length > 0)
@@ -480,6 +556,15 @@ const PropertyList = () => {
                   placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
               </div>
               <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1.5">
+                  <Youtube size={11} className="text-red-500" /> YouTube Video URL
+                </label>
+                <input value={formData.youtubeUrl} onChange={e => setFormData({ ...formData, youtubeUrl: e.target.value })}
+                  placeholder="https://youtube.com/watch?v=... or youtu.be/..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-red-300 transition-colors" />
+                <div className="text-[9px] text-slate-300 mt-1">Embedded as a play button in the client portal</div>
+              </div>
+              <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Details / Description</label>
                 <textarea value={formData.details} onChange={e => setFormData({ ...formData, details: e.target.value })}
                   rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300 resize-none" />
@@ -496,13 +581,122 @@ const PropertyList = () => {
                   <OccupancyPricing label="Triple Occupancy"
                     costKey="purchasePriceTriple" marginKey="marginTriple" sellKey="triplePrice"
                     formData={formData} setFormData={setFormData} />
-                  <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest pt-1">Add-ons</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MoneyInput label="DJ Cost" value={formData.djCost} onChange={v => setFormData({ ...formData, djCost: v })} />
-                    <MoneyInput label="DJ License Fee" value={formData.licenseFeeDJ} onChange={v => setFormData({ ...formData, licenseFeeDJ: v })} />
-                    <MoneyInput label="Cocktails & Snacks" value={formData.cocktailSnacks} onChange={v => setFormData({ ...formData, cocktailSnacks: v })} />
-                    <MoneyInput label="Banquet Hall" value={formData.banquetHall} onChange={v => setFormData({ ...formData, banquetHall: v })} />
+                  <OccupancyPricing label="Quad Occupancy"
+                    costKey="purchasePriceQuad" marginKey="marginQuad" sellKey="quadPrice"
+                    formData={formData} setFormData={setFormData} />
+
+                  {/* ── Shared Add-on Margin ── */}
+                  <div className="bg-indigo-100 border border-indigo-200 rounded-xl p-3 flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest mb-1">Add-on Margin %</div>
+                      <div className="text-[9px] text-indigo-500">Applied to all standard & custom add-ons below</div>
+                    </div>
+                    <div className="relative w-24">
+                      <input type="text" inputMode="numeric" value={formData.addonMargin}
+                        onChange={e => {
+                          const m = e.target.value.replace(/[^0-9]/g, '');
+                          // Recalculate all standard addon sell prices
+                          const recalc = (purchase) => purchase ? Math.ceil(Number(purchase) * (1 + Number(m) / 100)).toString() : '';
+                          const updatedAdhoc = (formData.adhocAddons || []).map(a => ({
+                            ...a, sellingPrice: recalc(a.purchasePrice),
+                          }));
+                          setFormData({
+                            ...formData,
+                            addonMargin:    m,
+                            djCost:         recalc(formData.purchaseDJ),
+                            licenseFeeDJ:   recalc(formData.purchaseLicenseFeeDJ),
+                            cocktailSnacks: recalc(formData.purchaseCocktailSnacks),
+                            banquetHall:    recalc(formData.purchaseBanquetHall),
+                            adhocAddons:    updatedAdhoc,
+                          });
+                        }}
+                        className="w-full bg-white border border-indigo-300 rounded-lg px-2 pr-6 py-1.5 text-sm font-black text-indigo-700 outline-none text-center focus:border-indigo-500 transition-colors" />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-indigo-400 text-xs font-bold">%</span>
+                    </div>
                   </div>
+
+                  <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest pt-1">Standard Add-ons</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* DJ */}
+                    <OccupancyPricing label="DJ" costKey="purchaseDJ" marginKey="addonMargin" sellKey="djCost"
+                      formData={formData} setFormData={setFormData} />
+                    {/* DJ License */}
+                    <OccupancyPricing label="DJ License Fee" costKey="purchaseLicenseFeeDJ" marginKey="addonMargin" sellKey="licenseFeeDJ"
+                      formData={formData} setFormData={setFormData} />
+                    {/* Cocktails */}
+                    <OccupancyPricing label="Cocktails & Snacks" costKey="purchaseCocktailSnacks" marginKey="addonMargin" sellKey="cocktailSnacks"
+                      formData={formData} setFormData={setFormData} />
+                    {/* Banquet */}
+                    <OccupancyPricing label="Banquet Hall" costKey="purchaseBanquetHall" marginKey="addonMargin" sellKey="banquetHall"
+                      formData={formData} setFormData={setFormData} />
+                  </div>
+
+                  {/* ── Adhoc Add-ons ── */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Custom Add-ons</div>
+                    <button type="button"
+                      onClick={() => setFormData({
+                        ...formData,
+                        adhocAddons: [...(formData.adhocAddons || []), { name: '', purchasePrice: '', sellingPrice: '' }],
+                      })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase transition-colors">
+                      <Plus size={11} /> Add
+                    </button>
+                  </div>
+                  {(formData.adhocAddons || []).length === 0 && (
+                    <div className="text-[10px] text-slate-300 italic text-center py-2">No custom add-ons yet — click Add to create one</div>
+                  )}
+                  {(formData.adhocAddons || []).map((addon, ai) => {
+                    const setAddon = (field, val) => {
+                      const next = formData.adhocAddons.map((a, i) => {
+                        if (i !== ai) return a;
+                        const updated = { ...a, [field]: val };
+                        if (field === 'purchasePrice') {
+                          updated.sellingPrice = calcSell(val, formData.addonMargin);
+                        }
+                        return updated;
+                      });
+                      setFormData({ ...formData, adhocAddons: next });
+                    };
+                    return (
+                      <div key={ai} className="bg-white border border-indigo-200 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Add-on {ai + 1}</span>
+                          <button type="button" onClick={() => setFormData({ ...formData, adhocAddons: formData.adhocAddons.filter((_, i) => i !== ai) })}
+                            className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Add-on Name</label>
+                          <input value={addon.name} onChange={e => setAddon('name', e.target.value)}
+                            placeholder="e.g. Barbeque, Bonfire, Bonfire + DJ..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300 transition-colors" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost Price</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                              <input type="text" inputMode="numeric" value={addon.purchasePrice}
+                                onChange={e => setAddon('purchasePrice', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-indigo-300 transition-colors" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell Price</label>
+                            <div className="relative bg-indigo-50 border border-indigo-200 rounded-lg pl-5 pr-2 py-1.5 flex items-center">
+                              <span className="absolute left-2 text-indigo-400 text-xs font-bold">₹</span>
+                              <input type="text" inputMode="numeric" value={addon.sellingPrice}
+                                onChange={e => setAddon('sellingPrice', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-transparent text-sm font-black text-indigo-700 outline-none" />
+                            </div>
+                            <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {formData.type === 'Day Outing' && (
@@ -601,15 +795,160 @@ const PropertyList = () => {
                     );
                   })}
 
-                  {/* Add-ons */}
-                  <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest pt-1">Add-ons</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MoneyInput label="DJ Cost" value={formData.djCost} onChange={v => setFormData({ ...formData, djCost: v })} accent="amber" />
-                    <MoneyInput label="Cocktails & Snacks" value={formData.cocktailSnacks} onChange={v => setFormData({ ...formData, cocktailSnacks: v })} accent="amber" />
+                  {/* ── Shared Add-on Margin ── */}
+                  <div className="bg-amber-100 border border-amber-200 rounded-xl p-3 flex items-center gap-3 mt-1">
+                    <div className="flex-1">
+                      <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1">Add-on Margin %</div>
+                      <div className="text-[9px] text-amber-500">Applied to all standard & custom add-ons below</div>
+                    </div>
+                    <div className="relative w-24">
+                      <input type="text" inputMode="numeric" value={formData.addonMargin}
+                        onChange={e => {
+                          const m = e.target.value.replace(/[^0-9]/g, '');
+                          const recalc = (purchase) => purchase ? Math.ceil(Number(purchase) * (1 + Number(m) / 100)).toString() : '';
+                          const updatedAdhoc = (formData.adhocAddons || []).map(a => ({
+                            ...a, sellingPrice: recalc(a.purchasePrice),
+                          }));
+                          setFormData({
+                            ...formData,
+                            addonMargin:    m,
+                            djCost:         recalc(formData.purchaseDJ),
+                            licenseFeeDJ:   recalc(formData.purchaseLicenseFeeDJ),
+                            cocktailSnacks: recalc(formData.purchaseCocktailSnacks),
+                            banquetHall:    recalc(formData.purchaseBanquetHall),
+                            adhocAddons:    updatedAdhoc,
+                          });
+                        }}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-2 pr-6 py-1.5 text-sm font-black text-amber-700 outline-none text-center focus:border-amber-500 transition-colors" />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-amber-400 text-xs font-bold">%</span>
+                    </div>
                   </div>
+
+                  {/* Standard Add-ons */}
+                  <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest pt-1">Standard Add-ons</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <OccupancyPricing label="DJ" costKey="purchaseDJ" marginKey="addonMargin" sellKey="djCost"
+                      formData={formData} setFormData={setFormData} accent="amber" />
+                    <OccupancyPricing label="DJ License Fee" costKey="purchaseLicenseFeeDJ" marginKey="addonMargin" sellKey="licenseFeeDJ"
+                      formData={formData} setFormData={setFormData} accent="amber" />
+                    <OccupancyPricing label="Cocktails & Snacks" costKey="purchaseCocktailSnacks" marginKey="addonMargin" sellKey="cocktailSnacks"
+                      formData={formData} setFormData={setFormData} accent="amber" />
+                    <OccupancyPricing label="Banquet Hall" costKey="purchaseBanquetHall" marginKey="addonMargin" sellKey="banquetHall"
+                      formData={formData} setFormData={setFormData} accent="amber" />
+                  </div>
+
+                  {/* ── Adhoc Add-ons ── */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Custom Add-ons</div>
+                    <button type="button"
+                      onClick={() => setFormData({
+                        ...formData,
+                        adhocAddons: [...(formData.adhocAddons || []), { name: '', purchasePrice: '', sellingPrice: '' }],
+                      })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase transition-colors">
+                      <Plus size={11} /> Add
+                    </button>
+                  </div>
+                  {(formData.adhocAddons || []).length === 0 && (
+                    <div className="text-[10px] text-slate-300 italic text-center py-2">No custom add-ons yet — click Add to create one</div>
+                  )}
+                  {(formData.adhocAddons || []).map((addon, ai) => {
+                    const setAddon = (field, val) => {
+                      const next = formData.adhocAddons.map((a, i) => {
+                        if (i !== ai) return a;
+                        const updated = { ...a, [field]: val };
+                        if (field === 'purchasePrice') updated.sellingPrice = calcSell(val, formData.addonMargin);
+                        return updated;
+                      });
+                      setFormData({ ...formData, adhocAddons: next });
+                    };
+                    return (
+                      <div key={ai} className="bg-white border border-amber-200 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Add-on {ai + 1}</span>
+                          <button type="button" onClick={() => setFormData({ ...formData, adhocAddons: formData.adhocAddons.filter((_, i) => i !== ai) })}
+                            className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Add-on Name</label>
+                          <input value={addon.name} onChange={e => setAddon('name', e.target.value)}
+                            placeholder="e.g. Barbeque, Bonfire, Guided trek..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-amber-300 transition-colors" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost Price</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                              <input type="text" inputMode="numeric" value={addon.purchasePrice}
+                                onChange={e => setAddon('purchasePrice', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-amber-300 transition-colors" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell Price</label>
+                            <div className="relative bg-amber-50 border border-amber-200 rounded-lg pl-5 pr-2 py-1.5 flex items-center">
+                              <span className="absolute left-2 text-amber-400 text-xs font-bold">₹</span>
+                              <input type="text" inputMode="numeric" value={addon.sellingPrice}
+                                onChange={e => setAddon('sellingPrice', e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-transparent text-sm font-black text-amber-700 outline-none" />
+                            </div>
+                            <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
+              {/* ── Attachments ── */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                      <Paperclip size={11} /> Attachments
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">PDFs, brochures, menus — visible to client in the portal</div>
+                  </div>
+                  <button type="button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={uploadingAttachment}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-600 hover:bg-slate-700 disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase transition-colors">
+                    {uploadingAttachment
+                      ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Uploading…</>
+                      : <><Upload size={11} /> Upload</>
+                    }
+                  </button>
+                  <input ref={attachmentInputRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.ppt,.pptx"
+                    style={{ position: 'fixed', top: -200, left: -200, width: 1, height: 1, opacity: 0 }}
+                    onChange={e => { handleAttachmentUpload(e.target.files); e.target.value = ''; }} />
+                </div>
+                {(formData.attachments || []).length === 0 && (
+                  <div className="text-[10px] text-slate-300 italic text-center py-2">No attachments yet</div>
+                )}
+                <div className="space-y-2">
+                  {(formData.attachments || []).map((att, ai) => (
+                    <div key={ai} className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-2">
+                      <FileText size={13} className="text-slate-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-slate-700 truncate">{att.name}</div>
+                        {att.size > 0 && <div className="text-[9px] text-slate-400">{att.size > 1048576 ? `${(att.size / 1048576).toFixed(1)} MB` : `${Math.round(att.size / 1024)} KB`}</div>}
+                      </div>
+                      <a href={att.url} target="_blank" rel="noreferrer"
+                        className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 flex-shrink-0 px-2">View</a>
+                      <button type="button" onClick={() => setFormData({ ...formData, attachments: formData.attachments.filter((_, i) => i !== ai) })}
+                        className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors flex-shrink-0">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
+
             <div className="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
               <button onClick={() => { setShowModal(false); resetForm(); }} className="px-6 py-2 text-slate-400 font-bold uppercase text-xs">Cancel</button>
               <button onClick={handleSave} className="px-10 py-3 bg-orange-500 text-white rounded-xl font-black uppercase text-xs hover:bg-orange-600 shadow-lg">
