@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   passwordResetExpires: { type: Date, default: undefined },
   role: {
     type: String,
-    enum: ['admin', 'accounts', 'sales', 'inventory', 'viewer'],
+    enum: ['admin', 'accounts', 'sales', 'inventory', 'courier', 'viewer'],
     default: 'viewer', // Admin assigns the actual role on approval
   },
   status: {

@@ -6,10 +6,15 @@ const ShipmentSchema = new mongoose.Schema({
   orderRef:         { type: String, default: '' },    // denormalised for display
   isAdhoc:          { type: Boolean, default: false },
 
+  // Vendor who submitted this shipment (stamped server-side from JWT)
+  vendorId:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  vendorName:       { type: String, default: '' },
+
   // Core shipment info
   shippedDate:      { type: Date, required: true },
   recipientName:    { type: String, required: true, trim: true },
   recipientAddress: { type: String, default: '' },
+  country:          { type: String, default: 'India' },
   city:             { type: String, default: '' },
   state:            { type: String, default: '' },
   phone:            { type: String, default: '' },

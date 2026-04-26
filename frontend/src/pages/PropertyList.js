@@ -7,6 +7,7 @@ import {
   Moon, Sun, Link2, FileText, Upload, Paperclip, Youtube,
 } from 'lucide-react';
 import usePortalItems from '../hooks/usePortalItems';
+import { INDIA_STATES, CITIES_BY_STATE, SearchableSelect } from '../utils/indiaLocations';
 
 // Simple ₹ input — no spinners, no up/down arrows
 const MoneyInput = ({ label, value, onChange, hint, accent = 'indigo' }) => (
@@ -309,7 +310,7 @@ const PropertyList = () => {
     isSelected(p) ? selected.filter(s => s._id !== p._id) : [...selected, p]
   );
 
-  const states = [...new Set(properties.map(p => p.state).filter(Boolean))].sort();
+  const states = INDIA_STATES;
   const filtered = properties.filter(p => {
     const s = searchTerm.toLowerCase();
     return (
@@ -535,14 +536,30 @@ const PropertyList = () => {
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">State</label>
-                  <input value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+                  <SearchableSelect
+                    label="State"
+                    value={formData.state}
+                    onChange={s => setFormData({ ...formData, state: s, place: '' })}
+                    options={INDIA_STATES}
+                    placeholder="Select State"
+                  />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Place / City</label>
-                  <input value={formData.place} onChange={e => setFormData({ ...formData, place: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none focus:border-indigo-300" />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Place / City</label>
+                  {formData.state && (CITIES_BY_STATE[formData.state] || []).length > 0 && (
+                    <SearchableSelect
+                      value={(CITIES_BY_STATE[formData.state] || []).includes(formData.place) ? formData.place : ''}
+                      onChange={c => setFormData({ ...formData, place: c })}
+                      options={CITIES_BY_STATE[formData.state] || []}
+                      placeholder="Select city from list…"
+                    />
+                  )}
+                  <input
+                    value={formData.place}
+                    onChange={e => setFormData({ ...formData, place: e.target.value })}
+                    placeholder={formData.state && (CITIES_BY_STATE[formData.state] || []).length > 0 ? 'Or type a custom city…' : 'Enter city…'}
+                    className="w-full mt-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-300 transition-colors placeholder-slate-300"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Website</label>

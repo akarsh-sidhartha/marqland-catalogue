@@ -78,35 +78,72 @@ const normaliseTrackCourier = (raw = '') => {
   return null; // unknown — don't overwrite existing status
 };
 
+// ── Partner name → trackcourier.io slug map ───────────────────────────────────
+// The API requires the courier's exact slug (not a freeform name).
+// Keys must match what's stored in the ShippingPartner collection (case-insensitive).
+// Get the full list from: GET https://api.trackcourier.io/v1/couriers
+const COURIER_SLUG_MAP = {
+  'blue dart':          'bluedart',
+  'bluedart':           'bluedart',
+  'dtdc':               'dtdc',
+  'delhivery':          'delhivery',
+  'ekart':              'ekart',
+  'ekart logistics':    'ekart',
+  'ecom express':       'ecom-express',
+  'xpressbees':         'xpressbees',
+  'shadowfax':          'shadowfax',
+  'gati':               'gati',
+  'gati kwe':           'gati-kwe',
+  'fedex':              'fedex',
+  'fedex india':        'fedex',
+  'dhl':                'dhl-express',
+  'dhl express':        'dhl-express',
+  'aramex':             'aramex',
+  'ups':                'ups',
+  'india post':         'india-post-domestic',
+  'speed post':         'india-post-domestic',
+  'professional courier': 'professional-courier',
+  'tci express':        'tci-express',
+  'spoton':             'spoton',
+  'safexpress':         'safexpress',
+  'trackon':            'trackon',
+  'first flight':       'first-flight',
+  'dp world':           'dp-world',
+};
+
+const toCourierSlug = (name = '') => {
+  const key = name.toLowerCase().trim();
+  return COURIER_SLUG_MAP[key] || null; // null = let API auto-detect
+};
+
 // ── trackcourier.io API call ──────────────────────────────────────────────────
-// Docs: https://docs.trackcourier.io/reference/tracking
-// Endpoint: GET https://api.trackcourier.io/api/v1/track/{trackingNumber}
-// Headers:  api-key: <key>
-//
-// The `courier` param is optional but improves accuracy when provided.
-// We pass the shipping partner name; trackcourier.io will auto-detect if blank.
+// Correct endpoint: GET https://api.trackcourier.io/v1/track
+//   Query params:   courier=<slug>  (optional, improves accuracy)
+//                   tracking_number=<id>
+// Auth header:      X-API-Key: <key>   (NOT "api-key")
+// Response shape:   { success, data: { status, MostRecentStatus, ... }, usage }
 const fetchFromTrackCourier = async (trackingId, courierName = '') => {
   const apiKey = process.env.TRACKCOURIER_API_KEY;
   if (!apiKey) throw new Error('TRACKCOURIER_API_KEY not set in environment');
 
-  const params = {};
-  if (courierName) params.courier = courierName.toLowerCase().replace(/\s+/g, '_');
+  const params = { tracking_number: trackingId };
+  const slug = toCourierSlug(courierName);
+  if (slug) params.courier = slug;
 
   const res = await axios.get(
-    `https://api.trackcourier.io/api/v1/track/${encodeURIComponent(trackingId)}`,
+    'https://api.trackcourier.io/v1/track',
     {
-      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
       params,
       timeout: 10000,
     }
   );
 
-  // trackcourier.io response shape:
-  // { tracking_number, courier, status, status_description, checkpoints: [...] }
+  // Response: { success: true, data: { status: "in_transit", ... }, usage: {...} }
   const data = res.data;
-  if (!data || !data.status) return null;
+  if (!data?.success || !data?.data?.status) return null;
 
-  return normaliseTrackCourier(data.status);
+  return normaliseTrackCourier(data.data.status);
 };
 
 // ── DIRECT HANDLERS (future cost-saving integrations) ────────────────────────

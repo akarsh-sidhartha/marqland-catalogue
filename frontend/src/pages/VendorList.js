@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api';
 import { Download, Plus, Search, ChevronDown, ChevronRight, Edit2, Trash2, MapPin, Tag, Mail, Phone, Building2, Paperclip, FileText, Image as ImageIcon, Video, X, Eye } from 'lucide-react';
+import { INDIA_STATES, CITIES_BY_STATE, SearchableSelect } from '../utils/indiaLocations';
 
 const VendorList = () => {
   const [vendors, setVendors] = useState([]);
@@ -21,12 +22,13 @@ const VendorList = () => {
 
   // Media attachment state
   const [newMediaFiles, setNewMediaFiles] = useState([]);   // new files to upload
-  const [keepMediaIds,  setKeepMediaIds]  = useState([]);   // existing media ids to retain
+  const [keepMediaIds, setKeepMediaIds] = useState([]);   // existing media ids to retain
   const [lightboxMedia, setLightboxMedia] = useState(null); // { url, mimeType, name }
 
   const [formData, setFormData] = useState({
     companyName: '',
     state: '',
+    city: '',
     category: '',
     suppliedProducts: '',
     contacts: [{ name: '', phone: '', email: '' }]
@@ -80,11 +82,12 @@ const VendorList = () => {
   const handleSave = async () => {
     try {
       const fd = new FormData();
-      fd.append('companyName',      formData.companyName);
-      fd.append('state',            formData.state);
-      fd.append('category',         formData.category);
+      fd.append('companyName', formData.companyName);
+      fd.append('state', formData.state);
+      fd.append('city', formData.city);
+      fd.append('category', formData.category);
       fd.append('suppliedProducts', formData.suppliedProducts);
-      fd.append('contacts',         JSON.stringify(formData.contacts));
+      fd.append('contacts', JSON.stringify(formData.contacts));
       if (isEditing) fd.append('keepMediaIds', keepMediaIds.join(','));
       newMediaFiles.forEach(f => fd.append('mediaFiles', f));
 
@@ -136,6 +139,7 @@ const VendorList = () => {
     setFormData({
       companyName: v.companyName,
       state: v.state || '',
+      city: v.city || '',
       category: v.category || '',
       suppliedProducts: v.suppliedProducts || '',
       contacts: v.contacts && v.contacts.length > 0 ? [...v.contacts] : [{ name: '', phone: '', email: '' }]
@@ -146,7 +150,7 @@ const VendorList = () => {
   };
 
   const resetForm = () => {
-    setFormData({ companyName: '', state: '', category: '', suppliedProducts: '', contacts: [{ name: '', phone: '', email: '' }] });
+    setFormData({ companyName: '', state: '', city: '', category: '', suppliedProducts: '', contacts: [{ name: '', phone: '', email: '' }] });
     setCardImages({ front: null, back: null });
     setIsEditing(false);
     setCurrentId(null);
@@ -181,8 +185,8 @@ const VendorList = () => {
   const filteredVendors = useMemo(() => {
     return vendors
       .filter(v => {
-        const matchesSearch = v.companyName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              (v.suppliedProducts && v.suppliedProducts.toLowerCase().includes(searchTerm.toLowerCase()));
+        const matchesSearch = v.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (v.suppliedProducts && v.suppliedProducts.toLowerCase().includes(searchTerm.toLowerCase()));
         const matchesCat = filterCategory ? v.category === filterCategory : true;
         const matchesState = filterState ? v.state === filterState : true;
         return matchesSearch && matchesCat && matchesState;
@@ -258,7 +262,7 @@ const VendorList = () => {
               onChange={(e) => setFilterState(e.target.value)}
             >
               <option value="">All States</option>
-              {uniqueStates.map(s => <option key={s} value={s}>{s}</option>)}
+              {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
 
             <button onClick={handleResetFilters} className="text-red-500 text-[10px] font-black uppercase px-2">
@@ -456,19 +460,35 @@ const VendorList = () => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">State / Region</label>
-                <input
-                  list="state-list"
-                  className="w-full border-2 p-3 rounded-lg font-bold outline-none focus:border-indigo-500"
-                  placeholder="Select or enter state..."
+                <SearchableSelect
+                  label="State / Region"
                   value={formData.state}
-                  onChange={e => setFormData({ ...formData, state: e.target.value })}
+                  onChange={s => setFormData({ ...formData, state: s, city: '' })}
+                  options={INDIA_STATES}
+                  placeholder="Select state..."
                 />
-                <datalist id="state-list">
-                  {uniqueStates.map(s => <option key={s} value={s} />)}
-                </datalist>
               </div>
 
+              {/*     
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Place / City</label>
+                {formData.state && (CITIES_BY_STATE[formData.state] || []).length > 0 && (
+                  <SearchableSelect
+                    value={(CITIES_BY_STATE[formData.state] || []).includes(formData.city) ? formData.city : ''}
+                    onChange={c => setFormData({ ...formData, city: c })}
+                    options={CITIES_BY_STATE[formData.state] || []}
+                    placeholder="Select city from list…"
+                  />
+                )}
+                <input
+                  value={formData.city}
+                  onChange={e => setFormData({ ...formData, city: e.target.value })}
+                  placeholder={formData.state && (CITIES_BY_STATE[formData.state] || []).length > 0 ? 'Or type a custom city…' : 'Enter city…'}
+                  className="w-full mt-1.5 border-2 border-gray-200 rounded-lg px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500 placeholder-gray-300"
+                />
+              </div>
+              */}
+              
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Products Supplied</label>
                 <textarea className="w-full border-2 p-3 rounded-lg h-20" value={formData.suppliedProducts} onChange={e => setFormData({ ...formData, suppliedProducts: e.target.value })} />

@@ -31,6 +31,8 @@ const ROUTE_PERMISSIONS = {
   '/challans': ['inventory', 'sales', 'accounts', 'admin'],
   '/inquiries': ['sales', 'accounts', 'admin'],
   '/payment-tracker': ['accounts', 'admin'],
+  '/shipments': ['courier', 'inventory', 'sales', 'accounts', 'admin'],
+  '/shipping-partners': ['courier', 'inventory', 'sales', 'accounts', 'admin'],
   '/portal/public': null,                              // public — client facing, no auth
   '/portal': ['sales', 'accounts', 'admin'],   // team — requires login
 };

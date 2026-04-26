@@ -55,20 +55,70 @@ const Ic = {
   play:   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
 };
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-const Lightbox = ({ src, alt, onClose }) => {
-  useEffect(()=>{
-    const fn = e => { if(e.key==='Escape') onClose(); };
-    window.addEventListener('keydown',fn);
-    return ()=>window.removeEventListener('keydown',fn);
-  },[onClose]);
+// ── Lightbox — supports single image OR gallery navigation ───────────────────
+// Call with: setLightbox({ src, alt })              → single image
+// Call with: setLightbox({ src, alt, all, idx })    → gallery with prev/next
+const Lightbox = ({ src, alt, all, startIdx, onClose }) => {
+  const gallery = all && all.length > 1 ? all : null;
+  const [cur, setCur] = React.useState(startIdx || 0);
+  const imgs   = gallery || [src];
+  const curSrc = gallery ? imgs[cur] : src;
+
+  const prev = (e) => { e.stopPropagation(); setCur(i => (i - 1 + imgs.length) % imgs.length); };
+  const next = (e) => { e.stopPropagation(); setCur(i => (i + 1) % imgs.length); };
+
+  useEffect(() => {
+    const fn = e => {
+      if (e.key === 'Escape')      onClose();
+      if (e.key === 'ArrowLeft'  && gallery) setCur(i => (i - 1 + imgs.length) % imgs.length);
+      if (e.key === 'ArrowRight' && gallery) setCur(i => (i + 1) % imgs.length);
+    };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, [onClose, gallery]);
+
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(5,8,16,0.96)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:24,backdropFilter:'blur(24px)'}}>
+      {/* Close */}
       <button onClick={onClose} style={{position:'fixed',top:20,right:20,background:GLASS_BG,border:'1px solid rgba(255,255,255,0.12)',borderRadius:'50%',width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
         {Ic.close}
       </button>
-      <img src={src} alt={alt} onClick={e=>e.stopPropagation()}
-        style={{maxWidth:'90vw',maxHeight:'86vh',borderRadius:16,objectFit:'contain',boxShadow:'0 40px 80px rgba(0,0,0,0.4)'}}/>
+
+      {/* Prev arrow */}
+      {gallery && (
+        <button onClick={prev} style={{position:'fixed',left:16,top:'50%',transform:'translateY(-50%)',background:'rgba(10,20,34,0.75)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:10,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      )}
+
+      {/* Image */}
+      <img src={curSrc} alt={alt} onClick={e=>e.stopPropagation()}
+        style={{maxWidth:'82vw',maxHeight:'86vh',borderRadius:16,objectFit:'contain',boxShadow:'0 40px 80px rgba(0,0,0,0.4)',transition:'opacity 0.2s ease'}}/>
+
+      {/* Next arrow */}
+      {gallery && (
+        <button onClick={next} style={{position:'fixed',right:16,top:'50%',transform:'translateY(-50%)',background:'rgba(10,20,34,0.75)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:10,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      )}
+
+      {/* Counter */}
+      {gallery && (
+        <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'rgba(10,20,34,0.8)',color:'rgba(255,255,255,0.5)',borderRadius:20,padding:'5px 16px',fontSize:12,fontWeight:700,backdropFilter:'blur(8px)',fontFamily:'Manrope,sans-serif',zIndex:10000}}>
+          {cur + 1} / {imgs.length}
+        </div>
+      )}
+
+      {/* Thumbnail strip */}
+      {gallery && imgs.length > 1 && (
+        <div onClick={e=>e.stopPropagation()} style={{position:'fixed',bottom:60,left:'50%',transform:'translateX(-50%)',display:'flex',gap:6,padding:'6px 10px',background:'rgba(10,20,34,0.8)',borderRadius:10,backdropFilter:'blur(8px)',zIndex:10000,maxWidth:'80vw',overflowX:'auto'}}>
+          {imgs.map((src,i) => (
+            <div key={i} onClick={()=>setCur(i)} style={{width:44,height:44,borderRadius:6,overflow:'hidden',flexShrink:0,border:`2px solid ${i===cur?DS.gold:'transparent'}`,cursor:'pointer',transition:'border-color .2s'}}>
+              <img src={src} alt="" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -239,7 +289,7 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
     <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
       {/* Main image */}
       <div
-        onClick={() => onZoom({ src: all[idx], alt: productName })}
+        onClick={() => onZoom({ src: all[idx], alt: productName, all, startIdx: idx })}
         style={{ cursor: 'zoom-in', position: 'relative' }}
       >
         <img
@@ -496,6 +546,7 @@ const ClientPortalView = () => {
   const [wishlisted, setWishlisted] = useState(new Set());
   const [shipments, setShipments]   = useState([]);
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
+  const [shipFilter, setShipFilter]  = useState('all');
   const [toasts, setToasts] = useState([]);
   const chatEnd         = useRef(null);
   const fileRef         = useRef(null);
@@ -647,7 +698,7 @@ const ClientPortalView = () => {
     <div style={{minHeight:'100vh',background:DS.base,fontFamily:'Manrope,sans-serif',color:DS.text}}>
       <style>{globalStyles}</style>
 
-      {lightbox&&<Lightbox src={lightbox.src} alt={lightbox.alt} onClose={()=>setLightbox(null)}/>}
+      {lightbox&&<Lightbox src={lightbox.src} alt={lightbox.alt} all={lightbox.all} startIdx={lightbox.startIdx} onClose={()=>setLightbox(null)}/>}
       <Toast toasts={toasts}/>
 
       {/* ── Navigation Rail — Refined Glassmorphism ── */}
@@ -842,12 +893,29 @@ const ClientPortalView = () => {
               <div style={{fontSize:13,fontFamily:'Manrope,sans-serif',lineHeight:1.7}}>Shipment details will appear here once your parcels are dispatched.</div>
             </div>
           );
+          const STATUSES = ['Booked','In Transit','Out for Delivery','Delivered','Returned','Exception'];
+          const filtered = shipFilter==='all' ? shipments : shipments.filter(s=>s.status===shipFilter);
+          const downloadExcel = () => {
+              const headers = ['Recipient','City','State','Phone','Tracking ID','Partner','Status','Updated'];
+              const rows = shipments.map(s => [
+                s.recipientName||'',s.city||'',s.state||'',s.phone||'',
+                s.trackingId||'',s.shippingPartner||'',s.status||'',
+                s.lastTrackedAt ? new Date(s.lastTrackedAt).toLocaleDateString('en-IN') : '',
+              ]);
+              const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+              const url  = URL.createObjectURL(blob);
+              const a    = document.createElement('a');
+              a.href=url; a.download=`shipments-${portal.orderRef||'export'}.csv`;
+              document.body.appendChild(a); a.click();
+              document.body.removeChild(a); URL.revokeObjectURL(url);
+            };
           return (
             <div>
-              {/* Summary strip */}
-              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:28,padding:'16px 20px',background:DS.cont,borderRadius:12,border:`1px solid rgba(255,255,255,0.05)`}}>
+              {/* Summary strip + download */}
+              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:16,padding:'16px 20px',background:DS.cont,borderRadius:12,border:`1px solid rgba(255,255,255,0.05)`,flexWrap:'wrap'}}>
                 <div style={{width:2,height:24,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
-                <div>
+                <div style={{flex:1}}>
                   <div style={{fontSize:16,fontWeight:700,color:DS.gold,fontFamily:'Noto Serif,serif'}}>
                     {shipments.length} shipment{shipments.length!==1?'s':''}
                   </div>
@@ -857,11 +925,34 @@ const ClientPortalView = () => {
                     {shipments.filter(s=>['In Transit','Out for Delivery','Booked'].includes(s.status)).length} in transit
                   </div>
                 </div>
+                {/* Download button */}
+                <button onClick={downloadExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,cursor:'pointer',color:DS.gold,fontSize:11,fontWeight:700,fontFamily:'Manrope,sans-serif',whiteSpace:'nowrap'}}>
+                  {Ic.dl} Download Excel
+                </button>
+              </div>
+
+              {/* Status filter chips */}
+              <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
+                {['all',...STATUSES].map(st=>{
+                  const count = st==='all' ? shipments.length : shipments.filter(s=>s.status===st).length;
+                  if(st!=='all'&&count===0) return null;
+                  return (
+                    <button key={st} onClick={()=>setShipFilter(st)}
+                      style={{padding:'5px 14px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:'Manrope,sans-serif',transition:'all .15s',
+                        background: shipFilter===st ? GOLD_GRAD : 'rgba(255,255,255,0.05)',
+                        color:      shipFilter===st ? DS.onGold  : DS.sub,
+                        boxShadow:  shipFilter===st ? '0 4px 12px rgba(197,163,87,0.25)' : 'none',
+                      }}>
+                      {st==='all'?`All (${count})`:STATUS_CHIP[st]?`${st} (${count})`:st}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Shipment cards */}
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                {shipments.map((s,idx)=>{
+                {filtered.length===0&&<div style={{textAlign:'center',padding:'32px 0',color:DS.sub,fontSize:13,fontFamily:'Manrope,sans-serif'}}>No shipments with status "{shipFilter}"</div>}
+                {filtered.map((s,idx)=>{
                   const chip = STATUS_CHIP[s.status] || STATUS_CHIP['Pending'];
                   const isDelivered = s.status==='Delivered'||s.status==='Completed';
                   return (
@@ -1230,7 +1321,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                           the overlay never dismisses it.
                         */}
                         <div
-                          style={{display:'flex',flexDirection:'column',flex:1,position:'relative'}}
+                          style={{display:'flex',flexDirection:'column',position:'relative'}}
                           onMouseLeave={()=>setHoveredId(null)}
                         >
 
@@ -1313,8 +1404,8 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                             )}
                           </div>
 
-                          {/* ── Info panel ── */}
-                          <div style={{padding:isMobile?'10px 12px 12px':'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
+                          {/* ── Info panel — no flex:1 so card height = content only ── */}
+                          <div style={{padding:isMobile?'10px 12px 12px':'14px 16px 16px',background:DS.cont,display:'flex',flexDirection:'column',gap:8}}>
 
                             {/* Row 1: Name + Price */}
                             <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
@@ -1561,14 +1652,6 @@ const OffsiteCards = ({ items, onZoom }) => {
             </div>
           )}
 
-          {/* YouTube video embed */}
-          {item.youtubeUrl&&getYouTubeId(item.youtubeUrl)&&(
-            <div style={{padding:'0 24px 20px',background:DS.cont}}>
-              <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>🎬 Property Video</div>
-              <YouTubeEmbed url={item.youtubeUrl} title={item.name}/>
-            </div>
-          )}
-
           {/* Property attachments */}
           {(item.attachments||[]).length>0&&(
             <div style={{padding:'0 24px 20px',background:DS.cont}}>
@@ -1576,6 +1659,14 @@ const OffsiteCards = ({ items, onZoom }) => {
               <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
                 {item.attachments.map((att,ai)=><PropAttachChip key={ai} att={att}/>)}
               </div>
+            </div>
+          )}
+          
+          {/* YouTube video embed */}
+          {item.youtubeUrl&&getYouTubeId(item.youtubeUrl)&&(
+            <div style={{padding:'0 24px 20px',background:DS.cont}}>
+              <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>🎬 Property Video</div>
+              <YouTubeEmbed url={item.youtubeUrl} title={item.name}/>
             </div>
           )}
         </GlassCard>

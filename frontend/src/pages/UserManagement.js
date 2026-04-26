@@ -150,6 +150,7 @@ const ROLE_COLORS = {
   accounts:  { bg: '#022c22', text: '#6ee7b7', border: '#059669' },
   sales:     { bg: '#1c1917', text: '#fcd34d', border: '#b45309' },
   inventory: { bg: '#172554', text: '#93c5fd', border: '#1d4ed8' },
+  courier: { bg: '#1a2e1a', text: '#86efac', border: '#16a34a' },
   viewer:    { bg: '#1e293b', text: '#94a3b8', border: '#475569' },
 };
 

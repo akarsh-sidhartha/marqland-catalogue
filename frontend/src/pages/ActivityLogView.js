@@ -4,20 +4,24 @@ import {
   Activity, Search, Filter, RefreshCw, Trash2,
   ChevronLeft, ChevronRight, CheckCircle, XCircle,
   Shield, Package, Users, CreditCard, Globe, Settings,
-  LogIn, AlertTriangle, Download,
+  LogIn, AlertTriangle, Download, Truck, Archive,
 } from 'lucide-react';
 
 // ── Category config ───────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { key: '',        label: 'All',      icon: Activity,     color: '#6366f1' },
-  { key: 'auth',    label: 'Auth',     icon: LogIn,        color: '#10b981' },
-  { key: 'admin',   label: 'Admin',    icon: Shield,       color: '#8b5cf6' },
-  { key: 'orders',  label: 'Orders',   icon: Package,      color: '#f59e0b' },
-  { key: 'clients', label: 'Clients',  icon: Users,        color: '#3b82f6' },
-  { key: 'products',label: 'Products', icon: Package,      color: '#ec4899' },
-  { key: 'vendors', label: 'Vendors',  icon: Users,        color: '#06b6d4' },
-  { key: 'portal',  label: 'Portal',   icon: Globe,        color: '#f97316' },
-  { key: 'finance', label: 'Finance',  icon: CreditCard,   color: '#84cc16' },
+  { key: '',          label: 'All',       icon: Activity,  color: '#6366f1' },
+  { key: 'auth',      label: 'Auth',      icon: LogIn,     color: '#10b981' },
+  { key: 'admin',     label: 'Admin',     icon: Shield,    color: '#8b5cf6' },
+  { key: 'orders',    label: 'Orders',    icon: Package,   color: '#f59e0b' },
+  { key: 'clients',   label: 'Clients',   icon: Users,     color: '#3b82f6' },
+  { key: 'products',  label: 'Products',  icon: Package,   color: '#ec4899' },
+  { key: 'vendors',   label: 'Vendors',   icon: Users,     color: '#06b6d4' },
+  { key: 'inventory', label: 'Inventory', icon: Archive,   color: '#0ea5e9' },
+  { key: 'sourcing',  label: 'Sourcing',  icon: Settings,  color: '#a855f7' },
+  { key: 'logistics', label: 'Logistics', icon: Truck,     color: '#64748b' },
+  { key: 'portal',    label: 'Portal',    icon: Globe,     color: '#f97316' },
+  { key: 'finance',   label: 'Finance',   icon: CreditCard,color: '#84cc16' },
+  { key: 'general',   label: 'General',   icon: Activity,  color: '#94a3b8' },
 ];
 
 const STATUS_FILTER = [
@@ -30,35 +34,80 @@ const catConfig = (key) => CATEGORIES.find(c => c.key === key) || CATEGORIES[0];
 
 // Convert action code → plain English label
 const ACTION_LABELS = {
-  LOGIN:               'Logged in',
-  LOGOUT:              'Logged out',
-  REGISTER:            'Registered account',
-  FORGOT_PASSWORD:     'Requested password reset',
-  APPROVE_USER:        'Approved user',
-  CHANGE_ROLE:         'Changed user role',
-  SUSPEND_USER:        'Suspended user',
-  REACTIVATE_USER:     'Reactivated user',
-  DELETE_USER:         'Deleted user',
-  UPDATE_ROUTES:       'Updated route access',
-  SEND_INVITE:         'Sent invite',
-  CREATE_ORDER:        'Created order',
-  UPDATE_ORDER:        'Updated order',
-  DELETE_ORDER:        'Deleted order',
-  PATCH_ORDER:         'Updated order',
-  CREATE_CLIENT:       'Added client',
-  UPDATE_CLIENT:       'Updated client',
-  DELETE_CLIENT:       'Deleted client',
-  CREATE_PRODUCT:      'Added product',
-  UPDATE_PRODUCT:      'Updated product',
-  DELETE_PRODUCT:      'Deleted product',
-  CREATE_VENDOR:       'Added vendor',
-  UPDATE_VENDOR:       'Updated vendor',
-  DELETE_VENDOR:       'Deleted vendor',
-  CREATE_PORTAL:       'Created portal',
-  SEND_PORTAL_MSG:     'Sent portal message',
-  UPDATE_PORTAL_ITEMS: 'Updated portal items',
-  DELETE_PORTAL:       'Deleted portal',
-  PAYMENT_ACTION:      'Payment tracker action',
+  // Auth
+  LOGIN:                  'Logged in',
+  LOGOUT:                 'Logged out',
+  REGISTER:               'Registered account',
+  INVITE_REGISTER:        'Registered via invite',
+  FORGOT_PASSWORD:        'Requested password reset',
+  RESET_PASSWORD:         'Reset password',
+  // Admin
+  APPROVE_USER:           'Approved user',
+  CHANGE_ROLE:            'Changed user role',
+  SUSPEND_USER:           'Suspended user',
+  REACTIVATE_USER:        'Reactivated user',
+  DELETE_USER:            'Deleted user',
+  UPDATE_ROUTES:          'Updated route access',
+  SEND_INVITE:            'Sent invite',
+  // Orders
+  CREATE_ORDER:           'Created order',
+  UPDATE_ORDER:           'Updated order',
+  DELETE_ORDER:           'Deleted order',
+  PATCH_ORDER:            'Updated order',
+  // Clients
+  CREATE_CLIENT:          'Added client',
+  UPDATE_CLIENT:          'Updated client',
+  DELETE_CLIENT:          'Deleted client',
+  // Products
+  CREATE_PRODUCT:         'Added product',
+  UPDATE_PRODUCT:         'Updated product',
+  DELETE_PRODUCT:         'Deleted product',
+  CREATE_TRENDING:        'Added trending product',
+  UPDATE_TRENDING:        'Updated trending product',
+  DELETE_TRENDING:        'Deleted trending product',
+  // Vendors
+  CREATE_VENDOR:          'Added vendor',
+  UPDATE_VENDOR:          'Updated vendor',
+  DELETE_VENDOR:          'Deleted vendor',
+  // Inventory
+  CREATE_CATALOGUE:       'Created catalogue',
+  UPDATE_CATALOGUE:       'Updated catalogue',
+  DELETE_CATALOGUE:       'Deleted catalogue',
+  CREATE_PROPERTY:        'Created property',
+  UPDATE_PROPERTY:        'Updated property',
+  DELETE_PROPERTY:        'Deleted property',
+  CREATE_OFFSITE:         'Created offsite catalogue',
+  UPDATE_OFFSITE:         'Updated offsite catalogue',
+  DELETE_OFFSITE:         'Deleted offsite catalogue',
+  CREATE_CHALLAN:         'Created challan',
+  UPDATE_CHALLAN:         'Updated challan',
+  DELETE_CHALLAN:         'Deleted challan',
+  // Sourcing / Inquiries
+  CREATE_INQUIRY:         'Created inquiry',
+  UPDATE_INQUIRY:         'Updated inquiry',
+  DELETE_INQUIRY:         'Deleted inquiry',
+  PATCH_INQUIRY:          'Updated inquiry status',
+  // Logistics
+  CREATE_SHIPMENT:        'Created shipment',
+  UPDATE_SHIPMENT:        'Updated shipment',
+  DELETE_SHIPMENT:        'Deleted shipment',
+  PATCH_SHIPMENT:         'Updated shipment status',
+  CREATE_SHIPPING_PARTNER:'Added shipping partner',
+  UPDATE_SHIPPING_PARTNER:'Updated shipping partner',
+  DELETE_SHIPPING_PARTNER:'Deleted shipping partner',
+  // Portal
+  CREATE_PORTAL:          'Created portal',
+  SEND_PORTAL_MSG:        'Sent portal message',
+  UPDATE_PORTAL_ITEMS:    'Updated portal items',
+  DELETE_PORTAL:          'Deleted portal',
+  PATCH_PORTAL:           'Updated portal',
+  // Finance
+  PAYMENT_ACTION:         'Payment tracker action',
+  UPDATE_PAYMENT:         'Updated payment record',
+  DELETE_PAYMENT:         'Deleted payment record',
+  PATCH_PAYMENT:          'Updated payment status',
+  // General
+  IMAGE_PROCESS:          'Image processing task',
 };
 const actionLabel = (action) => ACTION_LABELS[action] || action?.replace(/_/g, ' ')?.toLowerCase() || '—';
 
@@ -78,11 +127,13 @@ const RoleBadge = ({ role }) => {
     accounts:  'bg-green-100 text-green-700',
     sales:     'bg-yellow-100 text-yellow-700',
     inventory: 'bg-blue-100 text-blue-700',
+    courier:   'bg-slate-100 text-slate-600',
     viewer:    'bg-gray-100 text-gray-500',
   };
+  if (!role) return null;
   return (
     <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${colors[role] || colors.viewer}`}>
-      {role || 'system'}
+      {role}
     </span>
   );
 };
@@ -176,10 +227,11 @@ const ActivityLogView = () => {
   };
 
   const exportCSV = () => {
-    const headers = ['Time', 'User', 'Role', 'Category', 'Action', 'Summary', 'Status', 'Duration(ms)', 'IP'];
+    const headers = ['Time', 'User', 'Email', 'Role', 'Category', 'Action', 'Summary', 'Status', 'Duration(ms)', 'IP'];
     const rows = logs.map(l => [
       fmtDate(l.createdAt),
-      l.userEmail || l.userName,
+      l.userName,
+      l.userEmail,
       l.userRole,
       l.category,
       l.action,
@@ -240,7 +292,7 @@ const ActivityLogView = () => {
         <div className="space-y-6">
           {/* Stat cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Actions (7d)"  value={stats.totalLast7}  icon={Activity}    color="#6366f1" />
+            <StatCard label="Actions (7d)"  value={stats.totalLast7}  icon={Activity}     color="#6366f1" />
             <StatCard label="Failed (7d)"   value={stats.failedLast7} icon={AlertTriangle} color="#ef4444" />
             <StatCard label="Top category"  value={stats.byCategory?.[0]?._id || '—'}  icon={Filter}   color="#f59e0b" />
             <StatCard label="Active users"  value={stats.byUser?.length || 0} icon={Users}    color="#10b981" />
@@ -340,7 +392,7 @@ const ActivityLogView = () => {
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
                 <input
                   className="w-full pl-8 pr-4 py-2 bg-gray-50 rounded-xl text-xs font-semibold outline-none border-2 border-transparent focus:border-indigo-200 transition"
-                  placeholder="Search by user, action, summary..."
+                  placeholder="Search by user, email, action, summary..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
@@ -405,11 +457,14 @@ const ActivityLogView = () => {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="text-[11px] font-bold text-gray-600">{fmtDateShort(log.createdAt)}</div>
                         </td>
-                        {/* User */}
+                        {/* User — show name + email + role badge */}
                         <td className="px-4 py-3">
                           <div className="text-xs font-bold text-gray-700 truncate max-w-[130px]">
-                            {log.userName || 'System'}
+                            {log.userName && log.userName !== 'Anonymous' ? log.userName : (log.userEmail || 'Anonymous')}
                           </div>
+                          {log.userEmail && log.userName !== log.userEmail && (
+                            <div className="text-[10px] text-gray-400 truncate max-w-[130px]">{log.userEmail}</div>
+                          )}
                           <div className="mt-0.5">
                             <RoleBadge role={log.userRole} />
                           </div>

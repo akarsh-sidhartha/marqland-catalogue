@@ -422,7 +422,7 @@ router.get('/users/pending', authenticate, authorize(['admin']), async (req, res
 router.patch('/users/:id/approve', authenticate, authorize(['admin']), async (req, res) => {
   try {
     const { role } = req.body;
-    const validRoles = ['admin', 'accounts', 'sales', 'inventory', 'viewer'];
+    const validRoles = ['admin', 'accounts', 'sales', 'inventory', 'courier', 'viewer'];
     if (!role || !validRoles.includes(role))
       return res.status(400).json({ message: `Role must be one of: ${validRoles.join(', ')}` });
 
@@ -444,7 +444,7 @@ router.patch('/users/:id/approve', authenticate, authorize(['admin']), async (re
 router.patch('/users/:id/role', authenticate, authorize(['admin']), async (req, res) => {
   try {
     const { role } = req.body;
-    const validRoles = ['admin', 'accounts', 'sales', 'inventory', 'viewer'];
+    const validRoles = ['admin', 'accounts', 'sales', 'inventory', 'courier', 'viewer'];
     if (!role || !validRoles.includes(role))
       return res.status(400).json({ message: `Role must be one of: ${validRoles.join(', ')}` });
     if (req.params.id === req.user.id && role !== 'admin')
