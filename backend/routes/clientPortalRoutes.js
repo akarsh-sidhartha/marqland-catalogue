@@ -428,20 +428,21 @@ router.get('/public/:slug', async (req, res) => {
     }
 
     const clientData = {
-      slug:          portal.slug,
-      type:          portal.type,
-      orderRef:      portal.orderRef,
-      orderId:       portal.orderId,        // needed for shipment tab fetch
-      clientName:    portal.clientName,
-      orderPlacedBy: portal.orderPlacedBy || '',
-      title:         portal.title,
-      teamNote:      portal.teamNote,
+      slug:           portal.slug,
+      type:           portal.type,
+      orderRef:       portal.orderRef,
+      orderId:        portal.orderId,        // needed for shipment tab fetch
+      clientName:     portal.clientName,
+      orderPlacedBy:  portal.orderPlacedBy || '',
+      title:          portal.title,
+      teamNote:       portal.teamNote,
       productItems,
-      offsiteItems:  portal.offsiteItems || [],
-      messages:      portal.messages     || [],
-      status:        portal.status,
-      completedAt:   portal.completedAt,
-      reviewLink:    portal.reviewLink,
+      offsiteItems:   portal.offsiteItems  || [],
+      messages:       portal.messages      || [],
+      status:         portal.status,
+      completedAt:    portal.completedAt,
+      reviewLink:     portal.reviewLink,
+      shortlistedIds: portal.shortlistedIds || [],  // ← persisted client shortlist
     };
 
     res.json(clientData);
@@ -746,6 +747,45 @@ router.post('/:slug/sync-products', async (req, res) => {
     res.json({ synced, total: items.length, portal });
   } catch (err) {
     console.error('[sync-products] error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+// ── PUT /api/portal/:slug/shortlist ─────────────────────────────────────────
+// Persists the client's shortlisted item IDs to the DB so they survive refresh.
+// Body: { ids: string[] }
+router.put('/:slug/shortlist', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ message: 'ids must be an array' });
+    const portal = await ClientPortal.findOneAndUpdate(
+      { slug: req.params.slug },
+      { $set: { shortlistedIds: ids } },
+      { new: true }
+    );
+    if (!portal) return res.status(404).json({ message: 'Portal not found' });
+    res.json({ shortlistedIds: portal.shortlistedIds || [] });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+// ── PUT /api/portal/public/:slug/shortlist ───────────────────────────────────
+// Public (no auth) — called by the client's browser to persist their shortlist.
+router.put('/public/:slug/shortlist', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ message: 'ids must be an array' });
+    const portal = await ClientPortal.findOneAndUpdate(
+      { slug: req.params.slug },
+      { $set: { shortlistedIds: ids } },
+      { new: true }
+    );
+    if (!portal) return res.status(404).json({ message: 'Portal not found' });
+    res.json({ ok: true, count: ids.length });
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });

@@ -247,6 +247,11 @@ const ClientPortalEditor = ({ order, onClose }) => {
           {isCompleted && (
             <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-1 rounded-full uppercase">Completed</span>
           )}
+          {portal.viewCount > 0 && (
+            <span className="text-[10px] text-slate-400 font-bold hidden sm:block">
+              👁 {portal.viewCount}
+            </span>
+          )}
           <button onClick={copyLink}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600'}`}>
             {copied ? <Check size={12} /> : <Copy size={12} />}
@@ -264,10 +269,14 @@ const ClientPortalEditor = ({ order, onClose }) => {
 
       {/* ── Tabs ── */}
       <div className="flex border-b border-slate-100 shrink-0">
-        {['items', 'chat', 'settings'].map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest transition-all ${tab === t ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
-            {t === 'items' ? `Options (${items.length})` : t === 'chat' ? `Chat (${portal.messages.length})` : 'Settings'}
+        {[
+          { k:'items',    l:`Options (${items.length})` },
+          { k:'selected', l:`Selected (${(portal.shortlistedIds||[]).length})` },
+          { k:'chat',     l:`Chat (${portal.messages.length})` },
+        ].map(t => (
+          <button key={t.k} onClick={() => setTab(t.k)}
+            className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest transition-all ${tab === t.k ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+            {t.l}
           </button>
         ))}
       </div>
@@ -597,35 +606,76 @@ const ClientPortalEditor = ({ order, onClose }) => {
           </div>
         )}
 
-        {/* ══ SETTINGS TAB ══ */}
-        {tab === 'settings' && (
-          <div className="p-4 space-y-4">
-            <div className="bg-slate-50 rounded-xl p-3 space-y-2">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Client link</div>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2 truncate">{portalUrl}</code>
-                <a href={portalUrl} target="_blank" rel="noreferrer" className="p-2 text-slate-400 hover:text-indigo-600">
-                  <ExternalLink size={14} />
+        {/* ══ SELECTED ITEMS TAB ══ */}
+        {tab === 'selected' && (() => {
+          const allItems = portal.type === 'product' ? (portal.productItems||[]) : (portal.offsiteItems||[]);
+          const shortlistedIds = new Set(portal.shortlistedIds || []);
+          const sel = allItems.filter(i => shortlistedIds.has(String(i._id)));
+          return (
+            <div className="p-4 space-y-3">
+              {/* Summary */}
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Client's shortlist · {sel.length} item{sel.length !== 1 ? 's' : ''}
+                </div>
+                {portal.lastViewedAt && (
+                  <div className="text-[10px] text-slate-300">
+                    Last viewed {new Date(portal.lastViewedAt).toLocaleDateString('en-IN')}
+                  </div>
+                )}
+              </div>
+
+              {sel.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-3xl mb-3">🤍</div>
+                  <p className="text-sm font-bold text-slate-400">No items shortlisted yet</p>
+                  <p className="text-xs text-slate-300 mt-1">
+                    The client hasn't ♡'d any items yet, or the portal link hasn't been opened.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sel.map(item => (
+                    <div key={item._id} className="flex gap-3 items-center p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 overflow-hidden shrink-0">
+                        {item.imageUrl
+                          ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-slate-300">
+                              {portal.type === 'product' ? <Package size={14} /> : <MapPin size={14} />}
+                            </div>
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm text-slate-800 truncate">{item.name}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          {portal.type === 'product'
+                            ? `₹${Number(item.price||0).toLocaleString('en-IN')}${item.category ? ` · ${item.category}` : ''}`
+                            : `${item.location || ''}${item.doublePrice > 0 ? ` · ₹${Number(item.doublePrice).toLocaleString('en-IN')}/double` : ''}`
+                          }
+                        </div>
+                      </div>
+                      <div className="text-amber-400 shrink-0">♥</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Portal analytics strip */}
+              <div className="mt-2 pt-3 border-t border-slate-100 flex items-center gap-4 flex-wrap">
+                <div className="text-[10px] text-slate-400">
+                  <span className="font-black">Views:</span> {portal.viewCount || 0}
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  <span className="font-black">Last seen:</span> {portal.lastViewedAt ? new Date(portal.lastViewedAt).toLocaleDateString('en-IN') : 'Never'}
+                </div>
+                <a href={portalUrl} target="_blank" rel="noreferrer"
+                  className="ml-auto flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-bold">
+                  <ExternalLink size={11} /> Open link
                 </a>
               </div>
-              <div className="text-[10px] text-slate-400">
-                Views: {portal.viewCount || 0} · Last viewed: {portal.lastViewedAt ? new Date(portal.lastViewedAt).toLocaleDateString('en-IN') : 'Never'}
-              </div>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Portal type</div>
-              <div className="flex items-center gap-2">
-                {portal.type === 'product'
-                  ? <Package size={14} className="text-indigo-500" />
-                  : <MapPin size={14} className="text-orange-500" />
-                }
-                <span className="text-sm font-bold text-slate-700">
-                  {portal.type === 'product' ? 'Product gifting' : 'Offsite / property'}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
 

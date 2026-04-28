@@ -29,6 +29,8 @@ const adhocAddonSchema = new mongoose.Schema({
   name:          { type: String, required: true },
   purchasePrice: { type: Number, default: 0 },
   sellingPrice:  { type: Number, default: 0 }, // computed: purchasePrice * (1 + addonMargin/100)
+  // When true, this add-on is priced per guest in the client portal calculator
+  perPerson:     { type: Boolean, default: false },
 }, { _id: true });
 
 /**
@@ -93,15 +95,19 @@ const propertySchema = new mongoose.Schema({
   // Standard add-ons (purchase prices stored; selling = purchase * (1 + addonMargin/100))
   purchaseDJ:             { type: Number, default: 0 },
   djCost:                 { type: Number, default: 0 }, // selling price
+  djCostPerPerson:        { type: Boolean, default: false },
 
   purchaseLicenseFeeDJ:   { type: Number, default: 0 },
   licenseFeeDJ:           { type: Number, default: 0 }, // selling price
+  licenseFeeDJPerPerson:  { type: Boolean, default: false },
 
   purchaseCocktailSnacks: { type: Number, default: 0 },
   cocktailSnacks:         { type: Number, default: 0 }, // selling price
+  cocktailSnacksPerPerson:{ type: Boolean, default: true }, // always per head by default
 
   purchaseBanquetHall:    { type: Number, default: 0 },
   banquetHall:            { type: Number, default: 0 }, // selling price
+  banquetHallPerPerson:   { type: Boolean, default: false },
 
   // Adhoc add-ons — unlimited extras
   adhocAddons: [adhocAddonSchema],

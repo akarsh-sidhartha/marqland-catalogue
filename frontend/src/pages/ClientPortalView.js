@@ -565,9 +565,20 @@ const ClientPortalView = () => {
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4500);
   };
 
-  const toggleWish = id => setWishlisted(prev => {
-    const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s;
-  });
+  const toggleWish = id => {
+    setWishlisted(prev => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      // Persist to DB so shortlist survives page refresh
+      const ids = Array.from(s);
+      fetch(`/api/portal/public/${slug}/shortlist`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      }).catch(() => {}); // fire and forget — don't block UI
+      return s;
+    });
+  };
 
   useEffect(()=>{
     initNotifications(); // register SW, no permission prompt yet
@@ -606,6 +617,11 @@ const ClientPortalView = () => {
         prevMsgCount.current=(data.messages||[]).filter(m=>m.sender==='team').length;
       }
       setPortal(data);
+      // Restore shortlist from DB on first load (not on silent polls).
+      // Always sync — even an empty array should clear a stale local state.
+      if (!silent) {
+        setWishlisted(new Set(data.shortlistedIds || []));
+      }
       const name=data.orderPlacedBy||data.clientName||'';
       setClientName(name); if(name) setNameSet(true);
     }catch(e){ if(!silent) setError(e.message||'Link invalid or expired.'); }
@@ -1765,11 +1781,11 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
 
   const addonList = item => {
     const l = [];
-    if (item.djCost>0)         l.push({ key:'dj',       label:'DJ',           value:item.djCost });
-    if (item.licenseFeeDJ>0)   l.push({ key:'djlic',    label:'DJ Licence',   value:item.licenseFeeDJ });
-    if (item.cocktailSnacks>0) l.push({ key:'cocktail', label:'Cocktails',    value:item.cocktailSnacks });
-    if (item.banquetHall>0)    l.push({ key:'banquet',  label:'Banquet Hall', value:item.banquetHall });
-    (item.adhocAddons||[]).filter(a=>a.sellingPrice>0).forEach((a,i)=>l.push({ key:`adhoc_${i}`, label:a.name, value:a.sellingPrice }));
+    if (item.djCost>0)         l.push({ key:'dj',       label:'DJ',           value:item.djCost,         perPerson: !!item.djCostPerPerson });
+    if (item.licenseFeeDJ>0)   l.push({ key:'djlic',    label:'DJ Licence',   value:item.licenseFeeDJ,   perPerson: !!item.licenseFeeDJPerPerson });
+    if (item.cocktailSnacks>0) l.push({ key:'cocktail', label:'Cocktails & Snacks', value:item.cocktailSnacks, perPerson: item.cocktailSnacksPerPerson !== false }); // default true
+    if (item.banquetHall>0)    l.push({ key:'banquet',  label:'Banquet Hall', value:item.banquetHall,    perPerson: !!item.banquetHallPerPerson });
+    (item.adhocAddons||[]).filter(a=>a.sellingPrice>0).forEach((a,i)=>l.push({ key:`adhoc_${i}`, label:a.name, value:a.sellingPrice, perPerson: !!a.perPerson }));
     return l;
   };
 
@@ -1785,7 +1801,15 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
       base = (item.singlePrice||0)*(c.single||0)*n + (item.doublePrice||0)*(c.double||0)*n
            + (item.triplePrice||0)*(c.triple||0)*n + (item.quadPrice||0)*(c.quad||0)*n;
     }
-    return base + addonList(item).reduce((s,a) => s+(c.addons[a.key]?a.value:0), 0);
+    // Guest headcount for per-person addon multiplication
+    const guests = isDayOut
+      ? (c.pax||0)
+      : (c.single||0)*1 + (c.double||0)*2 + (c.triple||0)*3 + (c.quad||0)*4;
+    const addonCost = addonList(item).reduce((s,a) => {
+      if (!c.addons[a.key]) return s;
+      return s + (a.perPerson ? a.value * Math.max(1, guests) : a.value);
+    }, 0);
+    return base + addonCost;
   };
 
   const oTotals  = offsiteItems.map(i => ({ _id:i._id, name:i.name, type:i.type, total:calcTotal(i) }));
@@ -2046,14 +2070,38 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
                             <div>
                               <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:14 }}>Add-ons</div>
                               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                                {addons.map(a=>(
-                                  <label key={a.key} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:`1px solid ${c.addons[a.key]?'#b8975a':'rgba(0,0,0,0.08)'}`, cursor:'pointer', background:c.addons[a.key]?'rgba(184,151,90,0.04)':'#fff', transition:'all .15s' }}>
-                                    <input type="checkbox" checked={!!c.addons[a.key]} onChange={()=>toggleAddon(item._id,a.key)} style={{accentColor:'#b8975a',width:15,height:15}}/>
-                                    <span style={{ flex:1, fontFamily:"'Jost',sans-serif", fontSize:13, color:'#1a1a1a' }}>{a.label}</span>
-                                    <span style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:'#b8975a', flexShrink:0 }}>{INR(a.value)}</span>
-                                  </label>
-                                ))}
+                                {addons.map(a=>{
+                                  const guests = c.pax||0;
+                                  const effectiveVal = a.perPerson ? a.value * Math.max(1,guests) : a.value;
+                                  const showMultiplied = a.perPerson && guests > 0 && c.addons[a.key];
+                                  return (
+                                    <label key={a.key} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:`1px solid ${c.addons[a.key]?'#b8975a':'rgba(0,0,0,0.08)'}`, cursor:'pointer', background:c.addons[a.key]?'rgba(184,151,90,0.04)':'#fff', transition:'all .15s' }}>
+                                      <input type="checkbox" checked={!!c.addons[a.key]} onChange={()=>toggleAddon(item._id,a.key)} style={{accentColor:'#b8975a',width:15,height:15}}/>
+                                      <span style={{ flex:1, fontFamily:"'Jost',sans-serif", fontSize:13, color:'#1a1a1a' }}>{a.label}</span>
+                                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, flexShrink:0 }}>
+                                        {a.perPerson && (
+                                          <span style={{ fontFamily:"'Jost',sans-serif", fontSize:8, color:'#b8975a', letterSpacing:'0.14em', textTransform:'uppercase', background:'rgba(184,151,90,0.1)', padding:'1px 6px' }}>per person</span>
+                                        )}
+                                        <span style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:'#b8975a' }}>
+                                          {showMultiplied ? INR(effectiveVal) : INR(a.value)}
+                                        </span>
+                                        {showMultiplied && (
+                                          <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa' }}>{INR(a.value)} × {guests}</span>
+                                        )}
+                                      </div>
+                                    </label>
+                                  );
+                                })}
                               </div>
+                              {addons.some(a=>c.addons[a.key])&&(
+                                <div style={{marginTop:10,padding:'8px 14px',background:'#faf8f5',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                  <span style={{fontFamily:"'Jost',sans-serif",fontSize:10,color:'#aaa',letterSpacing:'0.15em',textTransform:'uppercase'}}>Add-ons subtotal</span>
+                                  <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:16,color:'#b8975a'}}>{INR(addons.filter(a=>c.addons[a.key]).reduce((s,a)=>{
+                                    const guests=c.pax||0;
+                                    return s+(a.perPerson?a.value*Math.max(1,guests):a.value);
+                                  },0))}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </>
@@ -2128,18 +2176,36 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
                             <div>
                               <div style={{fontFamily:"'Jost',sans-serif",fontSize:9,color:'#aaa',letterSpacing:'0.22em',textTransform:'uppercase',marginBottom:14}}>Add-ons</div>
                               <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                                {addons.map(a=>(
-                                  <label key={a.key} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',border:`1px solid ${c.addons[a.key]?'#b8975a':'rgba(0,0,0,0.08)'}`,cursor:'pointer',background:c.addons[a.key]?'rgba(184,151,90,0.04)':'#fff',transition:'all .15s'}}>
-                                    <input type="checkbox" checked={!!c.addons[a.key]} onChange={()=>toggleAddon(item._id,a.key)} style={{accentColor:'#b8975a',width:15,height:15}}/>
-                                    <span style={{flex:1,fontFamily:"'Jost',sans-serif",fontSize:13,color:'#1a1a1a'}}>{a.label}</span>
-                                    <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:'#b8975a',flexShrink:0}}>{INR(a.value)}</span>
-                                  </label>
-                                ))}
+                                {addons.map(a=>{
+                                  const guests=(c.single||0)*1+(c.double||0)*2+(c.triple||0)*3+(c.quad||0)*4;
+                                  const effectiveVal = a.perPerson ? a.value * Math.max(1,guests) : a.value;
+                                  const showMultiplied = a.perPerson && guests > 0 && c.addons[a.key];
+                                  return (
+                                    <label key={a.key} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',border:`1px solid ${c.addons[a.key]?'#b8975a':'rgba(0,0,0,0.08)'}`,cursor:'pointer',background:c.addons[a.key]?'rgba(184,151,90,0.04)':'#fff',transition:'all .15s'}}>
+                                      <input type="checkbox" checked={!!c.addons[a.key]} onChange={()=>toggleAddon(item._id,a.key)} style={{accentColor:'#b8975a',width:15,height:15}}/>
+                                      <span style={{flex:1,fontFamily:"'Jost',sans-serif",fontSize:13,color:'#1a1a1a'}}>{a.label}</span>
+                                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, flexShrink:0 }}>
+                                        {a.perPerson && (
+                                          <span style={{ fontFamily:"'Jost',sans-serif", fontSize:8, color:'#b8975a', letterSpacing:'0.14em', textTransform:'uppercase', background:'rgba(184,151,90,0.1)', padding:'1px 6px' }}>per person</span>
+                                        )}
+                                        <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:'#b8975a'}}>
+                                          {showMultiplied ? INR(effectiveVal) : INR(a.value)}
+                                        </span>
+                                        {showMultiplied && (
+                                          <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa' }}>{INR(a.value)} × {guests}</span>
+                                        )}
+                                      </div>
+                                    </label>
+                                  );
+                                })}
                               </div>
                               {addons.some(a=>c.addons[a.key])&&(
                                 <div style={{marginTop:10,padding:'8px 14px',background:'#faf8f5',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                                   <span style={{fontFamily:"'Jost',sans-serif",fontSize:10,color:'#aaa',letterSpacing:'0.15em',textTransform:'uppercase'}}>Add-ons subtotal</span>
-                                  <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:16,color:'#b8975a'}}>{INR(addons.filter(a=>c.addons[a.key]).reduce((s,a)=>s+a.value,0))}</span>
+                                  <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:16,color:'#b8975a'}}>{INR(addons.filter(a=>c.addons[a.key]).reduce((s,a)=>{
+                                    const guests=(c.single||0)*1+(c.double||0)*2+(c.triple||0)*3+(c.quad||0)*4;
+                                    return s+(a.perPerson?a.value*Math.max(1,guests):a.value);
+                                  },0))}</span>
                                 </div>
                               )}
                             </div>

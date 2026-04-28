@@ -59,6 +59,8 @@ const portalDayPkgSchema = new mongoose.Schema({
 const portalAddonSchema = new mongoose.Schema({
   name:         { type: String, required: true },
   sellingPrice: { type: Number, default: 0 },
+  // When true, sellingPrice is per guest and is multiplied by headcount in the calculator
+  perPerson:    { type: Boolean, default: false },
 }, { _id: false });
 
 // Property-level attachment shown to client (itinerary PDFs, brochures)
@@ -97,6 +99,12 @@ const offsiteItemSchema = new mongoose.Schema({
   cocktailSnacks: { type: Number, default: 0 },
   banquetHall:    { type: Number, default: 0 },
 
+  // Per-person flags for standard add-ons (true = multiply by guest count in calculator)
+  djCostPerPerson:         { type: Boolean, default: false },
+  licenseFeeDJPerPerson:   { type: Boolean, default: false },
+  cocktailSnacksPerPerson: { type: Boolean, default: true  }, // default on — cocktails/snacks are always per head
+  banquetHallPerPerson:    { type: Boolean, default: false },
+
   // Dynamic adhoc add-ons
   adhocAddons:    [portalAddonSchema],
 
@@ -132,6 +140,9 @@ const clientPortalSchema = new mongoose.Schema({
   viewCount:     { type: Number, default: 0 },
 
   reviewLink:    { type: String, default: '' },
+
+  // Client's shortlisted item IDs — persisted so they survive page refresh
+  shortlistedIds: { type: [String], default: [] },
 }, {
   timestamps: true,
 });

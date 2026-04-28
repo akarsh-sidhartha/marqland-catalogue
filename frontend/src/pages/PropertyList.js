@@ -100,10 +100,10 @@ const EMPTY_FORM = {
   purchasePriceQuad:   '', marginQuad:   15, quadPrice:   '',
   // Shared add-on margin (applies to all 4 standard add-ons + adhoc)
   addonMargin:            15,
-  purchaseDJ:             '', djCost:         '',
-  purchaseLicenseFeeDJ:   '', licenseFeeDJ:   '',
-  purchaseCocktailSnacks: '', cocktailSnacks: '',
-  purchaseBanquetHall:    '', banquetHall:    '',
+  purchaseDJ:             '', djCost:         '', djCostPerPerson:         false,
+  purchaseLicenseFeeDJ:   '', licenseFeeDJ:   '', licenseFeeDJPerPerson:   false,
+  purchaseCocktailSnacks: '', cocktailSnacks: '', cocktailSnacksPerPerson: true,
+  purchaseBanquetHall:    '', banquetHall:    '', banquetHallPerPerson:    false,
   // Adhoc add-ons — unlimited extras
   adhocAddons: [],
   // Day Outing — multi-package
@@ -202,18 +202,23 @@ const PropertyList = () => {
         addonMargin:          Number(formData.addonMargin)          || 15,
         purchaseDJ:             Number(formData.purchaseDJ)             || 0,
         djCost:                 Number(formData.djCost)                 || 0,
+        djCostPerPerson:        !!formData.djCostPerPerson,
         purchaseLicenseFeeDJ:   Number(formData.purchaseLicenseFeeDJ)   || 0,
         licenseFeeDJ:           Number(formData.licenseFeeDJ)           || 0,
+        licenseFeeDJPerPerson:  !!formData.licenseFeeDJPerPerson,
         purchaseCocktailSnacks: Number(formData.purchaseCocktailSnacks) || 0,
         cocktailSnacks:         Number(formData.cocktailSnacks)         || 0,
+        cocktailSnacksPerPerson:!!formData.cocktailSnacksPerPerson,
         purchaseBanquetHall:    Number(formData.purchaseBanquetHall)    || 0,
         banquetHall:            Number(formData.banquetHall)            || 0,
+        banquetHallPerPerson:   !!formData.banquetHallPerPerson,
         adhocAddons: (formData.adhocAddons || [])
           .filter(a => a.name.trim())
           .map(a => ({
             name:          a.name.trim(),
             purchasePrice: Number(a.purchasePrice) || 0,
             sellingPrice:  Number(a.sellingPrice)  || 0,
+            perPerson:     !!a.perPerson,
           })),
         dayPackages: (formData.dayPackages || [])
           .filter(pkg => pkg.name || pkg.purchasePrice)
@@ -277,16 +282,21 @@ const PropertyList = () => {
       addonMargin:          p.addonMargin          ?? 15,
       purchaseDJ:             p.purchaseDJ             || '',
       djCost:                 p.djCost                 || '',
+      djCostPerPerson:        p.djCostPerPerson        ?? false,
       purchaseLicenseFeeDJ:   p.purchaseLicenseFeeDJ   || '',
       licenseFeeDJ:           p.licenseFeeDJ           || '',
+      licenseFeeDJPerPerson:  p.licenseFeeDJPerPerson  ?? false,
       purchaseCocktailSnacks: p.purchaseCocktailSnacks || '',
       cocktailSnacks:         p.cocktailSnacks         || '',
+      cocktailSnacksPerPerson:p.cocktailSnacksPerPerson ?? true,
       purchaseBanquetHall:    p.purchaseBanquetHall    || '',
       banquetHall:            p.banquetHall            || '',
+      banquetHallPerPerson:   p.banquetHallPerPerson   ?? false,
       adhocAddons: (p.adhocAddons || []).map(a => ({
         name:          a.name          || '',
         purchasePrice: String(a.purchasePrice || ''),
         sellingPrice:  String(a.sellingPrice  || ''),
+        perPerson:     !!a.perPerson,
       })),
       dayPackages: (p.dayPackages && p.dayPackages.length > 0)
         ? p.dayPackages.map(pkg => ({
@@ -633,19 +643,65 @@ const PropertyList = () => {
                   </div>
 
                   <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest pt-1">Standard Add-ons</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* DJ */}
-                    <OccupancyPricing label="DJ" costKey="purchaseDJ" marginKey="addonMargin" sellKey="djCost"
-                      formData={formData} setFormData={setFormData} />
-                    {/* DJ License */}
-                    <OccupancyPricing label="DJ License Fee" costKey="purchaseLicenseFeeDJ" marginKey="addonMargin" sellKey="licenseFeeDJ"
-                      formData={formData} setFormData={setFormData} />
-                    {/* Cocktails */}
-                    <OccupancyPricing label="Cocktails & Snacks" costKey="purchaseCocktailSnacks" marginKey="addonMargin" sellKey="cocktailSnacks"
-                      formData={formData} setFormData={setFormData} />
-                    {/* Banquet */}
-                    <OccupancyPricing label="Banquet Hall" costKey="purchaseBanquetHall" marginKey="addonMargin" sellKey="banquetHall"
-                      formData={formData} setFormData={setFormData} />
+                  <div className="space-y-3">
+                    {[
+                      { label:'DJ',               costKey:'purchaseDJ',             sellKey:'djCost',         ppKey:'djCostPerPerson',         defaultPP: false },
+                      { label:'DJ License Fee',   costKey:'purchaseLicenseFeeDJ',   sellKey:'licenseFeeDJ',   ppKey:'licenseFeeDJPerPerson',   defaultPP: false },
+                      { label:'Cocktails & Snacks',costKey:'purchaseCocktailSnacks',sellKey:'cocktailSnacks', ppKey:'cocktailSnacksPerPerson', defaultPP: true  },
+                      { label:'Banquet Hall',      costKey:'purchaseBanquetHall',   sellKey:'banquetHall',    ppKey:'banquetHallPerPerson',    defaultPP: false },
+                    ].map(({ label, costKey, sellKey, ppKey, defaultPP }) => (
+                      <div key={ppKey} className="bg-white border border-indigo-100 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{label}</span>
+                          {/* Per-person toggle — only visible when a sell price is set */}
+                          {Number(formData[sellKey]) > 0 && (
+                            <button type="button"
+                              onClick={() => setFormData({ ...formData, [ppKey]: !formData[ppKey] })}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border ${
+                                formData[ppKey]
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                              {formData[ppKey] ? '👤 Per person' : '🏠 Flat rate'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost price</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                              <input type="text" inputMode="numeric" pattern="[0-9]*"
+                                value={formData[costKey]}
+                                onChange={e => {
+                                  const v = e.target.value.replace(/[^0-9]/g, '');
+                                  setFormData({ ...formData, [costKey]: v, [sellKey]: calcSell(v, formData.addonMargin) });
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-indigo-300 transition-colors" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Margin %</label>
+                            <div className="relative">
+                              <input type="text" readOnly value={formData.addonMargin}
+                                className="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 pr-6 py-1.5 text-sm font-bold text-slate-400 text-center cursor-not-allowed" />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell price</label>
+                            <div className="relative bg-indigo-50 border border-indigo-200 rounded-lg px-2 pl-5 py-1.5 flex items-center">
+                              <span className="absolute left-2 text-indigo-400 text-xs font-bold">₹</span>
+                              <input type="text" inputMode="numeric" pattern="[0-9]*"
+                                value={formData[sellKey]}
+                                onChange={e => setFormData({ ...formData, [sellKey]: e.target.value.replace(/[^0-9]/g, '') })}
+                                className="w-full bg-transparent text-sm font-black text-indigo-700 outline-none" />
+                            </div>
+                            <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   {/* ── Adhoc Add-ons ── */}
@@ -679,10 +735,24 @@ const PropertyList = () => {
                       <div key={ai} className="bg-white border border-indigo-200 rounded-xl p-3 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Add-on {ai + 1}</span>
-                          <button type="button" onClick={() => setFormData({ ...formData, adhocAddons: formData.adhocAddons.filter((_, i) => i !== ai) })}
-                            className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {/* Per-person toggle — only visible when a sell price is set */}
+                            {Number(addon.sellingPrice) > 0 && (
+                              <button type="button"
+                                onClick={() => setAddon('perPerson', !addon.perPerson)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border ${
+                                  addon.perPerson
+                                    ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                                }`}>
+                                {addon.perPerson ? '👤 Per person' : '🏠 Flat rate'}
+                              </button>
+                            )}
+                            <button type="button" onClick={() => setFormData({ ...formData, adhocAddons: formData.adhocAddons.filter((_, i) => i !== ai) })}
+                              className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Add-on Name</label>
@@ -843,15 +913,64 @@ const PropertyList = () => {
 
                   {/* Standard Add-ons */}
                   <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest pt-1">Standard Add-ons</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <OccupancyPricing label="DJ" costKey="purchaseDJ" marginKey="addonMargin" sellKey="djCost"
-                      formData={formData} setFormData={setFormData} accent="amber" />
-                    <OccupancyPricing label="DJ License Fee" costKey="purchaseLicenseFeeDJ" marginKey="addonMargin" sellKey="licenseFeeDJ"
-                      formData={formData} setFormData={setFormData} accent="amber" />
-                    <OccupancyPricing label="Cocktails & Snacks" costKey="purchaseCocktailSnacks" marginKey="addonMargin" sellKey="cocktailSnacks"
-                      formData={formData} setFormData={setFormData} accent="amber" />
-                    <OccupancyPricing label="Banquet Hall" costKey="purchaseBanquetHall" marginKey="addonMargin" sellKey="banquetHall"
-                      formData={formData} setFormData={setFormData} accent="amber" />
+                  <div className="space-y-3">
+                    {[
+                      { label:'DJ',               costKey:'purchaseDJ',             sellKey:'djCost',         ppKey:'djCostPerPerson',         defaultPP: false },
+                      { label:'DJ License Fee',   costKey:'purchaseLicenseFeeDJ',   sellKey:'licenseFeeDJ',   ppKey:'licenseFeeDJPerPerson',   defaultPP: false },
+                      { label:'Cocktails & Snacks',costKey:'purchaseCocktailSnacks',sellKey:'cocktailSnacks', ppKey:'cocktailSnacksPerPerson', defaultPP: true  },
+                      { label:'Banquet Hall',      costKey:'purchaseBanquetHall',   sellKey:'banquetHall',    ppKey:'banquetHallPerPerson',    defaultPP: false },
+                    ].map(({ label, costKey, sellKey, ppKey }) => (
+                      <div key={ppKey} className="bg-white border border-amber-100 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">{label}</span>
+                          {Number(formData[sellKey]) > 0 && (
+                            <button type="button"
+                              onClick={() => setFormData({ ...formData, [ppKey]: !formData[ppKey] })}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border ${
+                                formData[ppKey]
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                              {formData[ppKey] ? '👤 Per person' : '🏠 Flat rate'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost price</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                              <input type="text" inputMode="numeric" pattern="[0-9]*"
+                                value={formData[costKey]}
+                                onChange={e => {
+                                  const v = e.target.value.replace(/[^0-9]/g, '');
+                                  setFormData({ ...formData, [costKey]: v, [sellKey]: calcSell(v, formData.addonMargin) });
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-amber-300 transition-colors" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Margin %</label>
+                            <div className="relative">
+                              <input type="text" readOnly value={formData.addonMargin}
+                                className="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 pr-6 py-1.5 text-sm font-bold text-slate-400 text-center cursor-not-allowed" />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell price</label>
+                            <div className="relative bg-amber-50 border border-amber-200 rounded-lg px-2 pl-5 py-1.5 flex items-center">
+                              <span className="absolute left-2 text-amber-400 text-xs font-bold">₹</span>
+                              <input type="text" inputMode="numeric" pattern="[0-9]*"
+                                value={formData[sellKey]}
+                                onChange={e => setFormData({ ...formData, [sellKey]: e.target.value.replace(/[^0-9]/g, '') })}
+                                className="w-full bg-transparent text-sm font-black text-amber-700 outline-none" />
+                            </div>
+                            <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   {/* ── Adhoc Add-ons ── */}
@@ -883,10 +1002,23 @@ const PropertyList = () => {
                       <div key={ai} className="bg-white border border-amber-200 rounded-xl p-3 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Add-on {ai + 1}</span>
-                          <button type="button" onClick={() => setFormData({ ...formData, adhocAddons: formData.adhocAddons.filter((_, i) => i !== ai) })}
-                            className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {Number(addon.sellingPrice) > 0 && (
+                              <button type="button"
+                                onClick={() => setAddon('perPerson', !addon.perPerson)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border ${
+                                  addon.perPerson
+                                    ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                                }`}>
+                                {addon.perPerson ? '👤 Per person' : '🏠 Flat rate'}
+                              </button>
+                            )}
+                            <button type="button" onClick={() => setFormData({ ...formData, adhocAddons: formData.adhocAddons.filter((_, i) => i !== ai) })}
+                              className="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Add-on Name</label>
