@@ -101,8 +101,12 @@ const AdminView = () => {
   };
 
   // ── Testimonials ──────────────────────────────────────────────────────────────
-  const openTestimonialModal = (mode, t = null) =>
-    setTestimonialModal({ show: true, mode, data: t ? { ...t } : { author: '', company: '', text: '' } });
+  const openTestimonialModal = (mode, t = null) => {
+    const tData = t
+      ? { ...t, text: t.text || t.feedback || t.content || '' }
+      : { author: '', company: '', text: '' };
+    setTestimonialModal({ show: true, mode, data: tData });
+  };
 
   const submitTestimonial = async () => {
     const { author, company, text, id } = testimonialModal.data;
@@ -474,7 +478,7 @@ const AdminView = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {data.testimonials.map(t => (
                 <div key={t.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative group transition-all">
-                  <p className="text-slate-600 italic mb-8 relative z-10 min-h-[80px]">"{t.text}"</p>
+                  <p className="text-slate-600 italic mb-8 relative z-10 min-h-[80px]">"{t.feedback || t.text || t.content}"</p>
                   <div className="flex justify-between items-end border-t pt-6">
                     <div>
                       <p className="font-bold text-sm">{t.author}</p>
@@ -516,6 +520,12 @@ const AdminView = () => {
                       {inq.company && <div className="flex items-center text-sm text-slate-500 font-medium"><Mail size={14} className="mr-3 text-slate-400" /> {inq.company}</div>}
                       <div className="flex items-center text-sm text-slate-500"><Mail size={14} className="mr-3 text-slate-400" /> {inq.email}</div>
                       {inq.phone && <div className="flex items-center text-sm text-slate-500"><Phone size={14} className="mr-3 text-slate-400" /> {inq.phone}</div>}
+                      {inq.hearAbout && (
+                        <div className="flex items-start gap-3 text-sm text-slate-500">
+                          <span className="mt-0.5 text-slate-400 text-xs">◎</span>
+                          <span><span className="font-semibold text-slate-400 uppercase tracking-widest text-[9px]">Heard via </span>{inq.hearAbout}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="col-span-7">
                       <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{inq.message}</p>

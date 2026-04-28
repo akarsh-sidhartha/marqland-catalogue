@@ -16,22 +16,23 @@ import { initNotifications, requestNotifPermission, pushNotif, subscribeToPortal
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DS = {
-  base:    '#0a1422',
-  cont:    '#17202f',
-  contHi:  '#1f2d40',
-  contTop: '#2c3545',
-  bright:  '#374155',
-  gold:    '#c5a357',
-  goldHi:  '#e6c273',
-  onGold:  '#3f2e00',
-  outline: 'rgba(255,255,255,0.15)',
-  muted:   'rgba(255,255,255,0.35)',
-  text:    '#f0e8d6',
-  sub:     'rgba(240,232,214,0.55)',
+  base:    '#faf8f5',
+  cont:    '#ffffff',
+  contHi:  '#f2efe9',
+  contTop: '#e8e4dd',
+  bright:  '#d4cfc6',
+  gold:    '#b8975a',
+  goldHi:  '#d4b06a',
+  onGold:  '#0e1520',
+  outline: 'rgba(0,0,0,0.08)',
+  muted:   'rgba(0,0,0,0.35)',
+  text:    '#1a1a1a',
+  sub:     'rgba(26,26,26,0.55)',
+  navy:    '#0e1520',
 };
 
-const GOLD_GRAD = `linear-gradient(45deg, ${DS.goldHi}, ${DS.gold})`;
-const GLASS_BG  = 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)';
+const GOLD_GRAD = 'linear-gradient(135deg, #d4b06a, #b8975a)';
+const GLASS_BG  = '#ffffff';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const toINR = v => `₹${Number(v||0).toLocaleString('en-IN')}`;
@@ -80,14 +81,14 @@ const Lightbox = ({ src, alt, all, startIdx, onClose }) => {
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(5,8,16,0.96)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:24,backdropFilter:'blur(24px)'}}>
       {/* Close */}
-      <button onClick={onClose} style={{position:'fixed',top:20,right:20,background:GLASS_BG,border:'1px solid rgba(255,255,255,0.12)',borderRadius:'50%',width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
+      <button onClick={onClose} style={{position:'fixed',top:26,right:26,background:'none',border:'none',width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'rgba(255,255,255,0.32)',zIndex:10000}}>
         {Ic.close}
       </button>
 
       {/* Prev arrow */}
       {gallery && (
-        <button onClick={prev} style={{position:'fixed',left:16,top:'50%',transform:'translateY(-50%)',background:'rgba(10,20,34,0.75)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:10,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+        <button onClick={prev} style={{position:'fixed',left:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',padding:16,cursor:'pointer',color:'rgba(255,255,255,0.22)',zIndex:10000}}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       )}
 
@@ -97,14 +98,14 @@ const Lightbox = ({ src, alt, all, startIdx, onClose }) => {
 
       {/* Next arrow */}
       {gallery && (
-        <button onClick={next} style={{position:'fixed',right:16,top:'50%',transform:'translateY(-50%)',background:'rgba(10,20,34,0.75)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:10,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:DS.muted,zIndex:10000,backdropFilter:'blur(12px)'}}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <button onClick={next} style={{position:'fixed',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',padding:16,cursor:'pointer',color:'rgba(255,255,255,0.22)',zIndex:10000}}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       )}
 
       {/* Counter */}
       {gallery && (
-        <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'rgba(10,20,34,0.8)',color:'rgba(255,255,255,0.5)',borderRadius:20,padding:'5px 16px',fontSize:12,fontWeight:700,backdropFilter:'blur(8px)',fontFamily:'Manrope,sans-serif',zIndex:10000}}>
+        <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'rgba(10,20,34,0.8)',color:'rgba(255,255,255,0.5)',borderRadius:20,padding:'5px 16px',fontSize:12,fontWeight:700,backdropFilter:'blur(8px)',fontFamily:"'Jost',sans-serif",zIndex:10000}}>
           {cur + 1} / {imgs.length}
         </div>
       )}
@@ -113,7 +114,7 @@ const Lightbox = ({ src, alt, all, startIdx, onClose }) => {
       {gallery && imgs.length > 1 && (
         <div onClick={e=>e.stopPropagation()} style={{position:'fixed',bottom:60,left:'50%',transform:'translateX(-50%)',display:'flex',gap:6,padding:'6px 10px',background:'rgba(10,20,34,0.8)',borderRadius:10,backdropFilter:'blur(8px)',zIndex:10000,maxWidth:'80vw',overflowX:'auto'}}>
           {imgs.map((src,i) => (
-            <div key={i} onClick={()=>setCur(i)} style={{width:44,height:44,borderRadius:6,overflow:'hidden',flexShrink:0,border:`2px solid ${i===cur?DS.gold:'transparent'}`,cursor:'pointer',transition:'border-color .2s'}}>
+            <div key={i} onClick={()=>setCur(i)} style={{width:44,height:44,borderRadius:6,overflow:'hidden',flexShrink:0,border:`2px solid ${i===cur?'#b8975a':'transparent'}`,cursor:'pointer',transition:'border-color .2s'}}>
               <img src={src} alt="" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
             </div>
           ))}
@@ -149,8 +150,8 @@ const AttachChip = ({ att, isTeam }) => {
     <a href={att.url} target="_blank" rel="noreferrer"
       onClick={handleDownload}
       style={{display:'inline-flex',alignItems:'center',gap:7,padding:'6px 11px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,textDecoration:'none',marginTop:5,cursor:'pointer'}}>
-      <span style={{color:DS.gold}}>{Ic.file}</span>
-      <span style={{fontSize:11,fontWeight:600,color:DS.muted,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
+      <span style={{color:'#b8975a'}}>{Ic.file}</span>
+      <span style={{fontSize:11,fontWeight:600,color:'#888',maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
       {att.size>0&&<span style={{fontSize:10,color:'rgba(255,255,255,0.25)'}}>{fmtSz(att.size)}</span>}
       <span style={{color:'rgba(255,255,255,0.3)'}}>{Ic.dl}</span>
     </a>
@@ -163,9 +164,9 @@ const FileStrip = ({ files, onRemove }) => {
   return (
     <div style={{display:'flex',flexWrap:'wrap',gap:6,padding:'8px 18px 0'}}>
       {files.map((f,i)=>(
-        <div key={i} style={{display:'flex',alignItems:'center',gap:6,background:DS.contHi,border:'1px solid rgba(255,255,255,0.08)',borderRadius:8,padding:'4px 10px'}}>
-          <span style={{color:DS.gold,display:'flex'}}>{Ic.file}</span>
-          <span style={{fontSize:11,color:DS.muted,maxWidth:90,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+        <div key={i} style={{display:'flex',alignItems:'center',gap:6,background:'#f3f0ec',border:'1px solid rgba(0,0,0,0.07)',borderRadius:4,padding:'4px 10px'}}>
+          <span style={{color:'#b8975a',display:'flex'}}>{Ic.file}</span>
+          <span style={{fontSize:11,color:'#888',maxWidth:90,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
           <button onClick={()=>onRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.3)',padding:0,display:'flex',marginLeft:2}}>{Ic.close}</button>
         </div>
       ))}
@@ -179,32 +180,26 @@ const GlassCard = ({ children, style={}, delay=0, onHover }) => {
   const ref = useRef(null);
   return (
     <div ref={ref} style={{
-      background: GLASS_BG,
-      border: `1px solid ${DS.outline}`,
-      borderRadius: 12,                    // xl per DESIGN.md
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.32)',
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.07)',
+      borderRadius: 4,
+      boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
       position: 'relative',
       overflow: 'hidden',
-      transition: 'transform 0.28s cubic-bezier(.34,1.56,.64,1), box-shadow 0.28s ease, border-color 0.28s ease',
+      transition: 'transform 0.5s cubic-bezier(0.16,1,0.3,1), box-shadow 0.5s ease',
       animation: `obsidianFadeIn .5s ease ${delay}s both`,
       ...style,
     }}
       onMouseEnter={e=>{
-        e.currentTarget.style.transform='translateY(-4px)';
-        e.currentTarget.style.boxShadow='0 24px 48px rgba(0,0,0,0.4)';
-        e.currentTarget.style.borderColor='rgba(197,163,87,0.35)';
+        e.currentTarget.style.transform='translateY(-3px)';
+        e.currentTarget.style.boxShadow='0 20px 60px rgba(0,0,0,0.09)';
         onHover?.('enter');
       }}
       onMouseLeave={e=>{
         e.currentTarget.style.transform='none';
-        e.currentTarget.style.boxShadow='0 8px 32px rgba(0,0,0,0.32)';
-        e.currentTarget.style.borderColor=DS.outline;
+        e.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.05)';
         onHover?.('leave');
       }}>
-      {/* Shimmer line — signature texture from DESIGN.md */}
-      <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,rgba(230,194,115,0.18) 50%,transparent)',pointerEvents:'none'}}/>
       {children}
     </div>
   );
@@ -213,12 +208,12 @@ const GlassCard = ({ children, style={}, delay=0, onHover }) => {
 // ── Price Box — uses tonal layering per DESIGN.md ─────────────────────────────
 const PBox = ({ label, value, sub, amber }) => (
   <div style={{
-    background: amber ? 'rgba(197,163,87,0.08)' : DS.contTop,
-    border: `1px solid ${amber ? 'rgba(197,163,87,0.2)' : 'rgba(255,255,255,0.06)'}`,
+    background: amber ? 'rgba(184,151,90,0.08)' : '#ffffff',
+    border: `1px solid ${amber ? 'rgba(184,151,90,0.2)' : 'rgba(255,255,255,0.06)'}`,
     borderRadius: 10, padding: '10px 14px', textAlign: 'center',
   }}>
-    <div style={{fontSize:9,color:amber?DS.gold:'rgba(255,255,255,0.4)',fontWeight:700,fontFamily:'Manrope,sans-serif',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>{label}</div>
-    <div style={{fontSize:16,fontWeight:700,color:amber?DS.goldHi:DS.text,fontFamily:'Manrope,sans-serif'}}>{toINR(value)}</div>
+    <div style={{fontSize:9,color:amber?'#b8975a':'rgba(255,255,255,0.4)',fontWeight:700,fontFamily:"'Jost',sans-serif",textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>{label}</div>
+    <div style={{fontSize:16,fontWeight:700,color:amber?'#d4b06a':'#1a1a1a',fontFamily:"'Jost',sans-serif"}}>{toINR(value)}</div>
     {sub&&<div style={{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:1}}>{sub}</div>}
   </div>
 );
@@ -244,18 +239,18 @@ const YouTubeEmbed = ({ url, title }) => {
   if (!videoId) return null;
   const thumb = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
   return (
-    <div style={{borderRadius:10,overflow:'hidden',background:DS.base,border:`1px solid rgba(255,255,255,0.08)`,marginTop:12}}>
+    <div style={{borderRadius:10,overflow:'hidden',background:'#faf8f5',border:`1px solid rgba(255,255,255,0.08)`,marginTop:12}}>
       {!show ? (
         <div style={{position:'relative',cursor:'pointer',aspectRatio:'16/9'}} onClick={()=>setShow(true)}>
           <img src={thumb} alt={title||'Video'} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
           <div style={{position:'absolute',inset:0,background:'rgba(5,10,20,0.5)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <div style={{width:54,height:54,background:'rgba(197,163,87,0.92)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(197,163,87,0.4)',transition:'transform .2s'}}
+            <div style={{width:54,height:54,background:'rgba(184,151,90,0.92)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(184,151,90,0.4)',transition:'transform .2s'}}
               onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'}
               onMouseLeave={e=>e.currentTarget.style.transform='none'}>
-              <span style={{color:DS.onGold,marginLeft:3}}>{Ic.play}</span>
+              <span style={{color:'#0e1520',marginLeft:3}}>{Ic.play}</span>
             </div>
           </div>
-          <div style={{position:'absolute',bottom:10,left:12,fontSize:11,fontWeight:600,color:'rgba(255,255,255,0.8)',fontFamily:'Manrope,sans-serif',textShadow:'0 1px 4px rgba(0,0,0,0.7)',maxWidth:'70%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{title||'Watch Video'}</div>
+          <div style={{position:'absolute',bottom:10,left:12,fontSize:11,fontWeight:600,color:'rgba(255,255,255,0.8)',fontFamily:"'Jost',sans-serif",textShadow:'0 1px 4px rgba(0,0,0,0.7)',maxWidth:'70%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{title||'Watch Video'}</div>
         </div>
       ) : (
         <div style={{aspectRatio:'16/9'}}>
@@ -306,15 +301,15 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
       </div>
 
       {/* Prev / Next arrows */}
-      <button onClick={prev} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(10,20,34,0.7)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: DS.muted, zIndex: 4, backdropFilter: 'blur(6px)' }}>
+      <button onClick={prev} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 2, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1a1a1a', zIndex: 4 }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <button onClick={next} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(10,20,34,0.7)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: DS.muted, zIndex: 4, backdropFilter: 'blur(6px)' }}>
+      <button onClick={next} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 2, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1a1a1a', zIndex: 4 }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
 
       {/* Counter badge */}
-      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(10,20,34,0.7)', color: 'rgba(255,255,255,0.55)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, backdropFilter: 'blur(4px)', fontFamily: 'Manrope,sans-serif', zIndex: 3 }}>
+      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.92)', color: 'rgba(26,26,26,0.55)', borderRadius: 2, padding: '3px 8px', fontSize: 9, fontWeight: 400, fontFamily: "'Jost',sans-serif", letterSpacing:'0.12em', zIndex: 3 }}>
         {idx + 1} / {all.length}
       </div>
 
@@ -326,7 +321,7 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
             onClick={(e) => { e.stopPropagation(); setIdx(i); }}
             style={{
               width: i === idx ? 18 : 6, height: 6, borderRadius: 3, border: 'none',
-              background: i === idx ? DS.gold : 'rgba(255,255,255,0.3)',
+              background: i === idx ? '#b8975a' : 'rgba(255,255,255,0.3)',
               cursor: 'pointer', padding: 0,
               transition: 'all 0.25s ease',
             }}
@@ -336,14 +331,14 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
 
       {/* Thumbnail strip — bottom of card, visible when many images */}
       {all.length > 3 && (
-        <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: 'rgba(10,20,34,0.85)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: '#fff', borderTop:'1px solid rgba(0,0,0,0.07)', overflowX: 'auto', scrollbarWidth: 'none' }}>
           {all.map((src, i) => (
             <div
               key={i}
               onClick={(e) => { e.stopPropagation(); setIdx(i); }}
               style={{
                 width: 38, height: 38, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
-                border: `2px solid ${i === idx ? DS.gold : 'transparent'}`,
+                border: `2px solid ${i === idx ? '#b8975a' : 'transparent'}`,
                 cursor: 'pointer', transition: 'border-color 0.2s',
               }}
             >
@@ -373,11 +368,11 @@ const PropAttachChip = ({ att }) => {
   };
   return (
     <a href={att.url} target="_blank" rel="noreferrer" onClick={handleClick}
-      style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',background:'rgba(197,163,87,0.07)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,textDecoration:'none',cursor:'pointer',transition:'background .15s'}}
-      onMouseEnter={e=>e.currentTarget.style.background='rgba(197,163,87,0.13)'}
-      onMouseLeave={e=>e.currentTarget.style.background='rgba(197,163,87,0.07)'}>
-      <span style={{color:DS.gold}}>{Ic.file}</span>
-      <span style={{fontSize:11,fontWeight:600,color:DS.text,maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
+      style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',background:'rgba(184,151,90,0.07)',border:'1px solid rgba(184,151,90,0.2)',borderRadius:8,textDecoration:'none',cursor:'pointer',transition:'background .15s'}}
+      onMouseEnter={e=>e.currentTarget.style.background='rgba(184,151,90,0.13)'}
+      onMouseLeave={e=>e.currentTarget.style.background='rgba(184,151,90,0.07)'}>
+      <span style={{color:'#b8975a'}}>{Ic.file}</span>
+      <span style={{fontSize:11,fontWeight:600,color:'#1a1a1a',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{att.name}</span>
       {att.size>0&&<span style={{fontSize:10,color:'rgba(255,255,255,0.25)'}}>{fmtSz(att.size)}</span>}
       <span style={{color:'rgba(255,255,255,0.35)'}}>{Ic.dl}</span>
     </a>
@@ -444,7 +439,7 @@ Rules: Each point max 12 words. Distance/travel info → "travel". Never duplica
 
   // Very short — plain text
   if (text.length < 80) {
-    return <p style={{fontSize:12,color:DS.sub,lineHeight:1.65,fontFamily:'Manrope,sans-serif'}}>{text}</p>;
+    return <p style={{fontSize:12,color:'#888888',lineHeight:1.65,fontFamily:"'Jost',sans-serif"}}>{text}</p>;
   }
 
   // Loading shimmer
@@ -461,12 +456,12 @@ Rules: Each point max 12 words. Distance/travel info → "travel". Never duplica
     const lines = text.split('\n').filter(Boolean);
     return (
       <div>
-        <p style={{fontSize:12,color:DS.sub,lineHeight:1.75,fontFamily:'Manrope,sans-serif',whiteSpace:'pre-line'}}>
+        <p style={{fontSize:12,color:'#888888',lineHeight:1.75,fontFamily:"'Jost',sans-serif",whiteSpace:'pre-line'}}>
           {(expanded||lines.length<=3) ? text : lines.slice(0,3).join('\n')+'…'}
         </p>
         {lines.length>3&&(
           <button onClick={()=>setExpanded(e=>!e)}
-            style={{marginTop:5,fontSize:11,color:DS.gold,fontWeight:700,background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'Manrope,sans-serif'}}>
+            style={{marginTop:5,fontSize:11,color:'#b8975a',fontWeight:700,background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:"'Jost',sans-serif"}}>
             {expanded?'▲ Show less':'▼ Show more'}
           </button>
         )}
@@ -479,12 +474,12 @@ Rules: Each point max 12 words. Distance/travel info → "travel". Never duplica
     <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:6}}>
       {sections.map((sec,si)=>(
         <div key={si} style={{borderRadius:8,padding:'9px 12px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}>
-          <div style={{fontSize:9,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6,fontFamily:'Manrope,sans-serif',display:'flex',alignItems:'center',gap:5}}>
+          <div style={{fontSize:9,fontWeight:800,color:'#b8975a',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6,fontFamily:"'Jost',sans-serif",display:'flex',alignItems:'center',gap:5}}>
             <span>{SECTION_ICONS[sec.type]||'ℹ️'}</span>{sec.title}
           </div>
           {(sec.points||[]).map((pt,pi)=>(
-            <div key={pi} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:DS.sub,lineHeight:1.55,marginBottom:3,fontFamily:'Manrope,sans-serif'}}>
-              <span style={{color:DS.gold,flexShrink:0,fontSize:10,marginTop:2}}>›</span>
+            <div key={pi} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:'#888888',lineHeight:1.55,marginBottom:3,fontFamily:"'Jost',sans-serif"}}>
+              <span style={{color:'#b8975a',flexShrink:0,fontSize:10,marginTop:2}}>›</span>
               <span>{pt}</span>
             </div>
           ))}
@@ -499,18 +494,18 @@ const Toast = ({ toasts }) => (
     {toasts.map(t => (
       <div key={t.id} style={{
         display:'flex',alignItems:'flex-start',gap:12,
-        background:DS.contHi,
-        border:`1px solid rgba(197,163,87,0.3)`,
+        background:'#f3f0ec',
+        border:`1px solid rgba(184,151,90,0.3)`,
         borderRadius:12, padding:'14px 18px',
         boxShadow:'0 16px 40px rgba(0,0,0,0.4)',
         animation:'toastSlide .35s cubic-bezier(.34,1.56,.64,1)',
         minWidth:260,maxWidth:340,pointerEvents:'all',
         backdropFilter:'blur(20px)',
       }}>
-        <div style={{width:32,height:32,background:'rgba(197,163,87,0.12)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:15}}>{t.icon||'💬'}</div>
+        <div style={{width:32,height:32,background:'rgba(184,151,90,0.12)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:15}}>{t.icon||'💬'}</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:10,fontWeight:700,color:DS.gold,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.08em',fontFamily:'Manrope,sans-serif'}}>{t.title}</div>
-          <div style={{fontSize:13,color:DS.text,lineHeight:1.4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>{t.body}</div>
+          <div style={{fontSize:10,fontWeight:700,color:'#b8975a',marginBottom:3,textTransform:'uppercase',letterSpacing:'0.08em',fontFamily:"'Jost',sans-serif"}}>{t.title}</div>
+          <div style={{fontSize:13,color:'#1a1a1a',lineHeight:1.4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:"'Jost',sans-serif"}}>{t.body}</div>
         </div>
       </div>
     ))}
@@ -530,6 +525,16 @@ const useMobile = () => {
   }, []);
   return mob;
 };
+
+// ── Empty State helper ────────────────────────────────────────────────────────
+const EmptyState = ({ icon, title, sub, children }) => (
+  <div style={{textAlign:'center',padding:'80px 0'}}>
+    <div style={{fontSize:48,marginBottom:18}}>{icon}</div>
+    <h3 style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:22,fontWeight:300,color:'#1a1a1a',marginBottom:10,lineHeight:1.2}}>{title}</h3>
+    <p style={{fontSize:13,color:'#888',fontFamily:"'Jost',sans-serif",fontWeight:300,letterSpacing:'0.06em'}}>{sub}</p>
+    {children}
+  </div>
+);
 
 const ClientPortalView = () => {
   const { slug }            = useParams();
@@ -629,64 +634,82 @@ const ClientPortalView = () => {
 
   // ── Global CSS injected once ──────────────────────────────────────────────
   const globalStyles = `
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Manrope:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Jost:wght@200;300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
     @keyframes obsidianFadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes toastSlide{from{opacity:0;transform:translateX(20px) scale(0.95)}to{opacity:1;transform:none}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
     *{box-sizing:border-box;margin:0}
+    body{background:#faf8f5}
     ::-webkit-scrollbar{width:3px}
     ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:rgba(197,163,87,0.35);border-radius:10px}
+    ::-webkit-scrollbar-thumb{background:rgba(184,151,90,0.35);border-radius:10px}
     .desc-scroll::-webkit-scrollbar{width:4px}
-    .desc-scroll::-webkit-scrollbar-track{background:rgba(255,255,255,0.04)}
-    .desc-scroll::-webkit-scrollbar-thumb{background:rgba(197,163,87,0.5);border-radius:10px}
-    .desc-scroll{scrollbar-width:thin;scrollbar-color:rgba(197,163,87,0.5) rgba(255,255,255,0.04)}
+    .desc-scroll::-webkit-scrollbar-track{background:rgba(0,0,0,0.04)}
+    .desc-scroll::-webkit-scrollbar-thumb{background:rgba(184,151,90,0.5);border-radius:10px}
+    .desc-scroll{scrollbar-width:thin;scrollbar-color:rgba(184,151,90,0.5) rgba(0,0,0,0.04)}
     textarea{resize:none}
     .img-hover:hover{transform:scale(1.04)!important}
-    .ghost-btn:hover{background:rgba(255,255,255,0.06)!important}
+    .ghost-btn:hover{background:rgba(0,0,0,0.04)!important}
+    .ms-pill{display:inline-block;padding:5px 18px;border:1px solid rgba(184,151,90,0.4);font-size:9px;font-weight:400;letter-spacing:0.25em;text-transform:uppercase;color:#b8975a;font-family:'Jost',sans-serif}
+    .ms-lbl{font-size:9px;font-weight:400;letter-spacing:0.3em;text-transform:uppercase;color:rgba(26,26,26,0.4);font-family:'Jost',sans-serif}
+    .cp-card{background:#fff;border:1px solid rgba(0,0,0,0.07);overflow:hidden;transition:transform 0.5s cubic-bezier(0.16,1,0.3,1),box-shadow 0.5s,border-color 0.3s}
+    .cp-card:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(0,0,0,0.08);border-color:rgba(184,151,90,0.25)}
+    .cp-btn-gold{display:inline-flex;align-items:center;gap:8px;background:#b8975a;color:#0e1520;padding:13px 32px;border:none;cursor:pointer;font-family:'Jost',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.25em;text-transform:uppercase;transition:background 0.3s,transform 0.2s;text-decoration:none}
+    .cp-btn-gold:hover{background:#d4b06a;transform:translateY(-1px)}
+    .cp-pill{display:inline-block;padding:4px 16px;border:1px solid rgba(184,151,90,0.45);font-size:9px;font-weight:400;letter-spacing:0.28em;text-transform:uppercase;color:#b8975a;font-family:'Jost',sans-serif}
+    .cp-divider{width:36px;height:1px;background:#b8975a;display:inline-block;flex-shrink:0}
+    .cp-wish-btn{transition:transform 0.2s,background 0.2s}
+    .cp-wish-btn:hover{transform:scale(1.1)}
+    .ms-grain{position:relative}
+    .ms-grain::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");background-size:200px}
+    .ms-card{overflow:hidden;cursor:pointer;position:relative;transition:transform 0.6s cubic-bezier(0.16,1,0.3,1);border:1px solid rgba(0,0,0,0.07)}
+    .ms-card:hover{transform:translateY(-3px);box-shadow:0 20px 60px rgba(0,0,0,0.09)}
+    .ms-tab-active{border-bottom:2px solid #b8975a !important;color:#b8975a !important}
+    .ms-tab-idle{border-bottom:2px solid transparent !important;color:rgba(26,26,26,0.45)}
+    .ms-tab-idle:hover{color:#1a1a1a}
   `;
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if(loading) return (
-    <div style={{minHeight:'100vh',background:DS.base,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Manrope,sans-serif'}}>
+    <div style={{minHeight:'100vh',background:'#0e1520',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Jost',sans-serif"}}>
       <style>{globalStyles}</style>
       <div style={{textAlign:'center'}}>
-        <div style={{width:38,height:38,border:`2px solid ${DS.contTop}`,borderTopColor:DS.gold,borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 16px'}}/>
-        <div style={{fontSize:12,color:DS.sub,letterSpacing:'0.12em',textTransform:'uppercase'}}>Loading your portal</div>
+        <div style={{width:36,height:36,border:'2px solid rgba(255,255,255,0.1)',borderTopColor:'#b8975a',borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 20px'}}/>
+        <span className="cp-lbl" style={{color:'#b8975a',letterSpacing:'0.35em',opacity:0.6}}>LOADING</span>
       </div>
     </div>
   );
 
   // ── Error ─────────────────────────────────────────────────────────────────
   if(error) return (
-    <div style={{minHeight:'100vh',background:DS.base,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Manrope,sans-serif',padding:24}}>
+    <div style={{minHeight:'100vh',background:'#faf8f5',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Jost',sans-serif",padding:24}}>
       <style>{globalStyles}</style>
       <div style={{textAlign:'center',maxWidth:400}}>
         <div style={{fontSize:48,marginBottom:20}}>⛓</div>
-        <h1 style={{fontFamily:'Noto Serif,serif',color:DS.text,fontSize:22,fontWeight:700,marginBottom:10}}>Link unavailable</h1>
-        <p style={{color:DS.sub,fontSize:14,lineHeight:1.7}}>{error}</p>
+        <h1 className="cp-sf" style={{fontSize:32,fontWeight:300,color:'#1a1a1a',marginBottom:12,lineHeight:1.1}}>Link unavailable</h1>
+        <p style={{color:'#888888',fontSize:14,lineHeight:1.7}}>{error}</p>
       </div>
     </div>
   );
 
   // ── Completed ─────────────────────────────────────────────────────────────
   if(portal.status==='completed') return (
-    <div style={{minHeight:'100vh',background:DS.base,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Manrope,sans-serif',padding:24}}>
+    <div style={{minHeight:'100vh',background:'#faf8f5',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Jost',sans-serif",padding:24}}>
       <style>{globalStyles}</style>
       <div style={{textAlign:'center',maxWidth:520}}>
-        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,padding:'7px 16px',marginBottom:40}}>
-          <div style={{width:20,height:20,background:GOLD_GRAD,borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:10}}>M</div>
-          <span style={{color:DS.gold,fontWeight:700,fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>Marqland Studios</span>
+        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(184,151,90,0.08)',border:'1px solid rgba(184,151,90,0.2)',borderRadius:8,padding:'7px 16px',marginBottom:40}}>
+          <div style={{width:20,height:20,background:GOLD_GRAD,borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center',color:'#0e1520',fontWeight:900,fontSize:10}}>M</div>
+          <span style={{color:'#b8975a',fontWeight:700,fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',fontFamily:"'Jost',sans-serif"}}>Marqland Studios</span>
         </div>
         <div style={{fontSize:64,marginBottom:24}}>🎉</div>
-        <h1 style={{fontFamily:'Noto Serif,serif',color:DS.text,fontWeight:700,fontSize:30,marginBottom:14,lineHeight:1.2}}>Thank you, {portal.clientName}!</h1>
-        <p style={{color:DS.sub,fontSize:15,lineHeight:1.8,marginBottom:40}}>It was our pleasure working with you. We hope the experience exceeded expectations.</p>
+        <h1 className="cp-sf" style={{fontSize:'clamp(28px,5vw,52px)',fontWeight:300,color:'#1a1a1a',marginBottom:16,lineHeight:1.05}}>Thank you, <em style={{color:'#b8975a'}}>{portal.clientName}.</em></h1>
+        <p style={{color:'#888888',fontSize:15,lineHeight:1.8,marginBottom:40}}>It was our pleasure working with you. We hope the experience exceeded expectations.</p>
         {portal.reviewLink&&<a href={portal.reviewLink} target="_blank" rel="noreferrer"
-          style={{display:'inline-flex',alignItems:'center',gap:10,background:GOLD_GRAD,color:DS.onGold,padding:'14px 30px',borderRadius:10,textDecoration:'none',fontWeight:700,fontSize:14,fontFamily:'Manrope,sans-serif'}}>
+          style={{display:'inline-flex',alignItems:'center',gap:10,background:GOLD_GRAD,color:'#0e1520',padding:'14px 30px',borderRadius:10,textDecoration:'none',fontWeight:700,fontSize:14,fontFamily:"'Jost',sans-serif"}}>
           {Ic.star} Share your experience
         </a>}
-        <p style={{color:'rgba(255,255,255,0.2)',fontSize:11,marginTop:44,fontFamily:'Manrope,sans-serif',letterSpacing:'0.06em'}}>REF · {portal.orderRef}</p>
+        <p style={{color:'rgba(255,255,255,0.2)',fontSize:11,marginTop:44,fontFamily:"'Jost',sans-serif",letterSpacing:'0.06em'}}>REF · {portal.orderRef}</p>
       </div>
     </div>
   );
@@ -695,105 +718,107 @@ const ClientPortalView = () => {
   const newMsgs = portal.messages?.filter(m=>m.sender==='team').length||0;
 
   return (
-    <div style={{minHeight:'100vh',background:DS.base,fontFamily:'Manrope,sans-serif',color:DS.text}}>
+    <div style={{minHeight:'100vh',background:'#faf8f5',fontFamily:"'Jost',sans-serif",color:'#1a1a1a'}}>
       <style>{globalStyles}</style>
 
       {lightbox&&<Lightbox src={lightbox.src} alt={lightbox.alt} all={lightbox.all} startIdx={lightbox.startIdx} onClose={()=>setLightbox(null)}/>}
       <Toast toasts={toasts}/>
 
-      {/* ── Navigation Rail — Refined Glassmorphism ── */}
-      <nav style={{
+      {/* ── Nav — HomePage navy bar ── */}
+      <nav className="ms-grain" style={{
         position:'sticky',top:0,zIndex:50,
-        background:'rgba(10,20,34,0.82)',
-        backdropFilter:'blur(20px)',
-        WebkitBackdropFilter:'blur(20px)',
-        borderBottom:`1px solid rgba(255,255,255,0.06)`,
-        padding: isMobile ? '0 16px' : '0 32px',
+        background:'rgba(14,21,32,0.96)',
+        backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+        borderBottom:'1px solid rgba(255,255,255,0.05)',
+        padding: isMobile ? '0 20px' : '0 48px',
+        height:68,display:'flex',alignItems:'center',
       }}>
-        <div style={{maxWidth:1160,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:isMobile?52:60}}>
-          {/* Brand mark */}
-          <div style={{display:'flex',alignItems:'center',gap:11}}>
-            <div style={{width:28,height:28,background:GOLD_GRAD,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:11,letterSpacing:'-0.02em',flexShrink:0}}>M</div>
-            <span style={{fontFamily:'Noto Serif,serif',color:DS.text,fontWeight:700,fontSize:14,letterSpacing:'0.04em'}}>Marqland Studios</span>
-          </div>
-
-          {/* Status + ref */}
-          <div style={{display:'flex',alignItems:'center',gap:16}}>
-            {/* Status Pillar — DESIGN.md "Featured Component" */}
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:2,height:20,background:GOLD_GRAD,borderRadius:2}}/>
-              <span style={{fontSize:11,fontWeight:700,color:DS.gold,letterSpacing:'0.06em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>
-                {portal.status==='active'?'Active':'Completed'}
-              </span>
-            </div>
-            {!isMobile&&<span style={{color:'rgba(255,255,255,0.2)',fontSize:12,fontFamily:'monospace',letterSpacing:'0.04em'}}>{portal.orderRef}</span>}
+        <div style={{width:'100%',maxWidth:1400,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <span className="cp-sf" style={{color:'white',fontSize:20,fontWeight:300,letterSpacing:'0.05em'}}>
+            Marqland Studios
+          </span>
+          <div style={{display:'flex',alignItems:'center',gap:isMobile?10:20}}>
+            <span className="ms-pill">{portal.status==='active'?'Active':'Completed'}</span>
+            {!isMobile&&<span style={{color:'rgba(255,255,255,0.2)',fontSize:10,fontFamily:"'Jost',sans-serif",letterSpacing:'0.2em',textTransform:'uppercase'}}>{portal.orderRef}</span>}
             <button onClick={()=>navigator.clipboard.writeText(window.location.href)}
               className="ghost-btn"
-              style={{background:'transparent',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'6px 9px',cursor:'pointer',color:DS.sub,display:'flex',alignItems:'center',transition:'background .15s'}}
+              style={{background:'transparent',border:'1px solid rgba(255,255,255,0.14)',padding:'8px 10px',cursor:'pointer',color:'rgba(255,255,255,0.4)',display:'flex',alignItems:'center',transition:'background .15s'}}
               title="Copy link">{Ic.share}
             </button>
           </div>
         </div>
       </nav>
 
-      {/* ── Tab Bar — tonal shift from nav ── */}
-      <div style={{background:DS.cont,borderBottom:`1px solid rgba(255,255,255,0.05)`,padding:isMobile?'0 12px':'0 32px'}}>
-        <div style={{maxWidth:1160,margin:'0 auto',display:'flex',gap:4}}>
+      {/* ── Tab Bar — HomePage .sub-btn style ── */}
+      <div style={{background:'#fff',borderBottom:'1px solid rgba(0,0,0,0.07)',padding:isMobile?'0 16px':'0 48px'}}>
+        <div style={{maxWidth:1400,margin:'0 auto',display:'flex',gap:0,overflowX:'auto'}}>
           {[
-            {k:'catalogue',l:'Catalogue Options', b:items.length},
+            {k:'catalogue',  l:'Catalogue Options', b:items.length},
             ...(portal.type==='product' ? [{k:'selected', l:'Selected Items', b:wishlisted.size||null}] : []),
-            ...(portal.type==='product' && !isMobile ? [{k:'shipments',l:'Shipment Tracking', b:null}] : []),
-            {k:'chat',     l:'Message Board',     b:newMsgs||null},
+            ...(!isMobile ? [{k:'calculator', l:'Cost Calculator', b:null}] : []),
+            ...(portal.type==='product' && !isMobile ? [{k:'shipments', l:'Shipment Tracking', b:null}] : []),
+            {k:'chat',       l:'Message Board',     b:newMsgs||null},
           ].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)}
+              className={tab===t.k?'ms-tab-active':'ms-tab-idle'}
               style={{
-                padding: isMobile ? '12px 8px' : '16px 22px',
+                padding: isMobile ? '14px 8px' : '18px 24px',
                 background:'none',border:'none',
-                borderBottom: tab===t.k ? `2px solid ${DS.gold}` : '2px solid transparent',
-                color: tab===t.k ? DS.gold : DS.sub,
-                fontSize: isMobile ? 11 : 13,
-                fontWeight:600,cursor:'pointer',
+                fontSize: isMobile ? 10 : 10,
+                fontWeight:400,cursor:'pointer',
                 display:'flex',alignItems:'center',gap:isMobile?4:8,
                 flex: isMobile ? 1 : 'none',
                 justifyContent: isMobile ? 'center' : 'flex-start',
-                transition:'color .15s, border-color .15s',
-                fontFamily:'Manrope,sans-serif',
-                letterSpacing:'0.01em',
+                transition:'color .2s',
+                fontFamily:"'Jost',sans-serif",
+                letterSpacing:'0.18em',
+                textTransform:'uppercase',
                 whiteSpace:'nowrap',
               }}>
               {t.l}
               {t.b!=null&&<span style={{
-                background: tab===t.k ? 'rgba(197,163,87,0.18)' : 'rgba(255,255,255,0.05)',
-                color: tab===t.k ? DS.gold : DS.sub,
-                fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:20,
-                letterSpacing:'0.04em',
+                background: tab===t.k ? 'rgba(184,151,90,0.12)' : 'rgba(0,0,0,0.06)',
+                color: tab===t.k ? '#b8975a' : 'rgba(26,26,26,0.35)',
+                fontSize:9,fontWeight:500,padding:'2px 8px',
+                letterSpacing:'0.1em',fontFamily:"'Jost',sans-serif",
               }}>{t.b}</span>}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Hero — catalogue tab only ── */}
+      {/* ── Hero — navy grain like HomePage ── */}
       {tab==='catalogue'&&(
-        <div style={{background:`linear-gradient(180deg, rgba(197,163,87,0.05) 0%, transparent 100%)`,padding:isMobile?'24px 16px 16px':'40px 32px 24px',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
-          <div style={{maxWidth:1160,margin:'0 auto'}}>
-            {/* Label chip */}
-            <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:6,padding:'4px 12px',marginBottom:14}}>
-              <span style={{fontSize:9,color:DS.gold,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.1em',fontFamily:'Manrope,sans-serif'}}>
-                {portal.type==='product'?'Product Gifting':'Exclusive Offsite'} · {portal.orderRef}
+        <div className="ms-grain" style={{background:'linear-gradient(155deg,#0c1220 0%,#111a28 60%,#0e1824 100%)',padding:isMobile?'40px 20px 32px':'64px 48px 52px',position:'relative',overflow:'hidden'}}>
+          <div style={{position:'absolute',top:'-20%',right:'5%',width:400,height:400,border:'1px solid rgba(184,151,90,0.05)',borderRadius:'50%',pointerEvents:'none'}}/>
+          <div style={{position:'absolute',top:'-25%',right:'2%',width:560,height:560,border:'1px solid rgba(184,151,90,0.03)',borderRadius:'50%',pointerEvents:'none'}}/>
+          <div style={{maxWidth:1400,margin:'0 auto',position:'relative',zIndex:3}}>
+            <span className="ms-pill" style={{marginBottom:22,display:'inline-block'}}>
+              {portal.type==='product'?'Product Gifting':'Exclusive Offsite'} · {portal.orderRef}
+            </span>
+            <h1 style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:isMobile?'clamp(32px,8vw,48px)':'clamp(40px,6vw,72px)',fontWeight:300,color:'white',lineHeight:1.05,marginBottom:6}}>
+              {portal.title
+                ? <>{portal.title} </>
+                : <>Curated for{' '}<em style={{color:'#b8975a'}}>{portal.clientName}.</em></>
+              }
+            </h1>
+            {portal.teamNote&&(
+              <p style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:'italic',color:'rgba(255,255,255,0.34)',fontSize:isMobile?14:17,lineHeight:1.75,maxWidth:520,marginTop:14}}>
+                {portal.teamNote}
+              </p>
+            )}
+            <div style={{marginTop:32,display:'flex',alignItems:'center',gap:12}}>
+              <div style={{width:40,height:1,background:'#b8975a'}}/>
+              <span style={{fontFamily:"'Jost',sans-serif",fontSize:9,color:'rgba(255,255,255,0.3)',letterSpacing:'0.25em',textTransform:'uppercase'}}>
+                {items.length} item{items.length!==1?'s':''} curated for you
               </span>
             </div>
-            {/* Headline — Noto Serif display */}
-            <h1 style={{fontFamily:'Noto Serif,serif',fontSize:isMobile?20:28,fontWeight:700,color:DS.text,marginBottom:10,letterSpacing:'-0.02em',lineHeight:1.2}}>
-              {portal.title||`Curated for ${portal.clientName}`}
-            </h1>
-            {portal.teamNote&&<p style={{color:DS.sub,fontSize:14,lineHeight:1.75,maxWidth:580,fontFamily:'Manrope,sans-serif'}}>{portal.teamNote}</p>}
           </div>
         </div>
       )}
 
       {/* ── Content ── */}
-      <div style={{maxWidth:1160,margin:'0 auto',padding:isMobile?'16px 12px 80px':'32px 32px 80px'}}>
+      <div style={{maxWidth:1400,margin:'0 auto',padding:isMobile?'24px 16px 80px':'48px 48px 80px'}}>
 
         {/* CATALOGUE */}
         {tab==='catalogue'&&(
@@ -804,6 +829,28 @@ const ClientPortalView = () => {
               : <OffsiteCards items={items} onZoom={setLightbox}/>
         )}
 
+        {/* COST CALCULATOR — desktop only */}
+        {tab==='calculator'&&!isMobile&&(
+          <div>
+            {/* Calculator hero */}
+            <div className="ms-grain" style={{background:'linear-gradient(155deg,#0c1220 0%,#111a28 60%,#0e1824 100%)',padding:'52px 0 44px',marginBottom:40,position:'relative',overflow:'hidden'}}>
+              <div style={{position:'absolute',top:'-20%',right:'4%',width:350,height:350,border:'1px solid rgba(184,151,90,0.05)',borderRadius:'50%',pointerEvents:'none'}}/>
+              <div style={{maxWidth:1400,margin:'0 auto',padding:'0 48px',position:'relative',zIndex:3}}>
+                <span className="ms-pill" style={{marginBottom:18,display:'inline-block'}}>Cost Calculator</span>
+                <h1 style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:'clamp(32px,5vw,56px)',fontWeight:300,color:'white',lineHeight:1.05,marginBottom:10}}>
+                  Estimate your <em style={{color:'#b8975a'}}>investment.</em>
+                </h1>
+                <p style={{fontFamily:"'Jost',sans-serif",fontSize:13,color:'rgba(255,255,255,0.32)',fontWeight:300,maxWidth:480,lineHeight:1.75}}>
+                  {portal.type==='product'
+                    ? 'Set quantities against each product to see an indicative order value. Final invoice will include GST, branding, and shipping.'
+                    : 'Enter your guest count and room split to compare property costs side by side. Toggle add-ons to fine-tune your estimate.'}
+                </p>
+              </div>
+            </div>
+            <CostCalculator portal={portal} wishlisted={wishlisted}/>
+          </div>
+        )}
+
         {/* SELECTED ITEMS */}
         {tab==='selected'&&(()=>{
           const allItems = portal.type==='product' ? portal.productItems : portal.offsiteItems;
@@ -811,21 +858,21 @@ const ClientPortalView = () => {
           if(!sel.length) return (
             <EmptyState icon="🤍" title="No items shortlisted yet"
               sub="Tap ♡ on any product in Catalogue Options to add it here.">
-              <button onClick={()=>setTab('catalogue')} style={{marginTop:24,background:GOLD_GRAD,color:DS.onGold,border:'none',borderRadius:10,padding:'11px 28px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'Manrope,sans-serif',letterSpacing:'0.02em'}}>
+              <button onClick={()=>setTab('catalogue')} style={{marginTop:24,background:'#b8975a',color:'#0e1520',border:'none',padding:'14px 36px',fontWeight:500,fontSize:10,cursor:'pointer',fontFamily:"'Jost',sans-serif",letterSpacing:'0.25em',textTransform:'uppercase'}}>
                 Browse Catalogue
               </button>
             </EmptyState>
           );
           return (
             <div>
-              {/* Summary bar — Status Pillar style */}
-              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:32,padding:'16px 20px',background:DS.cont,borderRadius:12}}>
-                <div style={{width:2,height:24,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
+              {/* Summary bar */}
+              <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:32,padding:'20px 24px',background:'#fff',border:'1px solid rgba(0,0,0,0.07)'}}>
+                <div style={{width:1,height:28,background:'#b8975a',flexShrink:0}}/>
                 <div>
-                  <div style={{fontSize:16,fontWeight:700,color:DS.gold,fontFamily:'Noto Serif,serif'}}>
+                  <div style={{fontSize:18,fontWeight:300,color:'#1a1a1a',fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:'italic'}}>
                     {sel.length} item{sel.length!==1?'s':''} shortlisted
                   </div>
-                  <div style={{fontSize:12,color:DS.sub,marginTop:2}}>Mention these in the message board to share your preferences.</div>
+                  <div style={{fontSize:10,color:'rgba(26,26,26,0.4)',marginTop:3,fontFamily:"'Jost',sans-serif",letterSpacing:'0.1em',textTransform:'uppercase'}}>Mention these in the message board to share your preferences.</div>
                 </div>
               </div>
               {/* Selected items — 3-col bento grid with image + description + price */}
@@ -837,13 +884,13 @@ const ClientPortalView = () => {
                       onClick={()=>{ if(item.imageUrl) setLightbox({src:item.imageUrl,alt:item.name}); }}>
                       {item.imageUrl
                         ?<img src={item.imageUrl} alt={item.name} className="img-hover" style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .4s ease'}}/>
-                        :<div style={{width:'100%',height:'100%',background:DS.contHi,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.2)',fontSize:11}}>No image</div>
+                        :<div style={{width:'100%',height:'100%',background:'#f3f0ec',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.2)',fontSize:11}}>No image</div>
                       }
                       <div style={{position:'absolute',inset:0,background:'linear-gradient(0deg,rgba(10,20,34,0.82) 0%,transparent 48%)',pointerEvents:'none'}}/>
                       {/* Badges */}
                       <div style={{position:'absolute',bottom:10,left:10,display:'flex',gap:5,flexWrap:'wrap'}}>
-                        {item.category&&<span style={{background:'rgba(197,163,87,0.88)',color:DS.onGold,fontSize:8,fontWeight:800,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.06em',fontFamily:'Manrope,sans-serif'}}>{item.category}</span>}
-                        {item.subCategory&&<span style={{background:'rgba(255,255,255,0.14)',color:'rgba(255,255,255,0.85)',fontSize:8,fontWeight:700,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>{item.subCategory}</span>}
+                        {item.category&&<span style={{background:'rgba(184,151,90,0.88)',color:'#0e1520',fontSize:8,fontWeight:800,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',letterSpacing:'0.06em',fontFamily:"'Jost',sans-serif"}}>{item.category}</span>}
+                        {item.subCategory&&<span style={{background:'rgba(255,255,255,0.14)',color:'rgba(255,255,255,0.85)',fontSize:8,fontWeight:700,padding:'3px 7px',borderRadius:4,backdropFilter:'blur(4px)',textTransform:'uppercase',fontFamily:"'Jost',sans-serif"}}>{item.subCategory}</span>}
                       </div>
                       {/* Remove heart */}
                       <button onClick={e=>{e.stopPropagation();toggleWish(String(item._id));}}
@@ -852,13 +899,13 @@ const ClientPortalView = () => {
                       </button>
                     </div>
                     {/* Info — same layout as catalogue bento card */}
-                    <div style={{padding:'14px 16px 16px',background:DS.cont,flex:1,display:'flex',flexDirection:'column',gap:8}}>
+                    <div style={{padding:'14px 16px 16px',background:'#ffffff',flex:1,display:'flex',flexDirection:'column',gap:8}}>
                       <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
-                        <div style={{fontSize:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>{item.name}</div>
-                        <div style={{fontSize:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>{toINR(item.price)}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:'#1a1a1a',lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:"'Jost',sans-serif"}}>{item.name}</div>
+                        <div style={{fontSize:15,fontWeight:700,color:'#d4b06a',fontFamily:"'Cormorant Garamond',Georgia,serif",flexShrink:0}}>{toINR(item.price)}</div>
                       </div>
                       {item.description&&(
-                        <p style={{fontSize:12,color:DS.sub,lineHeight:1.6,margin:0,fontFamily:'Manrope,sans-serif',display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.description}</p>
+                        <p style={{fontSize:12,color:'#888888',lineHeight:1.6,margin:0,fontFamily:"'Jost',sans-serif",display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.description}</p>
                       )}
                     </div>
                   </GlassCard>
@@ -882,15 +929,15 @@ const ClientPortalView = () => {
           };
           if(!shipmentsLoaded) return (
             <div style={{textAlign:'center',padding:'64px 0'}}>
-              <div style={{width:32,height:32,border:`2px solid ${DS.contTop}`,borderTopColor:DS.gold,borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 16px'}}/>
-              <div style={{fontSize:12,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>Loading shipments…</div>
+              <div style={{width:32,height:32,border:'1px solid rgba(184,151,90,0.3)',borderTopColor:'#b8975a',borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 16px'}}/>
+              <div style={{fontSize:12,color:'#888888',fontFamily:"'Jost',sans-serif"}}>Loading shipments…</div>
             </div>
           );
           if(shipments.length===0) return (
-            <div style={{textAlign:'center',padding:'64px 0',color:DS.sub}}>
+            <div style={{textAlign:'center',padding:'64px 0',color:'#888'}}>
               <div style={{fontSize:40,marginBottom:14}}>📦</div>
-              <div style={{fontFamily:'Noto Serif,serif',fontSize:18,fontWeight:700,color:DS.text,marginBottom:8}}>No shipments yet</div>
-              <div style={{fontSize:13,fontFamily:'Manrope,sans-serif',lineHeight:1.7}}>Shipment details will appear here once your parcels are dispatched.</div>
+              <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:18,fontWeight:700,color:'#1a1a1a',marginBottom:8}}>No shipments yet</div>
+              <div style={{fontSize:13,fontFamily:"'Jost',sans-serif",lineHeight:1.7}}>Shipment details will appear here once your parcels are dispatched.</div>
             </div>
           );
           const STATUSES = ['Booked','In Transit','Out for Delivery','Delivered','Returned','Exception'];
@@ -913,20 +960,20 @@ const ClientPortalView = () => {
           return (
             <div>
               {/* Summary strip + download */}
-              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:16,padding:'16px 20px',background:DS.cont,borderRadius:12,border:`1px solid rgba(255,255,255,0.05)`,flexWrap:'wrap'}}>
-                <div style={{width:2,height:24,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
+              <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:16,padding:'20px 24px',background:'#fff',border:'1px solid rgba(0,0,0,0.07)',flexWrap:'wrap'}}>
+                <div style={{width:1,height:24,background:'#b8975a',flexShrink:0}}/>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:16,fontWeight:700,color:DS.gold,fontFamily:'Noto Serif,serif'}}>
+                  <div style={{fontSize:16,fontWeight:300,color:'#1a1a1a',fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:'italic'}}>
                     {shipments.length} shipment{shipments.length!==1?'s':''}
                   </div>
-                  <div style={{fontSize:12,color:DS.sub,marginTop:2,fontFamily:'Manrope,sans-serif'}}>
+                  <div style={{fontSize:12,color:'#888888',marginTop:2,fontFamily:"'Jost',sans-serif"}}>
                     {shipments.filter(s=>s.status==='Delivered'||s.status==='Completed').length} delivered
                     {' · '}
                     {shipments.filter(s=>['In Transit','Out for Delivery','Booked'].includes(s.status)).length} in transit
                   </div>
                 </div>
                 {/* Download button */}
-                <button onClick={downloadExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'rgba(197,163,87,0.08)',border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,cursor:'pointer',color:DS.gold,fontSize:11,fontWeight:700,fontFamily:'Manrope,sans-serif',whiteSpace:'nowrap'}}>
+                <button onClick={downloadExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'rgba(184,151,90,0.08)',border:'1px solid rgba(184,151,90,0.2)',borderRadius:8,cursor:'pointer',color:'#b8975a',fontSize:11,fontWeight:700,fontFamily:"'Jost',sans-serif",whiteSpace:'nowrap'}}>
                   {Ic.dl} Download Excel
                 </button>
               </div>
@@ -938,10 +985,10 @@ const ClientPortalView = () => {
                   if(st!=='all'&&count===0) return null;
                   return (
                     <button key={st} onClick={()=>setShipFilter(st)}
-                      style={{padding:'5px 14px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:'Manrope,sans-serif',transition:'all .15s',
-                        background: shipFilter===st ? GOLD_GRAD : 'rgba(255,255,255,0.05)',
-                        color:      shipFilter===st ? DS.onGold  : DS.sub,
-                        boxShadow:  shipFilter===st ? '0 4px 12px rgba(197,163,87,0.25)' : 'none',
+                      style={{padding:'5px 14px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'Jost',sans-serif",transition:'all .15s',
+                        background: shipFilter===st ? '#0e1520' : 'transparent',
+                        color:      shipFilter===st ? '#0e1520' : '#888',
+                        boxShadow:  shipFilter===st ? '0 4px 12px rgba(184,151,90,0.25)' : 'none',
                       }}>
                       {st==='all'?`All (${count})`:STATUS_CHIP[st]?`${st} (${count})`:st}
                     </button>
@@ -951,7 +998,7 @@ const ClientPortalView = () => {
 
               {/* Shipment cards */}
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                {filtered.length===0&&<div style={{textAlign:'center',padding:'32px 0',color:DS.sub,fontSize:13,fontFamily:'Manrope,sans-serif'}}>No shipments with status "{shipFilter}"</div>}
+                {filtered.length===0&&<div style={{textAlign:'center',padding:'32px 0',color:'#888888',fontSize:13,fontFamily:"'Jost',sans-serif"}}>No shipments with status "{shipFilter}"</div>}
                 {filtered.map((s,idx)=>{
                   const chip = STATUS_CHIP[s.status] || STATUS_CHIP['Pending'];
                   const isDelivered = s.status==='Delivered'||s.status==='Completed';
@@ -964,8 +1011,8 @@ const ClientPortalView = () => {
 
                       {/* Recipient */}
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:15,color:DS.text,fontFamily:'Manrope,sans-serif',marginBottom:2}}>{s.recipientName}</div>
-                        <div style={{fontSize:12,color:DS.sub,fontFamily:'Manrope,sans-serif',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                        <div style={{fontWeight:700,fontSize:15,color:'#1a1a1a',fontFamily:"'Jost',sans-serif",marginBottom:2}}>{s.recipientName}</div>
+                        <div style={{fontSize:12,color:'#888888',fontFamily:"'Jost',sans-serif",display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                           {s.city&&<span>📍 {s.city}{s.state?`, ${s.state}`:''}</span>}
                           {s.phone&&<span>· {s.phone}</span>}
                         </div>
@@ -974,24 +1021,24 @@ const ClientPortalView = () => {
                       {/* Tracking ID + partner */}
                       <div style={{textAlign:isMobile?'left':'center',flexShrink:0}}>
                         {s.trackingId?(
-                          <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,color:DS.goldHi,background:'rgba(197,163,87,0.08)',padding:'4px 10px',borderRadius:7,marginBottom:4,display:'inline-block'}}>
+                          <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,color:'#d4b06a',background:'rgba(184,151,90,0.08)',padding:'4px 10px',borderRadius:7,marginBottom:4,display:'inline-block'}}>
                             {s.trackingId}
                           </div>
                         ):(
-                          <div style={{fontSize:11,color:'rgba(255,255,255,0.2)',marginBottom:4,fontFamily:'Manrope,sans-serif'}}>Tracking pending</div>
+                          <div style={{fontSize:11,color:'rgba(255,255,255,0.2)',marginBottom:4,fontFamily:"'Jost',sans-serif"}}>Tracking pending</div>
                         )}
                         {s.shippingPartner&&(
-                          <div style={{fontSize:11,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>{s.shippingPartner}</div>
+                          <div style={{fontSize:11,color:'#888888',fontFamily:"'Jost',sans-serif"}}>{s.shippingPartner}</div>
                         )}
                       </div>
 
                       {/* Status badge */}
                       <div style={{flexShrink:0}}>
-                        <span style={{fontSize:10,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.08em',padding:'5px 12px',borderRadius:20,background:chip.bg,color:chip.color,fontFamily:'Manrope,sans-serif'}}>
+                        <span style={{fontSize:10,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.08em',padding:'5px 12px',borderRadius:20,background:chip.bg,color:chip.color,fontFamily:"'Jost',sans-serif"}}>
                           {isDelivered?'✓ ':''}{s.status}
                         </span>
                         {s.lastTrackedAt&&(
-                          <div style={{fontSize:9,color:'rgba(255,255,255,0.2)',marginTop:4,textAlign:'center',fontFamily:'Manrope,sans-serif'}}>
+                          <div style={{fontSize:9,color:'rgba(255,255,255,0.2)',marginTop:4,textAlign:'center',fontFamily:"'Jost',sans-serif"}}>
                             Updated {new Date(s.lastTrackedAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}
                           </div>
                         )}
@@ -1011,27 +1058,27 @@ const ClientPortalView = () => {
             {/* Left sidebar — hidden on mobile */}
             <div style={{display: isMobile ? 'none' : 'flex',flexDirection:'column',gap:16}}>
               {/* Project info */}
-              <div style={{background:DS.cont,borderRadius:12,padding:20}}>
-                <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:'Manrope,sans-serif'}}>Current Project</div>
-                <div style={{fontFamily:'Noto Serif,serif',fontWeight:700,fontSize:15,color:DS.text,lineHeight:1.3,marginBottom:4}}>{portal.title||portal.orderRef}</div>
-                <div style={{fontSize:12,color:DS.sub,marginBottom:16,fontFamily:'Manrope,sans-serif'}}>{portal.clientName}</div>
+              <div style={{background:'#ffffff',borderRadius:12,padding:20}}>
+                <div style={{fontSize:9,fontWeight:800,color:'#888888',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:"'Jost',sans-serif"}}>Current Project</div>
+                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:700,fontSize:15,color:'#1a1a1a',lineHeight:1.3,marginBottom:4}}>{portal.title||portal.orderRef}</div>
+                <div style={{fontSize:12,color:'#888888',marginBottom:16,fontFamily:"'Jost',sans-serif"}}>{portal.clientName}</div>
                 {/* Nav items */}
                 {[{l:'Message Board',k:'chat',icon:'💬'},{l:'Catalogue Options',k:'catalogue',icon:'🗂'}].map(it=>(
                   <button key={it.k} onClick={()=>setTab(it.k)}
-                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 12px',background:tab===it.k?'rgba(197,163,87,0.1)':'transparent',border:'none',borderRadius:8,cursor:'pointer',color:tab===it.k?DS.gold:DS.sub,fontSize:12,fontWeight:600,textAlign:'left',width:'100%',marginBottom:3,fontFamily:'Manrope,sans-serif',transition:'background .15s'}}>
+                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 12px',background:tab===it.k?'rgba(184,151,90,0.1)':'transparent',border:'none',borderRadius:8,cursor:'pointer',color:tab===it.k?'#b8975a':'#888',fontSize:12,fontWeight:600,textAlign:'left',width:'100%',marginBottom:3,fontFamily:"'Jost',sans-serif",transition:'background .15s'}}>
                     <span>{it.icon}</span>{it.l}
                   </button>
                 ))}
               </div>
 
               {/* Concierge card — metallic gradient CTA per DESIGN.md */}
-              <div style={{background:`linear-gradient(135deg, rgba(197,163,87,0.1) 0%, rgba(230,194,115,0.05) 100%)`,border:'1px solid rgba(197,163,87,0.18)',borderRadius:12,padding:18}}>
-                <div style={{fontSize:9,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:'Manrope,sans-serif'}}>Your Concierge</div>
+              <div style={{background:`linear-gradient(135deg, rgba(184,151,90,0.1) 0%, rgba(230,194,115,0.05) 100%)`,border:'1px solid rgba(184,151,90,0.18)',borderRadius:12,padding:18}}>
+                <div style={{fontSize:9,fontWeight:800,color:'#b8975a',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:12,fontFamily:"'Jost',sans-serif"}}>Your Concierge</div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <div style={{width:36,height:36,background:GOLD_GRAD,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:14,flexShrink:0}}>M</div>
+                  <div style={{width:36,height:36,background:GOLD_GRAD,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',color:'#0e1520',fontWeight:900,fontSize:14,flexShrink:0}}>M</div>
                   <div>
-                    <div style={{fontWeight:700,fontSize:13,color:DS.text,fontFamily:'Manrope,sans-serif'}}>Marqland Team</div>
-                    <div style={{fontSize:11,color:'#4ade80',marginTop:1,fontFamily:'Manrope,sans-serif'}}>● Online · &lt;1 hour response</div>
+                    <div style={{fontWeight:700,fontSize:13,color:'#1a1a1a',fontFamily:"'Jost',sans-serif"}}>Marqland Team</div>
+                    <div style={{fontSize:11,color:'#4ade80',marginTop:1,fontFamily:"'Jost',sans-serif"}}>● Online · &lt;1 hour response</div>
                   </div>
                 </div>
               </div>
@@ -1039,16 +1086,16 @@ const ClientPortalView = () => {
               {/* Quick reference items */}
               {items.length>0&&(
                 <div>
-                  <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>Quick Reference</div>
+                  <div style={{fontSize:9,fontWeight:800,color:'#888888',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:10,fontFamily:"'Jost',sans-serif"}}>Quick Reference</div>
                   {items.slice(0,3).map((it,i)=>(
                     <div key={i} onClick={()=>setTab('catalogue')}
-                      style={{display:'flex',alignItems:'center',gap:9,background:DS.cont,borderRadius:10,padding:'8px 10px',marginBottom:6,cursor:'pointer'}}>
-                      <div style={{width:32,height:32,borderRadius:7,background:DS.contHi,overflow:'hidden',flexShrink:0}}>
+                      style={{display:'flex',alignItems:'center',gap:9,background:'#ffffff',borderRadius:10,padding:'8px 10px',marginBottom:6,cursor:'pointer'}}>
+                      <div style={{width:32,height:32,borderRadius:7,background:'#f3f0ec',overflow:'hidden',flexShrink:0}}>
                         {it.imageUrl&&<img src={it.imageUrl} alt={it.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>}
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:11,fontWeight:600,color:DS.text,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:'Manrope,sans-serif'}}>{it.name}</div>
-                        <div style={{fontSize:10,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>{portal.type==='product'?toINR(it.price):it.location||'—'}</div>
+                        <div style={{fontSize:11,fontWeight:600,color:'#1a1a1a',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:"'Jost',sans-serif"}}>{it.name}</div>
+                        <div style={{fontSize:10,color:'#888888',fontFamily:"'Jost',sans-serif"}}>{portal.type==='product'?toINR(it.price):it.location||'—'}</div>
                       </div>
                     </div>
                   ))}
@@ -1057,26 +1104,26 @@ const ClientPortalView = () => {
             </div>
 
             {/* Chat window — elevated surface */}
-            <div style={{background:DS.cont,borderRadius:12,display:'flex',flexDirection:'column',minHeight:isMobile?'calc(100vh - 200px)':580}}>
+            <div style={{background:'#ffffff',borderRadius:12,display:'flex',flexDirection:'column',minHeight:isMobile?'calc(100vh - 200px)':580}}>
               {/* Chat header */}
               <div style={{padding:'16px 20px',borderBottom:`1px solid rgba(255,255,255,0.05)`,display:'flex',alignItems:'center',gap:12}}>
-                <div style={{width:36,height:36,background:'rgba(197,163,87,0.12)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🏢</div>
+                <div style={{width:36,height:36,background:'rgba(184,151,90,0.12)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🏢</div>
                 <div>
-                  <div style={{fontWeight:700,fontSize:14,color:DS.text,fontFamily:'Manrope,sans-serif'}}>Marqland Team</div>
-                  <div style={{fontSize:11,color:'#4ade80',fontFamily:'Manrope,sans-serif'}}>● Typically responds in under an hour</div>
+                  <div style={{fontWeight:700,fontSize:14,color:'#1a1a1a',fontFamily:"'Jost',sans-serif"}}>Marqland Team</div>
+                  <div style={{fontSize:11,color:'#4ade80',fontFamily:"'Jost',sans-serif"}}>● Typically responds in under an hour</div>
                 </div>
               </div>
 
               {/* Name input if not set */}
               {!nameSet&&(
-                <div style={{padding:'10px 18px',background:DS.contHi,borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
+                <div style={{padding:'10px 18px',background:'#f3f0ec',borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
                   <div style={{display:'flex',gap:8,alignItems:'center'}}>
                     <input value={clientName} onChange={e=>setClientName(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter'&&clientName.trim())setNameSet(true);}}
                       placeholder="Your name so we know who's messaging"
-                      style={{flex:1,background:DS.contTop,border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,padding:'8px 13px',color:DS.text,fontSize:13,outline:'none',fontFamily:'Manrope,sans-serif'}}/>
+                      style={{flex:1,background:'#ffffff',border:'1px solid rgba(184,151,90,0.2)',borderRadius:8,padding:'8px 13px',color:'#1a1a1a',fontSize:13,outline:'none',fontFamily:"'Jost',sans-serif"}}/>
                     <button onClick={()=>{if(clientName.trim())setNameSet(true);}} disabled={!clientName.trim()}
-                      style={{background:GOLD_GRAD,border:'none',borderRadius:8,padding:'8px 16px',color:DS.onGold,fontSize:12,fontWeight:700,cursor:'pointer',opacity:clientName.trim()?1:0.4,fontFamily:'Manrope,sans-serif'}}>
+                      style={{background:GOLD_GRAD,border:'none',borderRadius:8,padding:'8px 16px',color:'#0e1520',fontSize:12,fontWeight:700,cursor:'pointer',opacity:clientName.trim()?1:0.4,fontFamily:"'Jost',sans-serif"}}>
                       Set
                     </button>
                   </div>
@@ -1086,28 +1133,28 @@ const ClientPortalView = () => {
               {/* Messages */}
               <div style={{flex:1,overflowY:'auto',padding:'18px 20px',display:'flex',flexDirection:'column',gap:14}}>
                 {portal.messages.length===0&&(
-                  <div style={{textAlign:'center',padding:'48px 0',color:DS.sub}}>
+                  <div style={{textAlign:'center',padding:'48px 0',color:'#888'}}>
                     <div style={{fontSize:32,marginBottom:12}}>💬</div>
-                    <p style={{fontSize:13,fontFamily:'Manrope,sans-serif'}}>No messages yet. Ask us anything!</p>
+                    <p style={{fontSize:13,fontFamily:"'Jost',sans-serif"}}>No messages yet. Ask us anything!</p>
                   </div>
                 )}
                 {portal.messages.map(m=>{
                   const isT=m.sender==='team';
                   return(
                     <div key={m._id} style={{display:'flex',justifyContent:isT?'flex-start':'flex-end',gap:8}}>
-                      {isT&&<div style={{width:28,height:28,background:GOLD_GRAD,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontSize:11,fontWeight:800,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>M</div>}
+                      {isT&&<div style={{width:28,height:28,background:GOLD_GRAD,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:'#0e1520',fontSize:11,fontWeight:800,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>M</div>}
                       <div style={{maxWidth:'72%'}}>
-                        <div style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.3)',marginBottom:4,textAlign:isT?'left':'right',fontFamily:'Manrope,sans-serif',letterSpacing:'0.02em'}}>{m.senderName} · {fmtT(m.createdAt)}</div>
+                        <div style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.3)',marginBottom:4,textAlign:isT?'left':'right',fontFamily:"'Jost',sans-serif",letterSpacing:'0.02em'}}>{m.senderName} · {fmtT(m.createdAt)}</div>
                         <div style={{
-                          background: isT ? DS.contTop : GOLD_GRAD,
+                          background: isT ? '#f0ede8' : 'linear-gradient(45deg,#d4b06a,#b8975a)',
                           borderRadius: isT ? '4px 14px 14px 14px' : '14px 14px 4px 14px',
                           padding:'11px 15px',
                         }}>
-                          {m.text&&<div style={{fontSize:14,lineHeight:1.65,color: isT ? DS.text : DS.onGold,fontFamily:'Manrope,sans-serif'}}>{m.text}</div>}
+                          {m.text&&<div style={{fontSize:14,lineHeight:1.65,color: isT ? '#1a1a1a' : '#0e1520',fontFamily:"'Jost',sans-serif"}}>{m.text}</div>}
                           {(m.attachments||[]).map((a,i)=><AttachChip key={i} att={a} isTeam={isT}/>)}
                         </div>
                       </div>
-                      {!isT&&<div style={{width:28,height:28,background:DS.contTop,border:'1px solid rgba(197,163,87,0.2)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:DS.gold,flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>
+                      {!isT&&<div style={{width:28,height:28,background:'#ffffff',border:'1px solid rgba(184,151,90,0.2)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#b8975a',flexShrink:0,alignSelf:'flex-end',marginBottom:2}}>
                         {(clientName||'C').slice(0,2).toUpperCase()}
                       </div>}
                     </div>
@@ -1120,22 +1167,22 @@ const ClientPortalView = () => {
               <FileStrip files={files} onRemove={i=>setFiles(files.filter((_,idx)=>idx!==i))}/>
 
               {/* Input — surface-container-lowest per DESIGN.md layering */}
-              <div style={{padding:'14px 18px',borderTop:`1px solid rgba(255,255,255,0.05)`}}>
+              <div style={{padding:'14px 18px',borderTop:'1px solid rgba(0,0,0,0.06)'}}>
                 <div style={{display:'flex',gap:10,alignItems:'flex-end'}}>
-                  <div style={{flex:1,background:DS.contTop,borderRadius:12,padding:'10px 14px',border:`1px solid rgba(197,163,87,0.15)`}}>
+                  <div style={{flex:1,background:'#ffffff',borderRadius:12,padding:'10px 14px',border:`1px solid rgba(184,151,90,0.15)`}}>
                     <textarea value={msg} onChange={e=>setMsg(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}
                       placeholder="Message the team… (Enter to send)"
                       rows={2}
-                      style={{background:'none',border:'none',outline:'none',color:DS.text,fontSize:14,fontFamily:'Manrope,sans-serif',lineHeight:1.55,width:'100%'}}/>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:6,paddingTop:6,borderTop:`1px solid rgba(255,255,255,0.05)`}}>
+                      style={{background:'none',border:'none',outline:'none',color:'#1a1a1a',fontSize:14,fontFamily:"'Jost',sans-serif",lineHeight:1.55,width:'100%'}}/>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:6,paddingTop:6,borderTop:'1px solid rgba(0,0,0,0.06)'}}>
                       <button type="button" onClick={()=>fileRef.current?.click()}
-                        style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.3)',padding:2,display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,fontFamily:'Manrope,sans-serif',transition:'color .15s'}}
-                        onMouseEnter={e=>e.currentTarget.style.color=DS.gold}
+                        style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.3)',padding:2,display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,fontFamily:"'Jost',sans-serif",transition:'color .15s'}}
+                        onMouseEnter={e=>e.currentTarget.style.color='#b8975a'}
                         onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.3)'}>
                         {Ic.attach} <span>Attach</span>
                       </button>
-                      <span style={{fontSize:10,color:'rgba(255,255,255,0.18)',fontFamily:'Manrope,sans-serif'}}>Max 5 files · 10MB each</span>
+                      <span style={{fontSize:10,color:'rgba(255,255,255,0.18)',fontFamily:"'Jost',sans-serif"}}>Max 5 files · 10MB each</span>
 {/* input moved outside — see root-level input below */}
                     </div>
                   </div>
@@ -1143,10 +1190,10 @@ const ClientPortalView = () => {
                   <button onClick={send} disabled={sending||(!msg.trim()&&files.length===0)}
                     style={{
                       width:44,height:44,
-                      background: (sending||(!msg.trim()&&files.length===0)) ? DS.contTop : GOLD_GRAD,
+                      background: (sending||(!msg.trim()&&files.length===0)) ? '#ffffff' : GOLD_GRAD,
                       border:'none',borderRadius:10,cursor:'pointer',
                       display:'flex',alignItems:'center',justifyContent:'center',
-                      color: (sending||(!msg.trim()&&files.length===0)) ? 'rgba(255,255,255,0.25)' : DS.onGold,
+                      color: (sending||(!msg.trim()&&files.length===0)) ? 'rgba(255,255,255,0.25)' : '#0e1520',
                       transition:'all .2s',flexShrink:0,
                     }}>
                     {sending
@@ -1176,31 +1223,19 @@ const ClientPortalView = () => {
       />
 
       {/* ── Footer — tonal shift ── */}
-      <div style={{background:DS.cont,borderTop:`1px solid rgba(255,255,255,0.04)`,padding:isMobile?'16px':'20px 32px',textAlign:'center'}}>
+      <div style={{background:'#ffffff',borderTop:`1px solid rgba(255,255,255,0.04)`,padding:isMobile?'16px':'20px 32px',textAlign:'center'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:9,marginBottom:5}}>
-          <div style={{width:16,height:16,background:GOLD_GRAD,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',color:DS.onGold,fontWeight:900,fontSize:9}}>M</div>
-          <span style={{color:DS.sub,fontSize:11,fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase',fontFamily:'Manrope,sans-serif'}}>Marqland Studios</span>
+          <div style={{width:16,height:16,background:GOLD_GRAD,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',color:'#0e1520',fontWeight:900,fontSize:9}}>M</div>
+          <span style={{color:'#888888',fontSize:11,fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase',fontFamily:"'Jost',sans-serif"}}>Marqland Studios</span>
         </div>
-        <p style={{color:'rgba(255,255,255,0.18)',fontSize:10,fontFamily:'Manrope,sans-serif'}}>This is a private proposal. Please do not share this link.</p>
+        <p style={{color:'rgba(255,255,255,0.18)',fontSize:10,fontFamily:"'Jost',sans-serif"}}>This is a private proposal. Please do not share this link.</p>
       </div>
     </div>
   );
 };
 
-// ── Empty State helper ─────────────────────────────────────────────────────────
-const EmptyState = ({ icon, title, sub, children }) => (
-  <div style={{textAlign:'center',padding:'80px 0'}}>
-    <div style={{fontSize:48,marginBottom:18}}>{icon}</div>
-    <h3 style={{fontFamily:'Noto Serif,serif',fontSize:18,fontWeight:700,color:'rgba(240,232,214,0.7)',marginBottom:8}}>{title}</h3>
-    <p style={{fontSize:13,color:'rgba(255,255,255,0.3)',fontFamily:'Manrope,sans-serif'}}>{sub}</p>
-    {children}
-  </div>
-);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BENTO GRID — Product catalogue
-// DESIGN.md: dense grid with xl (12px) radii, tonal surface cards, no dividers
-// ─────────────────────────────────────────────────────────────────────────────
+
 const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{} }) => {
   const [activeCategory, setActiveCategory] = React.useState(null);
   const [activeSubCat,   setActiveSubCat]   = React.useState(null);
@@ -1233,25 +1268,25 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
   const chip = active => ({
     padding:'5px 16px', borderRadius:20, border:'none', cursor:'pointer',
     fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
-    fontFamily:'Manrope,sans-serif', transition:'all .18s',
+    fontFamily:"'Jost',sans-serif", transition:'all .18s',
     background: active ? GOLD_GRAD : 'transparent',
-    color:      active ? DS.onGold  : DS.sub,
-    boxShadow:  active ? '0 4px 16px rgba(197,163,87,0.35)' : 'none',
+    color:      active ? '#0e1520' : '#888',
+    boxShadow:  active ? '0 4px 16px rgba(184,151,90,0.35)' : 'none',
     outline:    active ? 'none' : `1px solid rgba(255,255,255,0.12)`,
   });
   const subChip = active => ({
     ...chip(active), padding:'4px 12px', fontSize:10,
-    background: active ? 'rgba(197,163,87,0.15)' : 'transparent',
-    color:      active ? DS.gold : DS.sub,
-    outline:    `1px solid ${active?'rgba(197,163,87,0.4)':'rgba(255,255,255,0.08)'}`,
+    background: active ? 'rgba(184,151,90,0.15)' : 'transparent',
+    color:      active ? '#b8975a' : '#888888',
+    outline:    `1px solid ${active?'rgba(184,151,90,0.4)':'rgba(255,255,255,0.08)'}`,
   });
 
   return (
     <div>
       {/* Filter bar — surface-container tonal panel */}
-      <div style={{marginBottom:isMobile?16:32,padding:isMobile?'14px 16px':'18px 22px',background:DS.cont,borderRadius:12}}>
+      <div style={{marginBottom:isMobile?16:32,padding:isMobile?'14px 16px':'18px 22px',background:'#ffffff',borderRadius:12}}>
         <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>
-          <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:'Manrope,sans-serif'}}>Category</span>
+          <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:"'Jost',sans-serif"}}>Category</span>
           {categories.map(cat=>(
             <button key={cat} style={chip(activeCategory===cat)}
               onClick={()=>{ if(activeCategory===cat){setActiveCategory(null);setActiveSubCat(null);}else{setActiveCategory(cat);setActiveSubCat(null);} }}>
@@ -1260,17 +1295,17 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
           ))}
         </div>
         {activeCategory&&subCats.length>0&&(
-          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:12,paddingTop:12,borderTop:`1px solid rgba(255,255,255,0.05)`,alignItems:'center'}}>
-            <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:'Manrope,sans-serif'}}>Type</span>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:12,paddingTop:12,borderTop:'1px solid rgba(0,0,0,0.06)',alignItems:'center'}}>
+            <span style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:'0.12em',marginRight:6,fontFamily:"'Jost',sans-serif"}}>Type</span>
             {subCats.map(sc=>(
               <button key={sc} style={subChip(activeSubCat===sc)} onClick={()=>setActiveSubCat(activeSubCat===sc?null:sc)}>{sc}</button>
             ))}
           </div>
         )}
-        <div style={{marginTop:10,fontSize:12,color:DS.sub,fontFamily:'Manrope,sans-serif'}}>
-          <span style={{fontWeight:700,color:DS.gold}}>{filtered.length}</span>
+        <div style={{marginTop:10,fontSize:12,color:'#888888',fontFamily:"'Jost',sans-serif"}}>
+          <span style={{fontWeight:700,color:'#b8975a'}}>{filtered.length}</span>
           {' '}option{filtered.length!==1?'s':''} curated for you
-          {activeCategory&&<span style={{color:'rgba(255,255,255,0.25)'}}> in <span style={{color:DS.gold}}>{activeCategory}</span>{activeSubCat?` › ${activeSubCat}`:''}</span>}
+          {activeCategory&&<span style={{color:'rgba(255,255,255,0.25)'}}> in <span style={{color:'#b8975a'}}>{activeCategory}</span>{activeSubCat?` › ${activeSubCat}`:''}</span>}
         </div>
       </div>
 
@@ -1280,9 +1315,9 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
           {/* Category header — Status Pillar style */}
           <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:isMobile?14:22}}>
             <div style={{width:2,height:20,background:GOLD_GRAD,borderRadius:2,flexShrink:0}}/>
-            <span style={{fontSize:10,fontWeight:800,color:DS.gold,textTransform:'uppercase',letterSpacing:'0.14em',fontFamily:'Manrope,sans-serif'}}>{group.cat}</span>
-            <div style={{flex:1,height:1,background:`linear-gradient(90deg, rgba(197,163,87,0.2), transparent)`}}/>
-            <span style={{fontSize:10,color:'rgba(255,255,255,0.2)',fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{group.items.length} item{group.items.length!==1?'s':''}</span>
+            <span style={{fontSize:10,fontWeight:800,color:'#b8975a',textTransform:'uppercase',letterSpacing:'0.14em',fontFamily:"'Jost',sans-serif"}}>{group.cat}</span>
+            <div style={{flex:1,height:1,background:`linear-gradient(90deg, rgba(184,151,90,0.2), transparent)`}}/>
+            <span style={{fontSize:10,color:'rgba(255,255,255,0.2)',fontWeight:600,fontFamily:"'Jost',sans-serif"}}>{group.items.length} item{group.items.length!==1?'s':''}</span>
           </div>
 
           {/* Sub-groups */}
@@ -1293,7 +1328,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
             return subGroups.map(([sub,subItems])=>(
               <div key={sub||'main'} style={{marginBottom:28}}>
                 {sub&&subGroups.length>1&&(
-                  <div style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.2)',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:14,paddingLeft:4,fontFamily:'Manrope,sans-serif'}}>— {sub}</div>
+                  <div style={{fontSize:9,fontWeight:800,color:'rgba(255,255,255,0.2)',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:14,paddingLeft:4,fontFamily:"'Jost',sans-serif"}}>— {sub}</div>
                 )}
                 {/* BENTO GRID
                      Layout:  3 columns. No fixed row height — cards size to content.
@@ -1348,7 +1383,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                                       style={{width:'100%',display:'block',objectFit:'cover',maxHeight:isMobile?200:(span==='wide'?320:280),minHeight:isMobile?140:180}}
                                       onLoad={e=>handleImgLoad(item._id,e)}
                                     />
-                                  : <div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',background:DS.contHi,color:'rgba(255,255,255,0.15)',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
+                                  : <div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',background:'#f3f0ec',color:'rgba(255,255,255,0.15)',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>No image</div>
                                 }
                                 {/* Zoom hint */}
                                 {item.imageUrl&&(
@@ -1359,18 +1394,18 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                               </div>
                             )}
 
-                            {/* Heart — always top-left over image/carousel */}
+                            {/* Heart */}
                             <button
                               onClick={e=>{e.stopPropagation();onToggleWish(String(item._id));}}
                               title={loved?'Remove from shortlist':'Add to shortlist'}
                               style={{
                                 position:'absolute',top:10,left:10,zIndex:10,
-                                background:loved?'rgba(220,53,69,0.9)':'rgba(10,20,34,0.6)',
-                                border:`1px solid ${loved?'rgba(220,53,69,0.5)':'rgba(255,255,255,0.2)'}`,
-                                borderRadius:8,width:32,height:32,
+                                background:loved?'rgba(220,53,69,0.88)':'rgba(255,255,255,0.92)',
+                                border:`1px solid ${loved?'rgba(220,53,69,0.3)':'rgba(0,0,0,0.1)'}`,
+                                borderRadius:2,width:32,height:32,
                                 cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
-                                color:loved?'#fff':'rgba(255,255,255,0.6)',
-                                backdropFilter:'blur(8px)',transition:'all .2s',
+                                color:loved?'#fff':'rgba(26,26,26,0.5)',
+                                backdropFilter:'blur(4px)',transition:'all .2s',
                               }}>
                               {loved?Ic.heart:Ic.heartO}
                             </button>
@@ -1391,45 +1426,43 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                                   transition:'transform .32s cubic-bezier(.4,0,.2,1)',
                                   pointerEvents: hoveredId===item._id ? 'auto' : 'none',
                                   cursor:'default',
-                                  borderTop:'1px solid rgba(197,163,87,0.2)',
+                                  borderTop:'1px solid rgba(184,151,90,0.2)',
                                   zIndex:8,
                                 }}
                                 className="desc-scroll"
                               >
                                 <div style={{position:'sticky',top:0,left:0,right:0,height:2,background:GOLD_GRAD,flexShrink:0}}/>
                                 <div style={{padding:'12px 14px 16px'}}>
-                                  <p style={{fontSize:12.5,color:'rgba(240,232,214,0.92)',lineHeight:1.7,margin:0,fontFamily:'Manrope,sans-serif',fontWeight:400,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{item.description}</p>
+                                  <p style={{fontSize:12.5,color:'rgba(240,232,214,0.92)',lineHeight:1.7,margin:0,fontFamily:"'Jost',sans-serif",fontWeight:400,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{item.description}</p>
                                 </div>
                               </div>
                             )}
                           </div>
 
-                          {/* ── Info panel — no flex:1 so card height = content only ── */}
-                          <div style={{padding:isMobile?'10px 12px 12px':'14px 16px 16px',background:DS.cont,display:'flex',flexDirection:'column',gap:8}}>
+                          {/* ── Info panel ── */}
+                          <div style={{padding:isMobile?'12px 14px 14px':'16px 18px 18px',background:'#fff',display:'flex',flexDirection:'column',gap:8}}>
 
                             {/* Row 1: Name + Price */}
                             <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:10}}>
-                              <div style={{fontSize:isMobile?12:14,fontWeight:700,color:DS.text,lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'Manrope,sans-serif'}}>
+                              <div style={{fontSize:isMobile?11:12,fontWeight:400,color:'#1a1a1a',lineHeight:1.2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:"'Jost',sans-serif",letterSpacing:'0.04em'}}>
                                 {item.name}
                               </div>
-                              <div style={{fontSize:isMobile?13:15,fontWeight:700,color:DS.goldHi,fontFamily:'Noto Serif,serif',flexShrink:0}}>
+                              <div style={{fontSize:isMobile?13:14,fontWeight:300,color:'#b8975a',fontFamily:"'Cormorant Garamond',Georgia,serif",flexShrink:0,fontStyle:'italic'}}>
                                 {toINR(item.price)}
                               </div>
                             </div>
 
-                            {/* Row 2: Description — 3 lines, hover to open overlay over image */}
+                            {/* Row 2: Description — 3 lines, hover to open overlay */}
                             {item.description&&(
                               <p
                                 onMouseEnter={()=>setHoveredId(item._id)}
                                 style={{
-                                  fontSize:12,lineHeight:1.6,margin:0,
-                                  fontFamily:'Manrope,sans-serif',
+                                  fontSize:11,lineHeight:1.65,margin:0,
+                                  fontFamily:"'Jost',sans-serif",fontWeight:300,
                                   display:'-webkit-box',
-                                  WebkitLineClamp:3,
-                                  WebkitBoxOrient:'vertical',
-                                  overflow:'hidden',
-                                  cursor:'default',
-                                  color: hoveredId===item._id ? DS.gold : DS.sub,
+                                  WebkitLineClamp:3,WebkitBoxOrient:'vertical',
+                                  overflow:'hidden',cursor:'default',letterSpacing:'0.02em',
+                                  color: hoveredId===item._id ? '#b8975a' : 'rgba(26,26,26,0.5)',
                                   transition:'color .15s',
                                 }}
                               >{item.description}</p>
@@ -1438,7 +1471,7 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                             {/* ── Video embed (YouTube or direct link) ── */}
                             {item.videoUrl && getYouTubeId(item.videoUrl) && (
                               <div style={{marginTop:4}}>
-                                <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6,fontFamily:'Manrope,sans-serif'}}>🎬 Product Video</div>
+                                <div style={{fontSize:9,fontWeight:800,color:'#888888',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6,fontFamily:"'Jost',sans-serif"}}>🎬 Product Video</div>
                                 <YouTubeEmbed url={item.videoUrl} title={item.name}/>
                               </div>
                             )}
@@ -1450,8 +1483,8 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
                                 style={{
                                   display:'inline-flex',alignItems:'center',gap:6,marginTop:4,
                                   padding:'7px 12px',borderRadius:8,textDecoration:'none',
-                                  background:'rgba(197,163,87,0.07)',border:'1px solid rgba(197,163,87,0.18)',
-                                  fontSize:11,fontWeight:700,color:DS.gold,fontFamily:'Manrope,sans-serif',
+                                  background:'rgba(184,151,90,0.07)',border:'1px solid rgba(184,151,90,0.18)',
+                                  fontSize:11,fontWeight:700,color:'#b8975a',fontFamily:"'Jost',sans-serif",
                                 }}
                               >
                                 {Ic.play} Watch Brand Video
@@ -1497,8 +1530,8 @@ const OffsiteCards = ({ items, onZoom }) => {
   <div>
     {/* Type filter — only shown when both types are present */}
     {hasBoth&&(
-      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:20,padding:'12px 16px',background:DS.cont,borderRadius:12,flexWrap:'wrap'}}>
-        <span style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.12em',fontFamily:'Manrope,sans-serif',marginRight:4}}>Filter</span>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:20,padding:'12px 16px',background:'#ffffff',borderRadius:12,flexWrap:'wrap'}}>
+        <span style={{fontSize:9,fontWeight:800,color:'#888888',textTransform:'uppercase',letterSpacing:'0.12em',fontFamily:"'Jost',sans-serif",marginRight:4}}>Filter</span>
         {[
           {k:'all',   l:`All (${items.length})`},
           {k:'day',   l:`☀️ Day Outing (${items.filter(i=>i.type!=='Night Stay').length})`},
@@ -1507,10 +1540,10 @@ const OffsiteCards = ({ items, onZoom }) => {
           <button key={opt.k} onClick={()=>setTypeFilter(opt.k)}
             style={{
               padding:'6px 16px',borderRadius:20,border:'none',cursor:'pointer',
-              fontSize:11,fontWeight:700,fontFamily:'Manrope,sans-serif',transition:'all .18s',
+              fontSize:11,fontWeight:700,fontFamily:"'Jost',sans-serif",transition:'all .18s',
               background: typeFilter===opt.k ? GOLD_GRAD : 'transparent',
-              color:      typeFilter===opt.k ? DS.onGold  : DS.sub,
-              boxShadow:  typeFilter===opt.k ? '0 4px 16px rgba(197,163,87,0.3)' : 'none',
+              color:      typeFilter===opt.k ? '#0e1520' : '#888',
+              boxShadow:  typeFilter===opt.k ? '0 4px 16px rgba(184,151,90,0.3)' : 'none',
               outline:    typeFilter===opt.k ? 'none' : '1px solid rgba(255,255,255,0.12)',
             }}>
             {opt.l}
@@ -1518,7 +1551,7 @@ const OffsiteCards = ({ items, onZoom }) => {
         ))}
       </div>
     )}
-    <p style={{fontSize:12,color:DS.sub,marginBottom:20,fontWeight:600,fontFamily:'Manrope,sans-serif'}}>{visible.length} propert{visible.length!==1?'ies':'y'} selected for you</p>
+    <p style={{fontSize:12,color:'#888888',marginBottom:20,fontWeight:600,fontFamily:"'Jost',sans-serif"}}>{visible.length} propert{visible.length!==1?'ies':'y'} selected for you</p>
     <div style={{display:'flex',flexDirection:'column',gap:20}}>
       {visible.map((item,idx)=>{
         const isDayOut   = item.type !== 'Night Stay';
@@ -1532,27 +1565,27 @@ const OffsiteCards = ({ items, onZoom }) => {
               onClick={()=>{ if(item.imageUrl) onZoom({src:item.imageUrl,alt:item.name}); }}>
               {item.imageUrl
                 ?<img src={item.imageUrl} alt={item.name} className="img-hover" style={{width:'100%',height:'100%',objectFit:'cover',transition:'transform .5s ease'}}/>
-                :<div style={{width:'100%',height:'100%',background:DS.contHi,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.2)',fontSize:12}}>No image</div>
+                :<div style={{width:'100%',height:'100%',background:'#f3f0ec',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.2)',fontSize:12}}>No image</div>
               }
               <div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,rgba(0,0,0,0.3) 0%,transparent 55%)',pointerEvents:'none'}}/>
-              <div style={{position:'absolute',top:14,left:14,background:'rgba(10,20,34,0.75)',color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(6px)',fontFamily:'Manrope,sans-serif',letterSpacing:'0.06em'}}>Option {idx+1}</div>
-              <div style={{position:'absolute',bottom:14,left:14,background:isDayOut?'rgba(180,83,9,0.82)':'rgba(29,78,216,0.82)',color:'#fff',fontSize:9,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)',fontFamily:'Manrope,sans-serif'}}>
+              <div style={{position:'absolute',top:14,left:14,background:'rgba(10,20,34,0.75)',color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:800,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(6px)',fontFamily:"'Jost',sans-serif",letterSpacing:'0.06em'}}>Option {idx+1}</div>
+              <div style={{position:'absolute',bottom:14,left:14,background:isDayOut?'rgba(180,83,9,0.82)':'rgba(29,78,216,0.82)',color:'#fff',fontSize:9,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)',fontFamily:"'Jost',sans-serif"}}>
                 {isDayOut?'☀️ Day Outing':'🌙 Night Stay'}
               </div>
             </div>
             {/* Info panel */}
-            <div style={{padding:isMobile?'16px 18px':'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',background:DS.contHi,overflow:'hidden'}}>
+            <div style={{padding:isMobile?'16px 18px':'22px 26px',display:'flex',flexDirection:'column',justifyContent:'space-between',background:'#f3f0ec',overflow:'hidden'}}>
               <div>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:8}}>
                   <div>
-                    <h3 style={{fontFamily:'Noto Serif,serif',fontSize:isMobile?17:20,fontWeight:700,color:DS.text,marginBottom:5,lineHeight:1.2}}>{item.name}</h3>
-                    <div style={{display:'flex',alignItems:'center',gap:5,color:DS.sub,fontSize:13,fontFamily:'Manrope,sans-serif'}}>
-                      <span style={{color:DS.gold}}>{Ic.pin}</span>{item.location||'Location TBD'}
+                    <h3 style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:isMobile?17:20,fontWeight:700,color:'#1a1a1a',marginBottom:5,lineHeight:1.2}}>{item.name}</h3>
+                    <div style={{display:'flex',alignItems:'center',gap:5,color:'#888888',fontSize:13,fontFamily:"'Jost',sans-serif"}}>
+                      <span style={{color:'#b8975a'}}>{Ic.pin}</span>{item.location||'Location TBD'}
                     </div>
                   </div>
                   {item.website&&(
                     <a href={item.website.startsWith('http')?item.website:`https://${item.website}`} target="_blank" rel="noreferrer"
-                      style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:DS.gold,fontWeight:600,textDecoration:'none',background:'rgba(197,163,87,0.08)',padding:'6px 12px',borderRadius:8,whiteSpace:'nowrap',border:'1px solid rgba(197,163,87,0.2)',flexShrink:0,fontFamily:'Manrope,sans-serif'}}>
+                      style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'#b8975a',fontWeight:600,textDecoration:'none',background:'rgba(184,151,90,0.08)',padding:'6px 12px',borderRadius:8,whiteSpace:'nowrap',border:'1px solid rgba(184,151,90,0.2)',flexShrink:0,fontFamily:"'Jost',sans-serif"}}>
                       {Ic.ext} Visit
                     </a>
                   )}
@@ -1608,26 +1641,26 @@ const OffsiteCards = ({ items, onZoom }) => {
 
           {/* ── Day Packages — full-width section below, expands freely ── */}
           {hasPackages&&(
-            <div style={{padding:'20px 24px 24px',background:DS.cont,borderTop:`1px solid rgba(255,255,255,0.05)`}}>
-              <div style={{fontSize:9,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontFamily:'Manrope,sans-serif'}}>
+            <div style={{padding:'20px 24px 24px',background:'#ffffff',borderTop:'1px solid rgba(0,0,0,0.06)'}}>
+              <div style={{fontSize:9,fontWeight:800,color:'#f59e0b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontFamily:"'Jost',sans-serif"}}>
                 ☀️ Day Packages — {item.dayPackages.length} option{item.dayPackages.length!==1?'s':''}
               </div>
               <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${isMobile?200:260}px,1fr))`,gap:12}}>
                 {item.dayPackages.map((pkg,pi)=>(
-                  <div key={pi} style={{background:DS.contTop,border:'1px solid rgba(245,158,11,0.18)',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:10}}>
+                  <div key={pi} style={{background:'#ffffff',border:'1px solid rgba(245,158,11,0.18)',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:10}}>
                     <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
-                      <div style={{fontWeight:700,fontSize:14,color:DS.text,lineHeight:1.2,flex:1,fontFamily:'Manrope,sans-serif'}}>{pkg.name||`Package ${pi+1}`}</div>
+                      <div style={{fontWeight:700,fontSize:14,color:'#1a1a1a',lineHeight:1.2,flex:1,fontFamily:"'Jost',sans-serif"}}>{pkg.name||`Package ${pi+1}`}</div>
                       {pkg.sellingPrice>0&&(
                         <div style={{textAlign:'right',flexShrink:0}}>
-                          <div style={{fontSize:18,fontWeight:700,color:'#fbbf24',fontFamily:'Noto Serif,serif',lineHeight:1}}>₹{Number(pkg.sellingPrice).toLocaleString('en-IN')}</div>
-                          <div style={{fontSize:9,color:'#f59e0b',fontWeight:600,marginTop:3,fontFamily:'Manrope,sans-serif'}}>per person</div>
+                          <div style={{fontSize:18,fontWeight:700,color:'#fbbf24',fontFamily:"'Cormorant Garamond',Georgia,serif",lineHeight:1}}>₹{Number(pkg.sellingPrice).toLocaleString('en-IN')}</div>
+                          <div style={{fontSize:9,color:'#f59e0b',fontWeight:600,marginTop:3,fontFamily:"'Jost',sans-serif"}}>per person</div>
                         </div>
                       )}
                     </div>
                     {pkg.activities&&(
                       <div style={{display:'flex',flexDirection:'column',gap:5}}>
                         {pkg.activities.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean).map((line,li)=>(
-                          <div key={li} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:DS.sub,lineHeight:1.5,fontFamily:'Manrope,sans-serif'}}>
+                          <div key={li} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:12,color:'#888888',lineHeight:1.5,fontFamily:"'Jost',sans-serif"}}>
                             <span style={{color:'#f59e0b',flexShrink:0,fontSize:11,marginTop:1}}>✓</span>
                             <span>{line}</span>
                           </div>
@@ -1638,7 +1671,7 @@ const OffsiteCards = ({ items, onZoom }) => {
                 ))}
               </div>
               {item.note&&(
-                <div style={{marginTop:14,background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>
+                <div style={{marginTop:14,background:'rgba(184,151,90,0.06)',border:'1px solid rgba(184,151,90,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#b8975a',fontStyle:'italic',fontFamily:"'Jost',sans-serif"}}>
                   💡 {item.note}
                 </div>
               )}
@@ -1647,15 +1680,15 @@ const OffsiteCards = ({ items, onZoom }) => {
 
           {/* Night Stay note */}
           {!isDayOut&&item.note&&(
-            <div style={{padding:'0 24px 18px',background:DS.cont}}>
-              <div style={{background:'rgba(197,163,87,0.06)',border:'1px solid rgba(197,163,87,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:DS.gold,fontStyle:'italic',fontFamily:'Manrope,sans-serif'}}>💡 {item.note}</div>
+            <div style={{padding:'0 24px 18px',background:'#ffffff'}}>
+              <div style={{background:'rgba(184,151,90,0.06)',border:'1px solid rgba(184,151,90,0.14)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#b8975a',fontStyle:'italic',fontFamily:"'Jost',sans-serif"}}>💡 {item.note}</div>
             </div>
           )}
 
           {/* Property attachments */}
           {(item.attachments||[]).length>0&&(
-            <div style={{padding:'0 24px 20px',background:DS.cont}}>
-              <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>📎 Documents & Files</div>
+            <div style={{padding:'0 24px 20px',background:'#ffffff'}}>
+              <div style={{fontSize:9,fontWeight:800,color:'#888888',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:"'Jost',sans-serif"}}>📎 Documents & Files</div>
               <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
                 {item.attachments.map((att,ai)=><PropAttachChip key={ai} att={att}/>)}
               </div>
@@ -1664,8 +1697,8 @@ const OffsiteCards = ({ items, onZoom }) => {
           
           {/* YouTube video embed */}
           {item.youtubeUrl&&getYouTubeId(item.youtubeUrl)&&(
-            <div style={{padding:'0 24px 20px',background:DS.cont}}>
-              <div style={{fontSize:9,fontWeight:800,color:DS.sub,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:'Manrope,sans-serif'}}>🎬 Property Video</div>
+            <div style={{padding:'0 24px 20px',background:'#ffffff'}}>
+              <div style={{fontSize:9,fontWeight:800,color:'#888888',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:10,fontFamily:"'Jost',sans-serif"}}>🎬 Property Video</div>
               <YouTubeEmbed url={item.youtubeUrl} title={item.name}/>
             </div>
           )}
@@ -1676,5 +1709,472 @@ const OffsiteCards = ({ items, onZoom }) => {
   </div>
   );
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// UNIFIED COST CALCULATOR
+// One component for both portal types. Desktop/tablet only.
+// ═════════════════════════════════════════════════════════════════════════════
+const CostCalculator = ({ portal, wishlisted=new Set() }) => {
+  const INR  = v => `₹${Number(v||0).toLocaleString('en-IN')}`;
+  const isProduct = portal.type === 'product';
+  const productItems = portal.productItems || [];
+  // Only shortlisted products appear in the calculator
+  const shortlisted = productItems.filter(i => wishlisted.has(String(i._id)));
+  const offsiteItems = portal.offsiteItems || [];
+
+  // ── Shared helpers ──────────────────────────────────────────────────────────
+  const inputSt = {
+    padding: '5px 7px', border: '1px solid rgba(0,0,0,0.12)',
+    fontFamily: "'Jost',sans-serif", fontSize: 13, color: '#1a1a1a',
+    textAlign: 'center', outline: 'none', background: '#fff', transition: 'border-color .15s',
+  };
+
+  // ── PRODUCT STATE ───────────────────────────────────────────────────────────
+  const [qty,      setQty]      = React.useState({});
+  const setQ = (id, val) => {
+    const n = Math.max(0, Math.min(99999, Number(val) || 0));
+    setQty(prev => ({ ...prev, [id]: n }));
+  };
+
+  const pLines     = productItems.map(i => ({ ...i, q: qty[i._id]||0, line:(qty[i._id]||0)*(i.price||0) }));
+  const pTotal     = pLines.reduce((s,l) => s+l.line, 0);
+  const pTotalQty  = pLines.reduce((s,l) => s+l.q,    0);
+  const pActive    = pLines.filter(l => l.q > 0);
+
+  // ── OFFSITE STATE ───────────────────────────────────────────────────────────
+  const initProp = item => ({
+    nights: 1, single:0, double:0, triple:0, quad:0,
+    pax: 0,
+    pkgId: item.dayPackages?.length > 0 ? 0 : null,
+    addons: {},
+  });
+
+  const [calcs,      setCalcs]      = React.useState(() => { const m={}; offsiteItems.forEach(i=>{ m[i._id]=initProp(i); }); return m; });
+  const [propOpen,   setPropOpen]   = React.useState(() => { const m={}; offsiteItems.forEach((i,idx)=>{ m[i._id]=idx===0; }); return m; });
+  const [typeFilter, setTypeFilter] = React.useState('all');
+
+  const hasDay   = offsiteItems.some(i => i.type !== 'Night Stay');
+  const hasNight = offsiteItems.some(i => i.type === 'Night Stay');
+
+  const visibleItems = typeFilter==='all' ? offsiteItems
+    : typeFilter==='day'   ? offsiteItems.filter(i=>i.type!=='Night Stay')
+    : offsiteItems.filter(i=>i.type==='Night Stay');
+
+  const upd = (id, field, val) => setCalcs(p => ({ ...p, [id]: { ...p[id], [field]: val } }));
+  const toggleAddon = (id, key) => setCalcs(p => ({ ...p, [id]: { ...p[id], addons: { ...p[id].addons, [key]: !p[id].addons[key] } } }));
+
+  const addonList = item => {
+    const l = [];
+    if (item.djCost>0)         l.push({ key:'dj',       label:'DJ',           value:item.djCost });
+    if (item.licenseFeeDJ>0)   l.push({ key:'djlic',    label:'DJ Licence',   value:item.licenseFeeDJ });
+    if (item.cocktailSnacks>0) l.push({ key:'cocktail', label:'Cocktails',    value:item.cocktailSnacks });
+    if (item.banquetHall>0)    l.push({ key:'banquet',  label:'Banquet Hall', value:item.banquetHall });
+    (item.adhocAddons||[]).filter(a=>a.sellingPrice>0).forEach((a,i)=>l.push({ key:`adhoc_${i}`, label:a.name, value:a.sellingPrice }));
+    return l;
+  };
+
+  const calcTotal = item => {
+    const c = calcs[item._id] || initProp(item);
+    const isDayOut = item.type !== 'Night Stay';
+    let base = 0;
+    if (isDayOut) {
+      if (item.dayPackages?.length>0 && c.pkgId!==null) base = (item.dayPackages[c.pkgId]?.sellingPrice||0)*(c.pax||0);
+      else base = (item.packagePrice||0)*(c.pax||0);
+    } else {
+      const n = Math.max(1,c.nights||1);
+      base = (item.singlePrice||0)*(c.single||0)*n + (item.doublePrice||0)*(c.double||0)*n
+           + (item.triplePrice||0)*(c.triple||0)*n + (item.quadPrice||0)*(c.quad||0)*n;
+    }
+    return base + addonList(item).reduce((s,a) => s+(c.addons[a.key]?a.value:0), 0);
+  };
+
+  const oTotals  = offsiteItems.map(i => ({ _id:i._id, name:i.name, type:i.type, total:calcTotal(i) }));
+  const oMaxTotal = Math.max(...oTotals.map(t=>t.total), 1);
+  const oAnyNonZero = oTotals.some(t=>t.total>0);
+
+  // ── RENDER ──────────────────────────────────────────────────────────────────
+  return (
+    <div>
+
+      {/* ════ PRODUCT CALCULATOR ════ */}
+      {isProduct && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:28, alignItems:'start' }}>
+
+          {/* Left: shortlisted products only */}
+          <div>
+            {/* Empty state — no shortlisted items yet */}
+            {shortlisted.length === 0 ? (
+              <div style={{ padding:'60px 0', textAlign:'center' }}>
+                <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:28, fontWeight:300, color:'#1a1a1a', lineHeight:1.3, marginBottom:14 }}>
+                  Curate your selection to generate<br/>a <em style={{color:'#b8975a'}}>tailored cost summary.</em>
+                </div>
+                <p style={{ fontFamily:"'Jost',sans-serif", fontSize:11, color:'#aaa', letterSpacing:'0.1em', lineHeight:1.7, maxWidth:340, margin:'0 auto 28px' }}>
+                  Shortlist products from the Catalogue tab using the ♡ button — they will appear here for you to add quantities.
+                </p>
+                <button onClick={()=>{}} style={{ padding:'10px 24px', border:'1px solid rgba(184,151,90,0.35)', background:'transparent', cursor:'pointer', fontFamily:"'Jost',sans-serif", fontSize:9, letterSpacing:'0.22em', textTransform:'uppercase', color:'#b8975a' }}>
+                  ← Go to Catalogue
+                </button>
+              </div>
+            ) : (
+              <div>
+                {/* Table header */}
+                <div style={{ display:'grid', gridTemplateColumns:'56px 1fr 120px 80px 110px', gap:0, padding:'8px 16px', background:'#f7f5f1', borderBottom:'1px solid rgba(0,0,0,0.07)' }}>
+                  {[['','left'],['Product','left'],['Unit Price','center'],['Qty','center'],['Amount','right']].map(([h,align])=>(
+                    <span key={h} style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.2em', textTransform:'uppercase', textAlign:align }}>{h}</span>
+                  ))}
+                </div>
+
+                {/* Product rows — shortlisted only, one row per product */}
+                {shortlisted.map((item, idx) => {
+                  const q = qty[item._id]||0;
+                  const line = q*(item.price||0);
+                  const active = q>0;
+                  return (
+                    <div key={item._id} style={{
+                      display:'grid', gridTemplateColumns:'56px 1fr 120px 80px 110px', gap:0,
+                      alignItems:'center',
+                      background: active ? 'rgba(184,151,90,0.04)' : idx%2===0 ? '#fff' : '#faf8f5',
+                      borderLeft: active ? '3px solid #b8975a' : '3px solid transparent',
+                      borderBottom: '1px solid rgba(0,0,0,0.05)',
+                      transition: 'background .15s, border-color .15s',
+                      minHeight: 64,
+                    }}>
+                      {/* Product image — fixed 56×64 */}
+                      <div style={{ width:56, height:64, flexShrink:0, overflow:'hidden', background:'#f3f0ec' }}>
+                        {item.imageUrl
+                          ? <img src={item.imageUrl} alt={item.name} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+                          : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, color:'#ddd' }}>□</div>
+                        }
+                      </div>
+                      {/* Name + subcat */}
+                      <div style={{ padding:'0 14px' }}>
+                        <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:'#1a1a1a', lineHeight:1.2 }}>{item.name}</div>
+                        {item.subCategory && <div style={{ fontFamily:"'Jost',sans-serif", fontSize:10, color:'#aaa', marginTop:2, letterSpacing:'0.08em' }}>{item.subCategory}</div>}
+                        {item.category && <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#ccc', marginTop:1, letterSpacing:'0.06em', textTransform:'uppercase' }}>{item.category}</div>}
+                      </div>
+                      {/* Unit price */}
+                      <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:'#888', textAlign:'center', padding:'0 8px' }}>{INR(item.price)}</div>
+                      {/* Qty input */}
+                      <div style={{ display:'flex', justifyContent:'center', padding:'0 6px' }}>
+                        <input type="number" min="0" max="99999" value={q||''} placeholder="0"
+                          onChange={e=>setQ(item._id,e.target.value)}
+                          onFocus={e=>e.target.style.borderColor='#b8975a'}
+                          onBlur={e=>e.target.style.borderColor='rgba(0,0,0,0.12)'}
+                          style={{...inputSt, width:64, textAlign:'center'}}/>
+                      </div>
+                      {/* Line total */}
+                      <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:active?'#b8975a':'#ddd', textAlign:'right', padding:'0 16px 0 0', fontStyle:active?'normal':'italic' }}>
+                        {active ? INR(line) : '—'}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Reset */}
+                {pTotalQty>0 && (
+                  <button onClick={()=>setQty({})}
+                    style={{ marginTop:12, background:'none', border:'1px solid rgba(0,0,0,0.1)', padding:'7px 18px', cursor:'pointer', fontFamily:"'Jost',sans-serif", fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'#aaa', transition:'color .2s, border-color .2s' }}
+                    onMouseEnter={e=>{e.currentTarget.style.color='#1a1a1a'; e.currentTarget.style.borderColor='rgba(0,0,0,0.3)';}}
+                    onMouseLeave={e=>{e.currentTarget.style.color='#aaa'; e.currentTarget.style.borderColor='rgba(0,0,0,0.1)';}}>
+                    Reset quantities
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right: sticky summary */}
+          <div style={{ position:'sticky', top:88 }}>
+            <div style={{ background:'#0e1520', padding:'26px 24px', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:'-40%', right:'-30%', width:200, height:200, border:'1px solid rgba(184,151,90,0.06)', borderRadius:'50%', pointerEvents:'none' }}/>
+              <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:'0.28em', textTransform:'uppercase', marginBottom:20 }}>Cost Summary</div>
+              {pActive.length===0 ? (
+                <div style={{ padding:'20px 0', textAlign:'center' }}>
+                  <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:20, fontWeight:300, color:'rgba(255,255,255,0.18)', fontStyle:'italic' }}>Enter quantities</div>
+                  <div style={{ fontFamily:"'Jost',sans-serif", fontSize:10, color:'rgba(255,255,255,0.12)', marginTop:8, letterSpacing:'0.1em' }}>to see order value</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                  {pActive.map(l=>(
+                    <div key={l._id} style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8, padding:'7px 0', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:"'Jost',sans-serif", fontSize:12, color:'rgba(255,255,255,0.65)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.name}</div>
+                        <div style={{ fontFamily:"'Jost',sans-serif", fontSize:10, color:'rgba(255,255,255,0.22)', marginTop:2 }}>{INR(l.price)} × {l.q.toLocaleString('en-IN')}</div>
+                      </div>
+                      <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:14, color:'#d4b06a', flexShrink:0 }}>{INR(l.line)}</div>
+                    </div>
+                  ))}
+                  <div style={{ marginTop:18, paddingTop:14, borderTop:'1px solid rgba(184,151,90,0.2)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+                      <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'rgba(255,255,255,0.35)', letterSpacing:'0.2em', textTransform:'uppercase' }}>Total · {pTotalQty.toLocaleString('en-IN')} units</span>
+                      <span style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:28, fontWeight:300, color:'#d4b06a', lineHeight:1 }}>{INR(pTotal)}</span>
+                    </div>
+                  </div>
+                  <div style={{ marginTop:16, padding:'10px 12px', border:'1px solid rgba(255,255,255,0.06)', background:'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'rgba(255,255,255,0.22)', lineHeight:1.7, letterSpacing:'0.04em' }}>
+                      * Indicative estimate. Final invoice includes GST, branding / customisation, and shipping.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ OFFSITE CALCULATOR ════ */}
+      {!isProduct && (
+        <div>
+          {/* Type filter — only if both types present */}
+          {hasDay && hasNight && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:24, padding:'12px 18px', background:'#fff', border:'1px solid rgba(0,0,0,0.07)', flexWrap:'wrap' }}>
+              <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', marginRight:4, flexShrink:0 }}>Show</span>
+              {[
+                {k:'all',   l:`All (${offsiteItems.length})`},
+                {k:'day',   l:`☀️ Day Outing (${offsiteItems.filter(i=>i.type!=='Night Stay').length})`},
+                {k:'night', l:`🌙 Night Stay (${offsiteItems.filter(i=>i.type==='Night Stay').length})`},
+              ].map(opt=>(
+                <button key={opt.k} onClick={()=>setTypeFilter(opt.k)}
+                  style={{ padding:'6px 18px', border:'none', cursor:'pointer', fontFamily:"'Jost',sans-serif", fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', transition:'all .18s',
+                    background: typeFilter===opt.k?'#b8975a':'transparent',
+                    color:      typeFilter===opt.k?'#0e1520':'#888',
+                    outline:    typeFilter===opt.k?'none':'1px solid rgba(0,0,0,0.12)',
+                  }}>
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Comparison bar — shown once any total is non-zero */}
+          {visibleItems.length>1 && oAnyNonZero && (
+            <div style={{ marginBottom:28, padding:'22px 26px', background:'#0e1520', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:'-30%', right:'-10%', width:200, height:200, border:'1px solid rgba(184,151,90,0.04)', borderRadius:'50%', pointerEvents:'none' }}/>
+              <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:'0.28em', textTransform:'uppercase', marginBottom:16 }}>Property Comparison</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
+                {visibleItems.map((item,i)=>{
+                  const t = oTotals.find(x=>x._id===item._id) || {total:0};
+                  return (
+                    <div key={item._id} style={{ display:'flex', alignItems:'center', gap:14 }}>
+                      <div style={{ width:150, fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:13, color:'rgba(255,255,255,0.55)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flexShrink:0 }}>{item.name}</div>
+                      <div style={{ flex:1, height:5, background:'rgba(255,255,255,0.06)', position:'relative', overflow:'hidden' }}>
+                        <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${t.total>0?Math.round(t.total/oMaxTotal*100):0}%`, background:'linear-gradient(90deg,#b8975a,#d4b06a)', transition:'width .5s cubic-bezier(.4,0,.2,1)' }}/>
+                      </div>
+                      <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:16, color:t.total>0?'#d4b06a':'rgba(255,255,255,0.18)', width:100, textAlign:'right', flexShrink:0 }}>
+                        {t.total>0 ? INR(t.total) : '—'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Per-property rows */}
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            {visibleItems.map((item,idx)=>{
+              const isDayOut = item.type !== 'Night Stay';
+              const c = calcs[item._id] || initProp(item);
+              const total = calcTotal(item);
+              const addons = addonList(item);
+              const hasPackages = isDayOut && item.dayPackages?.length>0;
+              const open = !!propOpen[item._id];
+
+              return (
+                <div key={item._id} style={{ border:'1px solid rgba(0,0,0,0.08)', overflow:'hidden' }}>
+
+                  {/* ── Collapsible header row ── */}
+                  <button onClick={()=>setPropOpen(p=>({...p,[item._id]:!p[item._id]}))}
+                    style={{ display:'flex', alignItems:'center', width:'100%', padding:'16px 22px', background: open?'#0e1520':'#fff', border:'none', cursor:'pointer', gap:14, transition:'background .2s' }}>
+                    <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:open?'rgba(255,255,255,0.3)':'#ccc', letterSpacing:'0.18em', flexShrink:0 }}>Option {idx+1}</span>
+                    <h3 style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:18, fontWeight:300, color:open?'white':'#1a1a1a', margin:0, lineHeight:1, flex:1, textAlign:'left' }}>{item.name}</h3>
+                    <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:isDayOut?'#f59e0b':'#60a5fa', letterSpacing:'0.12em', textTransform:'uppercase', flexShrink:0 }}>
+                      {isDayOut?'☀️ Day':'🌙 Night'}
+                    </span>
+                    {total>0 && (
+                      <span style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:18, fontWeight:300, color:'#d4b06a', flexShrink:0, lineHeight:1 }}>{INR(total)}</span>
+                    )}
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={open?'rgba(255,255,255,0.4)':'#ccc'} strokeWidth="2"
+                      style={{ transform:open?'rotate(0)':'rotate(-90deg)', transition:'transform .2s', flexShrink:0 }}>
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+
+                  {/* ── Expanded body ── */}
+                  {open && (
+                    <div style={{ padding:'22px 22px 18px', background:'#fff', display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }}>
+                      {isDayOut ? (
+                        <>
+                          {/* Day Outing left: pax + package */}
+                          <div>
+                            <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:14 }}>Guests</div>
+                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                              <button onClick={()=>upd(item._id,'pax',Math.max(0,(c.pax||0)-1))}
+                                style={{ width:32, height:32, border:'1px solid rgba(0,0,0,0.12)', background:'#fff', cursor:'pointer', fontSize:18, color:'#1a1a1a', display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
+                              <input type="number" min="0" value={c.pax||''} placeholder="0"
+                                onChange={e=>upd(item._id,'pax',Math.max(0,Number(e.target.value)||0))}
+                                onFocus={e=>e.target.style.borderColor='#b8975a'}
+                                onBlur={e=>e.target.style.borderColor='rgba(0,0,0,0.12)'}
+                                style={{...inputSt, width:80}}/>
+                              <button onClick={()=>upd(item._id,'pax',(c.pax||0)+1)}
+                                style={{ width:32, height:32, border:'1px solid rgba(0,0,0,0.12)', background:'#fff', cursor:'pointer', fontSize:18, color:'#1a1a1a', display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                              <span style={{ fontFamily:"'Jost',sans-serif", fontSize:11, color:'#888' }}>guests</span>
+                            </div>
+                            {hasPackages && (
+                              <div style={{ marginTop:18 }}>
+                                <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:10 }}>Package</div>
+                                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                                  {item.dayPackages.map((pkg,pi)=>(
+                                    <label key={pi} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:`1px solid ${c.pkgId===pi?'#b8975a':'rgba(0,0,0,0.08)'}`, cursor:'pointer', background:c.pkgId===pi?'rgba(184,151,90,0.04)':'#fff', transition:'all .15s' }}>
+                                      <input type="radio" name={`pkg-${item._id}`} checked={c.pkgId===pi} onChange={()=>upd(item._id,'pkgId',pi)} style={{accentColor:'#b8975a'}}/>
+                                      <div style={{ flex:1, fontFamily:"'Jost',sans-serif", fontSize:13, color:'#1a1a1a' }}>{pkg.name||`Package ${pi+1}`}</div>
+                                      <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:'#b8975a', flexShrink:0 }}>{INR(pkg.sellingPrice)}<span style={{ fontSize:10, color:'#aaa', fontFamily:"'Jost',sans-serif" }}>/person</span></div>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {!hasPackages&&item.packagePrice>0&&(
+                              <div style={{ marginTop:14, padding:'10px 14px', background:'#faf8f5', border:'1px solid rgba(0,0,0,0.07)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                <span style={{ fontFamily:"'Jost',sans-serif", fontSize:12, color:'#888' }}>Day Package rate</span>
+                                <span style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:16, color:'#b8975a' }}>{INR(item.packagePrice)}<span style={{ fontSize:10, color:'#aaa', fontFamily:"'Jost',sans-serif" }}>/person</span></span>
+                              </div>
+                            )}
+                          </div>
+                          {/* Day Outing right: add-ons */}
+                          {addons.length>0 && (
+                            <div>
+                              <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:14 }}>Add-ons</div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                                {addons.map(a=>(
+                                  <label key={a.key} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:`1px solid ${c.addons[a.key]?'#b8975a':'rgba(0,0,0,0.08)'}`, cursor:'pointer', background:c.addons[a.key]?'rgba(184,151,90,0.04)':'#fff', transition:'all .15s' }}>
+                                    <input type="checkbox" checked={!!c.addons[a.key]} onChange={()=>toggleAddon(item._id,a.key)} style={{accentColor:'#b8975a',width:15,height:15}}/>
+                                    <span style={{ flex:1, fontFamily:"'Jost',sans-serif", fontSize:13, color:'#1a1a1a' }}>{a.label}</span>
+                                    <span style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:15, color:'#b8975a', flexShrink:0 }}>{INR(a.value)}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {/* Night Stay left: occupancy table + nights */}
+                          <div>
+                            <div style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:14 }}>Occupancy</div>
+                            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                              <thead>
+                                <tr>
+                                  {['Type','Price / Night','Rooms','Guests'].map((h,hi)=>(
+                                    <th key={h} style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.18em', textTransform:'uppercase', textAlign:hi===0||hi===2?'left':'center', paddingBottom:10, fontWeight:400 }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[
+                                  {key:'single',label:'Single',price:item.singlePrice,guests:1},
+                                  {key:'double',label:'Double',price:item.doublePrice,guests:2},
+                                  {key:'triple',label:'Triple',price:item.triplePrice,guests:3},
+                                  {key:'quad',  label:'Quad',  price:item.quadPrice,  guests:4},
+                                ].filter(r=>r.price>0).map(r=>(
+                                  <tr key={r.key} style={{borderTop:'1px solid rgba(0,0,0,0.05)'}}>
+                                    <td style={{padding:'9px 0',fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:'#1a1a1a'}}>{r.label}</td>
+                                    <td style={{padding:'9px 0',fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:14,color:'#888',textAlign:'center'}}>{INR(r.price)}</td>
+                                    <td style={{padding:'9px 8px',textAlign:'left'}}>
+                                      <input type="number" min="0" value={c[r.key]||''} placeholder="0"
+                                        onChange={e=>upd(item._id,r.key,Math.max(0,Number(e.target.value)||0))}
+                                        onFocus={e=>e.target.style.borderColor='#b8975a'}
+                                        onBlur={e=>e.target.style.borderColor='rgba(0,0,0,0.12)'}
+                                        style={{...inputSt,width:64}}/>
+                                    </td>
+                                    <td style={{padding:'9px 0',fontFamily:"'Jost',sans-serif",fontSize:12,color:'#aaa',textAlign:'center'}}>
+                                      {((c[r.key]||0)*r.guests)>0?`${(c[r.key]||0)*r.guests} guests`:'—'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {/* Nights stepper */}
+                            <div style={{ marginTop:14, display:'flex', alignItems:'center', gap:10, paddingTop:12, borderTop:'1px solid rgba(0,0,0,0.06)' }}>
+                              <span style={{ fontFamily:"'Jost',sans-serif", fontSize:9, color:'#aaa', letterSpacing:'0.22em', textTransform:'uppercase', flex:1 }}>Nights</span>
+                              <button onClick={()=>upd(item._id,'nights',Math.max(1,(c.nights||1)-1))} style={{width:28,height:28,border:'1px solid rgba(0,0,0,0.12)',background:'#fff',cursor:'pointer',fontSize:16,color:'#1a1a1a',display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                              <input type="number" min="1" value={c.nights||1}
+                                onChange={e=>upd(item._id,'nights',Math.max(1,Number(e.target.value)||1))}
+                                onFocus={e=>e.target.style.borderColor='#b8975a'}
+                                onBlur={e=>e.target.style.borderColor='rgba(0,0,0,0.12)'}
+                                style={{...inputSt,width:56}}/>
+                              <button onClick={()=>upd(item._id,'nights',(c.nights||1)+1)} style={{width:28,height:28,border:'1px solid rgba(0,0,0,0.12)',background:'#fff',cursor:'pointer',fontSize:16,color:'#1a1a1a',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                              <span style={{fontFamily:"'Jost',sans-serif",fontSize:11,color:'#888'}}>night{(c.nights||1)!==1?'s':''}</span>
+                            </div>
+                            {/* Guest summary tiles */}
+                            {(()=>{
+                              const tG=(c.single||0)*1+(c.double||0)*2+(c.triple||0)*3+(c.quad||0)*4;
+                              const tR=(c.single||0)+(c.double||0)+(c.triple||0)+(c.quad||0);
+                              if(tG===0) return null;
+                              return (
+                                <div style={{marginTop:12,padding:'8px 12px',background:'rgba(184,151,90,0.05)',border:'1px solid rgba(184,151,90,0.15)',display:'flex',gap:20}}>
+                                  {[{v:tG,l:'Guests'},{v:tR,l:'Rooms'},{v:c.nights||1,l:`Night${(c.nights||1)!==1?'s':''}`}].map(({v,l})=>(
+                                    <div key={l} style={{textAlign:'center'}}>
+                                      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:22,fontWeight:300,color:'#b8975a',lineHeight:1}}>{v}</div>
+                                      <div style={{fontFamily:"'Jost',sans-serif",fontSize:9,color:'#aaa',letterSpacing:'0.15em',marginTop:3}}>{l}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          {/* Night Stay right: add-ons */}
+                          {addons.length>0 && (
+                            <div>
+                              <div style={{fontFamily:"'Jost',sans-serif",fontSize:9,color:'#aaa',letterSpacing:'0.22em',textTransform:'uppercase',marginBottom:14}}>Add-ons</div>
+                              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                                {addons.map(a=>(
+                                  <label key={a.key} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',border:`1px solid ${c.addons[a.key]?'#b8975a':'rgba(0,0,0,0.08)'}`,cursor:'pointer',background:c.addons[a.key]?'rgba(184,151,90,0.04)':'#fff',transition:'all .15s'}}>
+                                    <input type="checkbox" checked={!!c.addons[a.key]} onChange={()=>toggleAddon(item._id,a.key)} style={{accentColor:'#b8975a',width:15,height:15}}/>
+                                    <span style={{flex:1,fontFamily:"'Jost',sans-serif",fontSize:13,color:'#1a1a1a'}}>{a.label}</span>
+                                    <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:'#b8975a',flexShrink:0}}>{INR(a.value)}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              {addons.some(a=>c.addons[a.key])&&(
+                                <div style={{marginTop:10,padding:'8px 14px',background:'#faf8f5',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                  <span style={{fontFamily:"'Jost',sans-serif",fontSize:10,color:'#aaa',letterSpacing:'0.15em',textTransform:'uppercase'}}>Add-ons subtotal</span>
+                                  <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:16,color:'#b8975a'}}>{INR(addons.filter(a=>c.addons[a.key]).reduce((s,a)=>s+a.value,0))}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Total footer — shown when expanded or has a total */}
+                  {(open || total>0) && total>0 && (
+                    <div style={{padding:'12px 22px',background:'#faf8f5',borderTop:'1px solid rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+                      <div style={{fontFamily:"'Jost',sans-serif",fontSize:9,color:'#aaa',letterSpacing:'0.18em',textTransform:'uppercase'}}>* Excl. GST, branding &amp; transport</div>
+                      <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+                        <span style={{fontFamily:"'Jost',sans-serif",fontSize:9,color:'#aaa',letterSpacing:'0.15em',textTransform:'uppercase'}}>Estimated Total</span>
+                        <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:300,color:'#b8975a',lineHeight:1}}>{INR(total)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Global disclaimer */}
+          <div style={{marginTop:24,padding:'14px 18px',border:'1px solid rgba(0,0,0,0.07)',background:'#fff'}}>
+            <div style={{fontFamily:"'Jost',sans-serif",fontSize:10,color:'#aaa',lineHeight:1.75,letterSpacing:'0.04em'}}>
+              These figures are indicative estimates. Final invoice will include applicable GST, branding / decoration, and logistics charges. Please confirm your preferences with the team via the message board.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export default ClientPortalView;

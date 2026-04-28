@@ -20,7 +20,8 @@ import {
   Shield,
   Activity,
   TrendingUp,
-  Truck 
+  Truck,
+  Target 
 } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -48,6 +49,7 @@ import ClientPortalView from './pages/ClientPortalView';
 import ActivityLogView from './pages/ActivityLogView';
 import TrendingProducts from './pages/TrendingProducts';
 import CourierTracking from './pages/CourierTracking';
+import LeadScout from       './pages/LeadScout';
 
 // ── Route keys matching ALL_ROUTES in UserManagement ─────────────────────────
 // Maps each path to its route key so ProtectedRoute can check allowedRoutes.
@@ -67,6 +69,7 @@ const PATH_TO_ROUTE_KEY = {
   '/admin/logs':         'Activity Logs',
   '/trending-products':  'Trending Products',
   '/courier-tracking':   'Courier Tracking',
+  '/admin/lead-scout':   'Lead Scout', 
   // ⚠ Add new routes here AND in ALL_ROUTES in UserManagement.js
 };
 
@@ -230,6 +233,7 @@ const Sidebar = () => {
             <div className="flex flex-col gap-1">
               <NavLink to="/admin/users" icon={Shield} label="User Management" />
               <NavLink to="/admin/logs" icon={Activity} label="Activity Logs" />
+              <NavLink to="/admin/lead-scout" icon={Target} label="Lead Scout" />
               <NavLink to="/public-site-admin" icon={Shield} label="Public Admin Management" />
             </div>
           </nav>
@@ -335,6 +339,7 @@ const AppShell = () => {
           <Route path="/admin/users" element={<ProtectedRoute routeKey="User Management"><UserManagement /></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute routeKey="User Management"><ActivityLogView /></ProtectedRoute>} />
           <Route path="/public-site-admin" element={<ProtectedRoute routeKey="User Management"><PublicAdminPoral /></ProtectedRoute>} />
+          <Route path="/admin/lead-scout" element={<ProtectedRoute routeKey="Lead Scout"><LeadScout /></ProtectedRoute>} />
 
           {/* All users */}
           <Route path="/change-password" element={<ChangePassword />} />

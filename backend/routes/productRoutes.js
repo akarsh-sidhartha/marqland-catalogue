@@ -429,4 +429,24 @@ router.post('/:id/upload-images', upload.array('images', 20), async (req, res) =
   }
 });
 
+
+// ─── POST /products/upload-temp-image — upload image for discussion-only items ─
+// Not linked to any Product doc. Returns { imageUrl } for use in portal items.
+router.post('/upload-temp-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
+    const processed = await sharp(req.file.path)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 88 })
+      .toBuffer();
+    const newFilename = req.file.filename.replace(/\.[^.]+$/, '') + '-custom.webp';
+    const outPath = path.join(process.cwd(), 'public', 'uploads', newFilename);
+    fs.writeFileSync(outPath, processed);
+    try { fs.unlinkSync(req.file.path); } catch {}
+    res.json({ imageUrl: '/uploads/' + newFilename });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

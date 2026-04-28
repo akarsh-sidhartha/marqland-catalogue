@@ -5,6 +5,7 @@ import {
   Link2, Trash2, Send, Check, X, Edit3,
   Package, MapPin, ChevronUp, ChevronDown, ChevronRight,
   ExternalLink, RefreshCw, Copy, Eye, Paperclip, Download,
+  ImagePlus, Plus, Loader2,
 } from 'lucide-react';
 import { requestNotifPermission, pushNotif, subscribeToPortalPush } from '../utils/portalNotifications';
 
@@ -31,6 +32,66 @@ const ClientPortalEditor = ({ order, onClose }) => {
   const chatFileRef        = useRef(null);
   const pollTimer          = useRef(null);
   const prevClientMsgCount = useRef(0);
+
+  // ── Custom item form state ──────────────────────────────────────────────────
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customForm, setCustomForm]         = useState({ name:'', description:'', price:'' });
+  const [customImage, setCustomImage]       = useState(null);
+  const [customPreview, setCustomPreview]   = useState(null);
+  const [savingCustom, setSavingCustom]     = useState(false);
+  const customImageRef                      = useRef(null);
+
+  const resetCustomForm = () => {
+    setShowCustomForm(false);
+    setCustomForm({ name:'', description:'', price:'' });
+    setCustomImage(null);
+    setCustomPreview(null);
+  };
+
+  const handleCustomImagePick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCustomImage(file);
+    const reader = new FileReader();
+    reader.onload = ev => setCustomPreview(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleAddCustomItem = async () => {
+    if (!customForm.name.trim() || !portal) return;
+    setSavingCustom(true);
+    try {
+      let imageUrl = '';
+      if (customImage) {
+        const fd = new FormData();
+        fd.append('image', customImage);
+        const up = await api.post('/products/upload-temp-image', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        imageUrl = up.data?.imageUrl || '';
+      }
+      const newItem = {
+        productId:   '',
+        name:        customForm.name.trim(),
+        description: customForm.description.trim(),
+        imageUrl,
+        price:       customForm.price !== '' ? Number(customForm.price) : 0,
+        category:    'Custom',
+        subCategory: '',
+        note:        '',
+        order:       0,
+      };
+      const existing = portal.productItems || [];
+      await api.put(`/portal/${portal.slug}/items`, { productItems: [...existing, newItem] });
+      await loadPortal(true);
+      resetCustomForm();
+    } catch (err) {
+      alert('Failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSavingCustom(false);
+    }
+  };
 
   const fallbackSlug = order.refNumber?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const portalUrl = portal?.slug
@@ -352,6 +413,92 @@ const ClientPortalEditor = ({ order, onClose }) => {
                   </div>
                 </div>
               ))
+            )}
+
+            {/* ── Custom / Discussion item — product portals only ── */}
+            {portal.type === 'product' && (
+              <div className="border border-dashed border-slate-200 rounded-xl overflow-hidden">
+                {!showCustomForm ? (
+                  /* Trigger button */
+                  <button
+                    onClick={() => setShowCustomForm(true)}
+                    className="w-full flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                  >
+                    <ImagePlus size={13} />
+                    Add Discussion / Custom Item
+                  </button>
+                ) : (
+                  /* Expanded inline form */
+                  <div>
+                    {/* Form header */}
+                    <div className="flex items-center justify-between px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                      <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Custom Item</span>
+                      <button onClick={resetCustomForm} className="text-indigo-300 hover:text-indigo-500">
+                        <X size={13} />
+                      </button>
+                    </div>
+
+                    <div className="p-3 space-y-2.5">
+                      {/* Image + Name row */}
+                      <div className="flex items-start gap-2.5">
+                        {/* Image picker */}
+                        <div
+                          onClick={() => customImageRef.current?.click()}
+                          className="w-14 h-14 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/50 transition-all flex-shrink-0 overflow-hidden"
+                        >
+                          {customPreview
+                            ? <img src={customPreview} alt="" className="w-full h-full object-cover" />
+                            : <ImagePlus size={16} className="text-slate-300" />
+                          }
+                        </div>
+                        <input ref={customImageRef} type="file" accept="image/*" className="hidden" onChange={handleCustomImagePick} />
+
+                        {/* Name */}
+                        <input
+                          type="text"
+                          placeholder="Product name *"
+                          value={customForm.name}
+                          onChange={e => setCustomForm(p => ({ ...p, name: e.target.value }))}
+                          className="flex-1 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder:font-normal placeholder:text-slate-300 transition"
+                        />
+                      </div>
+
+                      {/* Description */}
+                      <textarea
+                        placeholder="Description (optional)"
+                        value={customForm.description}
+                        onChange={e => setCustomForm(p => ({ ...p, description: e.target.value }))}
+                        rows={2}
+                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300 resize-none transition"
+                      />
+
+                      {/* Price */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-400">₹</span>
+                        <input
+                          type="number" min="0"
+                          placeholder="Price (optional)"
+                          value={customForm.price}
+                          onChange={e => setCustomForm(p => ({ ...p, price: e.target.value }))}
+                          className="flex-1 border border-slate-200 rounded-lg px-2.5 py-2 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300 transition"
+                        />
+                      </div>
+
+                      {/* Save button */}
+                      <button
+                        onClick={handleAddCustomItem}
+                        disabled={savingCustom || !customForm.name.trim()}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {savingCustom
+                          ? <><Loader2 size={11} className="animate-spin" /> Adding…</>
+                          : <><Plus size={11} /> Add to Portal</>
+                        }
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="text-center pt-1 pb-2">

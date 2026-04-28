@@ -27,6 +27,10 @@ app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 app.use(express.json());
 
+//www.marqland.com routes
+const publicSiteRoutes = require('./routes/public-site/publicSiteRoutes'); 
+
+//www.internalportal.marqland.com Routes
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
@@ -34,7 +38,6 @@ const clientRoutes = require('./routes/clientRoutes');
 const catalogueRoutes = require('./routes/catalogueRoutes');
 const propertyRoutes = require('./routes/propertyRoutes');
 const offsiteCatalogueRoutes = require('./routes/offsiteCatalogueRoutes');
-//const invoiceRoutes = require('./routes/invoiceRoute');
 const orderInquiry = require('./routes/orderInquiryRoute');
 const SamplesProvided = require('./routes/samplesProvided');
 const SourcingHub = require('./routes/inquiryRoutes');
@@ -45,6 +48,7 @@ const imageProcessing = require('./routes/imageProcessingRoutes');
 const trendingProductRoutes = require('./routes/trendingProductRoutes');
 const shipmentRoutes = require('./routes/shipmentRoutes');
 const shippingPartnerRoutes = require('./routes/shippingPartnerRoutes');
+const leadScoutRoutes = require('./routes/leadScoutRoutes');
 /**
  * 2. STATIC FILE SERVING
  * This ensures that images uploaded by one person are visible to 
@@ -82,6 +86,10 @@ app.use('/api/image-processing', imageProcessing);
 app.use('/api/trending-products', trendingProductRoutes);
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/shipping-partners', shippingPartnerRoutes);
+app.use('/api/lead-scout', leadScoutRoutes);
+
+//www.marqland.com app use
+app.use('/api/public-site', publicSiteRoutes);
 
 // Client Portal routes
 const clientPortalRoutes = require('./routes/clientPortalRoutes');
@@ -165,7 +173,7 @@ cron.schedule('0 10 * * *', async () => {
  * Listening on '0.0.0.0' makes the server accessible via your IP address
  * on the local office network.
  */
-const PORT = 5000;
+const PORT = 80;
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {

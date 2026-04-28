@@ -98,6 +98,7 @@ const buildStorePayload = async () => {
   const shapedInquiries = inquiries.map(i => ({
     id: i._id.toString(), name: i.name, company: i.company,
     email: i.email, phone: i.phone, message: i.message,
+    hearAbout: i.hearAbout,
     read: i.read, createdAt: i.createdAt,
   }));
 
@@ -126,9 +127,9 @@ router.get('/store', async (req, res) => {
  */
 router.post('/inquiry', async (req, res) => {
   try {
-    const { name, company, email, phone, message } = req.body;
+    const { name, company, email, phone, message, hearAbout } = req.body;
     if (!name || !email) return res.status(400).json({ message: 'Name and email are required.' });
-    const inq = await PublicInquiry.create({ name, company, email, phone, message });
+    const inq = await PublicInquiry.create({ name, company, email, phone, message, hearAbout });
     res.status(201).json({ message: 'Inquiry received.', id: inq._id });
   } catch (err) {
     res.status(500).json({ message: err.message });
