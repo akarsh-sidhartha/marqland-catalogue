@@ -58,24 +58,33 @@ const shouldPoll = (shipment) => {
 const normaliseTrackCourier = (raw = '') => {
   const s = raw.toLowerCase().trim();
 
-  // trackcourier.io canonical statuses
-  if (s === 'delivered')                          return 'Delivered';
-  if (s === 'out_for_delivery' || s === 'out for delivery') return 'Out for Delivery';
-  if (s === 'in_transit'       || s === 'in transit')       return 'In Transit';
-  if (s === 'picked_up'        || s === 'booked'  || s === 'manifested') return 'Booked';
-  if (s === 'returned'         || s === 'rto')    return 'Returned';
-  if (s === 'exception'        || s === 'failed'  || s === 'lost') return 'Exception';
-  if (s === 'pending'          || s === 'info_received') return 'Pending';
+  // Exact canonical matches first (most reliable)
+  if (s === 'delivered')                                            return 'Delivered';
+  if (s === 'out_for_delivery' || s === 'out for delivery'
+    || s === 'outfordelivery')                                      return 'Out for Delivery';
+  if (s === 'in_transit'  || s === 'in transit'
+    || s === 'intransit'  || s === 'transit')                      return 'In Transit';
+  if (s === 'picked_up'   || s === 'pickedup'
+    || s === 'booked'     || s === 'manifested'
+    || s === 'info_received' || s === 'inforeceived'
+    || s === 'registered')                                          return 'Booked';
+  if (s === 'returned'    || s === 'rto'
+    || s === 'return_to_origin')                                    return 'Returned';
+  if (s === 'exception'   || s === 'failed'
+    || s === 'lost'       || s === 'undelivered'
+    || s === 'delivery_failed')                                     return 'Exception';
+  if (s === 'pending'     || s === 'not_found'
+    || s === 'notfound')                                            return 'Pending';
 
-  // Fallback: substring matching for edge cases
-  if (s.includes('deliver') && !s.includes('out')) return 'Delivered';
-  if (s.includes('out'))    return 'Out for Delivery';
-  if (s.includes('transit') || s.includes('in-transit')) return 'In Transit';
-  if (s.includes('book')    || s.includes('pick'))       return 'Booked';
-  if (s.includes('return')  || s.includes('rto'))        return 'Returned';
-  if (s.includes('exception') || s.includes('fail') || s.includes('lost')) return 'Exception';
+  // Substring fallback for edge cases / new API values
+  if (s.includes('deliver') && !s.includes('out') && !s.includes('fail') && !s.includes('un')) return 'Delivered';
+  if (s.includes('out') && s.includes('deliver'))                   return 'Out for Delivery';
+  if (s.includes('transit') || s.includes('in-transit'))            return 'In Transit';
+  if (s.includes('pick') || s.includes('book') || s.includes('manifest')) return 'Booked';
+  if (s.includes('return') || s.includes('rto'))                    return 'Returned';
+  if (s.includes('exception') || s.includes('fail') || s.includes('lost') || s.includes('undeliver')) return 'Exception';
 
-  return null; // unknown — don't overwrite existing status
+  return null; // unknown — don't overwrite existing status; will log a warning
 };
 
 // ── Partner name → trackcourier.io slug map ───────────────────────────────────
@@ -141,9 +150,22 @@ const fetchFromTrackCourier = async (trackingId, courierName = '') => {
 
   // Response: { success: true, data: { status: "in_transit", ... }, usage: {...} }
   const data = res.data;
+
+  // Log the raw response for every poll so we can diagnose normaliser mismatches
+  console.log(`[TrackCourier] ${trackingId} (${courierName || 'auto'}) →`,
+    JSON.stringify({ success: data?.success, rawStatus: data?.data?.status, mostRecent: data?.data?.MostRecentStatus })
+  );
+
   if (!data?.success || !data?.data?.status) return null;
 
-  return normaliseTrackCourier(data.data.status);
+  const normalised = normaliseTrackCourier(data.data.status);
+
+  // Warn when we can't normalise a status — helps catch new API values
+  if (!normalised) {
+    console.warn(`[TrackCourier] Unknown status "${data.data.status}" for ${trackingId} — update normaliseTrackCourier()`);
+  }
+
+  return normalised;
 };
 
 // ── DIRECT HANDLERS (future cost-saving integrations) ────────────────────────
@@ -233,15 +255,26 @@ const refreshShipmentStatuses = async () => {
 };
 
 // ── Scheduler ─────────────────────────────────────────────────────────────────
-// Runs every 30 minutes. The shouldPoll() check inside refreshShipmentStatuses
-// ensures each shipment is only actually called according to its own interval:
-//   Pending/Booked       → called at most every 8 hrs
-//   In Transit/OFD       → called at most every 4 hrs
+// Runs every 30 minutes in PRODUCTION only.
+// In development, the scheduler is disabled by default to avoid burning API
+// quota — both environments share the same MongoDB so both would otherwise
+// poll the same shipments simultaneously.
+//
+// To enable polling in development, set ENABLE_TRACKING_SCHEDULER=true in .env
 //
 // Call startTrackingScheduler() once from server.js at startup.
 const startTrackingScheduler = () => {
+  const isProd    = process.env.NODE_ENV === 'production';
+  const forceOn   = process.env.ENABLE_TRACKING_SCHEDULER === 'true';
+
+  if (!isProd && !forceOn) {
+    console.log('[ShipmentTracking] Scheduler DISABLED in development (NODE_ENV !== production).');
+    console.log('[ShipmentTracking] Set ENABLE_TRACKING_SCHEDULER=true in .env to override.');
+    return;
+  }
+
   const TICK = 30 * 60 * 1000; // 30 minutes
-  console.log('[ShipmentTracking] Scheduler started — ticking every 30 min, intervals per status applied.');
+  console.log(`[ShipmentTracking] Scheduler started (${isProd ? 'production' : 'dev-forced'}) — ticking every 30 min.`);
 
   // Run once immediately on startup to catch anything overdue
   refreshShipmentStatuses().catch(err =>
