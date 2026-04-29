@@ -368,13 +368,15 @@ const ProductList = () => {
       const fd = new FormData();
       fd.append('pdf', extractFile);
       const res = await api.post('/image-processing/pdf/extract', fd, { responseType: 'arraybuffer' });
+
+      // Decode error responses that come back as arraybuffer (axios won't throw for 2xx)
       const contentType = res.headers['content-type'] || '';
       if (!contentType.includes('application/zip')) {
-        const text = new TextDecoder().decode(res.data);
-        let msg = 'Extraction failed';
-        try { msg = JSON.parse(text).message || msg; } catch {}
+        let msg = 'Extraction failed — server did not return a ZIP file';
+        try { msg = JSON.parse(new TextDecoder().decode(res.data)).message || msg; } catch {}
         throw new Error(msg);
       }
+
       const blob = new Blob([res.data], { type: 'application/zip' });
       const url  = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -383,13 +385,17 @@ const ProductList = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Revoke after a delay so the browser has time to start the download
+      setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+
       setShowExtractModal(false);
       setExtractFile(null);
     } catch (err) {
-      const msg = err.response?.data instanceof ArrayBuffer
-        ? (() => { try { return JSON.parse(new TextDecoder().decode(err.response.data)).message; } catch { return err.message; } })()
-        : err.message;
+      // err.response.data is an ArrayBuffer when responseType is arraybuffer
+      let msg = err.message;
+      if (err.response?.data instanceof ArrayBuffer) {
+        try { msg = JSON.parse(new TextDecoder().decode(err.response.data)).message || msg; } catch {}
+      }
       alert('Extraction failed: ' + msg);
     } finally {
       setExtractLoading(false);
@@ -1219,7 +1225,7 @@ const ProductList = () => {
               <h2 className="text-xl font-black text-gray-800 uppercase flex items-center gap-2">
                 <Download size={18} className="text-amber-500" /> Extract PDF Images
               </h2>
-              <button onClick={() => { setShowExtractModal(false); setExtractFile(null); }} className="text-gray-400 hover:text-gray-600"><X size={22} /></button>
+              <button onClick={() => { if (!extractLoading) { setShowExtractModal(false); setExtractFile(null); } }} className="text-gray-400 hover:text-gray-600 disabled:opacity-30" disabled={extractLoading}><X size={22} /></button>
             </div>
 
             <div className="p-6 space-y-5">
@@ -1228,13 +1234,19 @@ const ProductList = () => {
               </p>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">PDF File</label>
-                <input type="file" accept="application/pdf" onChange={e => setExtractFile(e.target.files[0])} className="text-sm w-full" />
+                <input type="file" accept="application/pdf" onChange={e => setExtractFile(e.target.files[0])} className="text-sm w-full" disabled={extractLoading} />
                 {extractFile && <p className="text-[9px] text-amber-600 mt-1">{extractFile.name}</p>}
               </div>
+              {extractLoading && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-lg">
+                  <Loader2 size={13} className="text-amber-500 animate-spin flex-shrink-0" />
+                  <p className="text-[10px] font-bold text-amber-600">Extracting images — this may take a moment for large PDFs…</p>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t flex justify-end gap-3">
-              <button onClick={() => { setShowExtractModal(false); setExtractFile(null); }} className="px-6 py-2 text-gray-400 font-bold uppercase text-xs">Cancel</button>
+              <button onClick={() => { if (!extractLoading) { setShowExtractModal(false); setExtractFile(null); } }} disabled={extractLoading} className="px-6 py-2 text-gray-400 font-bold uppercase text-xs disabled:opacity-30">Cancel</button>
               <button
                 onClick={handleExtractImages}
                 disabled={extractLoading || !extractFile}

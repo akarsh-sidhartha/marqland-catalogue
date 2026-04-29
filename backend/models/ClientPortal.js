@@ -143,6 +143,10 @@ const clientPortalSchema = new mongoose.Schema({
 
   // Client's shortlisted item IDs — persisted so they survive page refresh
   shortlistedIds: { type: [String], default: [] },
+
+  // Offsite cost calculator state — persisted so team pre-set and client edits both survive
+  // Shape: { [itemId]: { pax, nights, single, double, triple, quad, addons: { [key]: bool }, disabledAddons: { [key]: bool } } }
+  calculatorState: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, {
   timestamps: true,
 });

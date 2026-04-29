@@ -443,6 +443,7 @@ router.get('/public/:slug', async (req, res) => {
       completedAt:    portal.completedAt,
       reviewLink:     portal.reviewLink,
       shortlistedIds: portal.shortlistedIds || [],  // ← persisted client shortlist
+      calculatorState: portal.calculatorState || {}, // ← persisted offsite calculator state
     };
 
     res.json(clientData);
@@ -785,6 +786,47 @@ router.put('/public/:slug/shortlist', async (req, res) => {
     );
     if (!portal) return res.status(404).json({ message: 'Portal not found' });
     res.json({ ok: true, count: ids.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── PUT /api/portal/:slug/calculator ──────────────────────────────────────────
+// Team-facing: persist calculator state (guest counts, addon on/off, disabled addons).
+// Body: { calculatorState: { [itemId]: { pax, nights, single, double, triple, quad, addons, disabledAddons } } }
+router.put('/:slug/calculator', async (req, res) => {
+  try {
+    const { calculatorState } = req.body;
+    if (!calculatorState || typeof calculatorState !== 'object') {
+      return res.status(400).json({ message: 'calculatorState must be an object' });
+    }
+    const portal = await ClientPortal.findOneAndUpdate(
+      { slug: req.params.slug },
+      { $set: { calculatorState } },
+      { new: true }
+    );
+    if (!portal) return res.status(404).json({ message: 'Portal not found' });
+    res.json({ ok: true, calculatorState: portal.calculatorState });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── PUT /api/portal/public/:slug/calculator ────────────────────────────────────
+// Public (no auth) — called by the client's browser to persist guest count changes.
+router.put('/public/:slug/calculator', async (req, res) => {
+  try {
+    const { calculatorState } = req.body;
+    if (!calculatorState || typeof calculatorState !== 'object') {
+      return res.status(400).json({ message: 'calculatorState must be an object' });
+    }
+    const portal = await ClientPortal.findOneAndUpdate(
+      { slug: req.params.slug },
+      { $set: { calculatorState } },
+      { new: true }
+    );
+    if (!portal) return res.status(404).json({ message: 'Portal not found' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

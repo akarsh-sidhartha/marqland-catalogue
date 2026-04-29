@@ -196,60 +196,67 @@ async function extractPdfPages(pdfPath) {
   const paths = [];
 
   // ── Strategy 1: pdfjs-dist page rendering (most reliable) ─────────────────
+  // pdfjs-dist v4+ is pure ESM — must use dynamic import(), not require().
+  // workerSrc must be a file:// absolute URL to pdf.worker.mjs;
+  // setting it to '' silently fails in v5 (root cause of the original bug).
   let pdfjsWorked = false;
   try {
-    // pdfjs-dist v4+ removed the legacy path — try multiple entry points
+    const pdfjsDir  = path.dirname(require.resolve('pdfjs-dist/package.json'));
+    const workerAbs = path.join(pdfjsDir, 'legacy', 'build', 'pdf.worker.mjs');
+    if (!fs.existsSync(workerAbs))
+      throw new Error('pdfjs-dist worker not found — run: npm install pdfjs-dist');
+    // Convert Windows backslashes and ensure the file:// scheme is correct
+    const workerSrc = 'file:///' + workerAbs.replace(/\\/g, '/').replace(/^\//, '');
+
     let pdfjs;
-    const pdfjsPaths = [
-      'pdfjs-dist/legacy/build/pdf.js',   // v2/v3
-      'pdfjs-dist/build/pdf.js',           // v4+ commonjs
-      'pdfjs-dist',                         // v4+ main entry
-    ];
-    for (const p of pdfjsPaths) {
-      try { pdfjs = require(p); break; } catch {}
+    try {
+      // v4/v5 — pure ESM
+      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    } catch {
+      // v2/v3 fallback — CJS build still available
+      pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
+      if (pdfjs.default) pdfjs = pdfjs.default;
     }
-    if (!pdfjs) throw new Error('pdfjs-dist not loadable — run: npm install pdfjs-dist');
+    if (!pdfjs?.getDocument)
+      throw new Error('pdfjs-dist not loadable — run: npm install pdfjs-dist');
 
-    // v4+ exports are nested under a default or named export
-    if (pdfjs.default) pdfjs = pdfjs.default;
-    if (!pdfjs.getDocument) throw new Error('pdfjs getDocument not found — unexpected module shape');
+    pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
-    // Disable the worker (we are in Node, not a browser)
-    if (pdfjs.GlobalWorkerOptions) pdfjs.GlobalWorkerOptions.workerSrc = '';
-
-    // Support both 'canvas' (Linux/Mac) and '@napi-rs/canvas' (Windows, no build tools needed)
-    let canvas;
-    try { canvas = require('canvas'); }
-    catch { canvas = require('@napi-rs/canvas'); }
-
-    // Normalise API differences between canvas and @napi-rs/canvas
-    const createCanvas = canvas.createCanvas || canvas.Canvas
-      ? (w, h) => canvas.createCanvas(w, h)
-      : null;
-    if (!createCanvas) throw new Error('No compatible canvas module found');
+    // Support 'canvas' (Linux/Mac native) or '@napi-rs/canvas' (Windows, no build tools)
+    let createCanvas;
+    try { createCanvas = require('canvas').createCanvas; } catch {}
+    if (!createCanvas) {
+      try { createCanvas = require('@napi-rs/canvas').createCanvas; } catch {}
+    }
+    if (!createCanvas)
+      throw new Error('No canvas module found — run: npm install @napi-rs/canvas');
 
     const data    = new Uint8Array(fs.readFileSync(pdfPath));
-    const loadDoc = await pdfjs.getDocument({ data, disableFontFace: true }).promise;
+    const loadDoc = await pdfjs.getDocument({
+      data,
+      disableFontFace: true,
+      useWorkerFetch:  false,
+      isEvalSupported: false,
+    }).promise;
     console.log(`   pdfjs: ${loadDoc.numPages} pages`);
 
     for (let pn = 1; pn <= loadDoc.numPages; pn++) {
       try {
         const page     = await loadDoc.getPage(pn);
-        const viewport = page.getViewport({ scale: 2.0 }); // 2x = ~150dpi
-        const cvs      = createCanvas(viewport.width, viewport.height);
+        const viewport = page.getViewport({ scale: 2.0 }); // 2x ≈ 150 dpi
+        const w        = Math.ceil(viewport.width);
+        const h        = Math.ceil(viewport.height);
+        const cvs      = createCanvas(w, h);
         const ctx      = cvs.getContext('2d');
 
+        // Do NOT pass a custom canvasFactory — pdfjs-dist v5 has a built-in
+        // NodeCanvasFactory that correctly uses @napi-rs/canvas. Overriding it
+        // with a custom factory causes blank white output.
         await page.render({
           canvasContext: ctx,
           viewport,
-          canvasFactory: {
-            create:  (w, h) => { const c = createCanvas(w, h); return { canvas: c, context: c.getContext('2d') }; },
-            reset:   (obj, w, h) => { obj.canvas.width = w; obj.canvas.height = h; },
-            destroy: () => {},
-          },
         }).promise;
 
-        // toBuffer works on both canvas implementations
         const pngBuf  = typeof cvs.toBuffer === 'function'
           ? cvs.toBuffer('image/png')
           : Buffer.from(await cvs.encode('png'));
@@ -433,17 +440,29 @@ router.post('/pdf/extract', adminOnly, (req, res, next) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="pdf-images-${Date.now()}.zip"`);
     const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', e => { if (!res.headersSent) res.status(500).json({ message: e.message }); });
+
+    // Register cleanup BEFORE pipe so the 'finish' event is never missed
+    const capturedOutDir = outDir;
+    res.on('finish', () => {
+      try { fs.rmSync(capturedOutDir, { recursive: true, force: true }); } catch {}
+      try { if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf); } catch {}
+    });
+
+    // Archive errors after headers are sent cannot use res.json — just destroy the stream
+    archive.on('error', e => {
+      if (!res.headersSent) {
+        res.status(500).json({ message: e.message });
+      } else {
+        console.error('Archive error after headers sent:', e.message);
+        res.destroy(e);
+      }
+    });
+
     archive.pipe(res);
     imagePaths.forEach((imgPath, i) => {
       archive.file(imgPath, { name: `image-${i + 1}${path.extname(imgPath)}` });
     });
     await archive.finalize();
-
-    res.on('finish', () => {
-      try { fs.rmSync(outDir, { recursive: true, force: true }); } catch {}
-      try { if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf); } catch {}
-    });
   } catch (err) {
     try { if (tmpPdf && fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf); } catch {}
     try { if (outDir) fs.rmSync(outDir, { recursive: true, force: true }); } catch {}

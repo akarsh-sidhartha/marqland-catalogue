@@ -209,12 +209,12 @@ const GlassCard = ({ children, style={}, delay=0, onHover }) => {
 const PBox = ({ label, value, sub, amber }) => (
   <div style={{
     background: amber ? 'rgba(184,151,90,0.08)' : '#ffffff',
-    border: `1px solid ${amber ? 'rgba(184,151,90,0.2)' : 'rgba(255,255,255,0.06)'}`,
+    border: `1px solid ${amber ? 'rgba(184,151,90,0.2)' : 'rgba(0,0,0,0.08)'}`,
     borderRadius: 10, padding: '10px 14px', textAlign: 'center',
   }}>
-    <div style={{fontSize:9,color:amber?'#b8975a':'rgba(255,255,255,0.4)',fontWeight:700,fontFamily:"'Jost',sans-serif",textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>{label}</div>
+    <div style={{fontSize:9,color:amber?'#b8975a':'rgba(26,26,26,0.45)',fontWeight:700,fontFamily:"'Jost',sans-serif",textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>{label}</div>
     <div style={{fontSize:16,fontWeight:700,color:amber?'#d4b06a':'#1a1a1a',fontFamily:"'Jost',sans-serif"}}>{toINR(value)}</div>
-    {sub&&<div style={{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:1}}>{sub}</div>}
+    {sub&&<div style={{fontSize:9,color:'rgba(26,26,26,0.35)',marginTop:1,fontFamily:"'Jost',sans-serif"}}>{sub}</div>}
   </div>
 );
 
@@ -842,7 +842,7 @@ const ClientPortalView = () => {
             ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly."/>
             : portal.type==='product'
               ? <ProductBento items={items} onZoom={setLightbox} wishlisted={wishlisted} onToggleWish={toggleWish}/>
-              : <OffsiteCards items={items} onZoom={setLightbox}/>
+              : <OffsiteCards items={items} onZoom={setLightbox} portal={portal}/>
         )}
 
         {/* COST CALCULATOR — desktop only */}
@@ -1530,13 +1530,20 @@ const ProductBento = ({ items, onZoom, wishlisted=new Set(), onToggleWish=()=>{}
 // Day Outing : same layout but info panel height is natural (no clamp),
 //              full description shown, packages expand in full-width section below
 // ─────────────────────────────────────────────────────────────────────────────
-const OffsiteCards = ({ items, onZoom }) => {
+const OffsiteCards = ({ items, onZoom, portal }) => {
   const isMobile = useMobile();
   const [typeFilter, setTypeFilter] = React.useState('all');
+  const calcState = portal?.calculatorState || {};
 
   const hasDay   = items.some(i => i.type !== 'Night Stay');
   const hasNight = items.some(i => i.type === 'Night Stay');
   const hasBoth  = hasDay && hasNight;
+
+  // Returns true if addon should be shown for this item (not disabled by team)
+  const addonVisible = (itemId, key) => {
+    const disabled = calcState[itemId]?.disabledAddons || {};
+    return !disabled[key];
+  };
 
   const visible = typeFilter === 'all' ? items
     : typeFilter === 'day'   ? items.filter(i => i.type !== 'Night Stay')
@@ -1618,12 +1625,12 @@ const OffsiteCards = ({ items, onZoom }) => {
                   {item.doublePrice>0&&<PBox label="Double" value={item.doublePrice} sub="per night"/>}
                   {item.triplePrice>0&&<PBox label="Triple" value={item.triplePrice} sub="per night"/>}
                   {item.quadPrice>0&&<PBox label="Quad" value={item.quadPrice} sub="per night"/>}
-                  {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
-                  {item.licenseFeeDJ>0&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
-                  {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
-                  {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
+                  {item.djCost>0&&addonVisible(item._id,'djCost')&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.licenseFeeDJ>0&&addonVisible(item._id,'licenseFeeDJ')&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
+                  {item.cocktailSnacks>0&&addonVisible(item._id,'cocktailSnacks')&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
+                  {item.banquetHall>0&&addonVisible(item._id,'banquetHall')&&<PBox label="Banquet" value={item.banquetHall} amber/>}
                   {(item.adhocAddons||[]).filter(a=>a.sellingPrice>0).map((a,ai)=>(
-                    <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
+                    addonVisible(item._id,`adhoc_${ai}`) && <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
                   ))}
                 </div>
               )}
@@ -1631,24 +1638,24 @@ const OffsiteCards = ({ items, onZoom }) => {
               {isDayOut&&!hasPackages&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
                   {item.packagePrice>0&&<PBox label="Day package" value={item.packagePrice} sub="per person"/>}
-                  {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
-                  {item.licenseFeeDJ>0&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
-                  {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
-                  {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
+                  {item.djCost>0&&addonVisible(item._id,'djCost')&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.licenseFeeDJ>0&&addonVisible(item._id,'licenseFeeDJ')&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
+                  {item.cocktailSnacks>0&&addonVisible(item._id,'cocktailSnacks')&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
+                  {item.banquetHall>0&&addonVisible(item._id,'banquetHall')&&<PBox label="Banquet" value={item.banquetHall} amber/>}
                   {(item.adhocAddons||[]).filter(a=>a.sellingPrice>0).map((a,ai)=>(
-                    <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
+                    addonVisible(item._id,`adhoc_${ai}`) && <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
                   ))}
                 </div>
               )}
               {/* Day Outing with packages: show add-ons only (packages shown below) */}
               {isDayOut&&hasPackages&&(item.djCost>0||item.licenseFeeDJ>0||item.cocktailSnacks>0||item.banquetHall>0||(item.adhocAddons||[]).length>0)&&(
                 <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
-                  {item.djCost>0&&<PBox label="DJ" value={item.djCost} amber/>}
-                  {item.licenseFeeDJ>0&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
-                  {item.cocktailSnacks>0&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
-                  {item.banquetHall>0&&<PBox label="Banquet" value={item.banquetHall} amber/>}
+                  {item.djCost>0&&addonVisible(item._id,'djCost')&&<PBox label="DJ" value={item.djCost} amber/>}
+                  {item.licenseFeeDJ>0&&addonVisible(item._id,'licenseFeeDJ')&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
+                  {item.cocktailSnacks>0&&addonVisible(item._id,'cocktailSnacks')&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
+                  {item.banquetHall>0&&addonVisible(item._id,'banquetHall')&&<PBox label="Banquet" value={item.banquetHall} amber/>}
                   {(item.adhocAddons||[]).filter(a=>a.sellingPrice>0).map((a,ai)=>(
-                    <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
+                    addonVisible(item._id,`adhoc_${ai}`) && <PBox key={ai} label={a.name} value={a.sellingPrice} amber/>
                   ))}
                 </div>
               )}
@@ -1732,6 +1739,7 @@ const OffsiteCards = ({ items, onZoom }) => {
 // ═════════════════════════════════════════════════════════════════════════════
 const CostCalculator = ({ portal, wishlisted=new Set() }) => {
   const INR  = v => `₹${Number(v||0).toLocaleString('en-IN')}`;
+  const slug = portal.slug;
   const isProduct = portal.type === 'product';
   const productItems = portal.productItems || [];
   // Only shortlisted products appear in the calculator
@@ -1758,16 +1766,43 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
   const pActive    = pLines.filter(l => l.q > 0);
 
   // ── OFFSITE STATE ───────────────────────────────────────────────────────────
-  const initProp = item => ({
-    nights: 1, single:0, double:0, triple:0, quad:0,
-    pax: 0,
-    pkgId: item.dayPackages?.length > 0 ? 0 : null,
-    addons: {},
-  });
+  const persistedCalc = portal.calculatorState || {};
+
+  const initProp = item => {
+    const saved = persistedCalc[item._id] || {};
+    return {
+      nights: saved.nights ?? 1,
+      single: saved.single ?? 0,
+      double: saved.double ?? 0,
+      triple: saved.triple ?? 0,
+      quad:   saved.quad   ?? 0,
+      pax:    saved.pax    ?? 0,
+      pkgId:  saved.pkgId  !== undefined ? saved.pkgId : (item.dayPackages?.length > 0 ? 0 : null),
+      addons: saved.addons || {},
+    };
+  };
 
   const [calcs,      setCalcs]      = React.useState(() => { const m={}; offsiteItems.forEach(i=>{ m[i._id]=initProp(i); }); return m; });
   const [propOpen,   setPropOpen]   = React.useState(() => { const m={}; offsiteItems.forEach((i,idx)=>{ m[i._id]=idx===0; }); return m; });
   const [typeFilter, setTypeFilter] = React.useState('all');
+
+  // Debounced persist to DB — fires 800ms after last change, fire-and-forget
+  const persistTimer = React.useRef(null);
+  const persistCalcState = React.useCallback((newCalcs) => {
+    clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      // Merge local calcs back into the full calculatorState (preserving disabledAddons/disabledRooms set by team)
+      const merged = { ...persistedCalc };
+      Object.entries(newCalcs).forEach(([id, c]) => {
+        merged[id] = { ...(persistedCalc[id] || {}), ...c };
+      });
+      fetch(`/api/portal/public/${slug}/calculator`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calculatorState: merged }),
+      }).catch(() => {});
+    }, 800);
+  }, [slug]);
 
   const hasDay   = offsiteItems.some(i => i.type !== 'Night Stay');
   const hasNight = offsiteItems.some(i => i.type === 'Night Stay');
@@ -1776,16 +1811,32 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
     : typeFilter==='day'   ? offsiteItems.filter(i=>i.type!=='Night Stay')
     : offsiteItems.filter(i=>i.type==='Night Stay');
 
-  const upd = (id, field, val) => setCalcs(p => ({ ...p, [id]: { ...p[id], [field]: val } }));
-  const toggleAddon = (id, key) => setCalcs(p => ({ ...p, [id]: { ...p[id], addons: { ...p[id].addons, [key]: !p[id].addons[key] } } }));
+  const upd = (id, field, val) => {
+    setCalcs(p => {
+      const next = { ...p, [id]: { ...p[id], [field]: val } };
+      persistCalcState(next);
+      return next;
+    });
+  };
+  const toggleAddon = (id, key) => {
+    setCalcs(p => {
+      const next = { ...p, [id]: { ...p[id], addons: { ...p[id].addons, [key]: !p[id].addons[key] } } };
+      persistCalcState(next);
+      return next;
+    });
+  };
 
   const addonList = item => {
+    // disabledAddons from team editor — these are hidden for this specific order
+    const disabledMap = (persistedCalc[item._id]?.disabledAddons) || {};
     const l = [];
-    if (item.djCost>0)         l.push({ key:'dj',       label:'DJ',           value:item.djCost,         perPerson: !!item.djCostPerPerson });
-    if (item.licenseFeeDJ>0)   l.push({ key:'djlic',    label:'DJ Licence',   value:item.licenseFeeDJ,   perPerson: !!item.licenseFeeDJPerPerson });
-    if (item.cocktailSnacks>0) l.push({ key:'cocktail', label:'Cocktails & Snacks', value:item.cocktailSnacks, perPerson: item.cocktailSnacksPerPerson !== false }); // default true
-    if (item.banquetHall>0)    l.push({ key:'banquet',  label:'Banquet Hall', value:item.banquetHall,    perPerson: !!item.banquetHallPerPerson });
-    (item.adhocAddons||[]).filter(a=>a.sellingPrice>0).forEach((a,i)=>l.push({ key:`adhoc_${i}`, label:a.name, value:a.sellingPrice, perPerson: !!a.perPerson }));
+    if (item.djCost>0         && !disabledMap['djCost'])         l.push({ key:'dj',       label:'DJ',                value:item.djCost,         perPerson: !!item.djCostPerPerson });
+    if (item.licenseFeeDJ>0   && !disabledMap['licenseFeeDJ'])   l.push({ key:'djlic',    label:'DJ Licence',        value:item.licenseFeeDJ,   perPerson: !!item.licenseFeeDJPerPerson });
+    if (item.cocktailSnacks>0 && !disabledMap['cocktailSnacks']) l.push({ key:'cocktail', label:'Cocktails & Snacks', value:item.cocktailSnacks, perPerson: item.cocktailSnacksPerPerson !== false });
+    if (item.banquetHall>0    && !disabledMap['banquetHall'])    l.push({ key:'banquet',  label:'Banquet Hall',      value:item.banquetHall,    perPerson: !!item.banquetHallPerPerson });
+    (item.adhocAddons||[]).filter(a=>a.sellingPrice>0).forEach((a,i)=>{
+      if (!disabledMap[`adhoc_${i}`]) l.push({ key:`adhoc_${i}`, label:a.name, value:a.sellingPrice, perPerson: !!a.perPerson });
+    });
     return l;
   };
 
@@ -2124,7 +2175,7 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
                                   {key:'double',label:'Double',price:item.doublePrice,guests:2},
                                   {key:'triple',label:'Triple',price:item.triplePrice,guests:3},
                                   {key:'quad',  label:'Quad',  price:item.quadPrice,  guests:4},
-                                ].filter(r=>r.price>0).map(r=>(
+                                ].filter(r => r.price>0 && !(persistedCalc[item._id]?.disabledRooms?.[r.key])).map(r=>(
                                   <tr key={r.key} style={{borderTop:'1px solid rgba(0,0,0,0.05)'}}>
                                     <td style={{padding:'9px 0',fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:'#1a1a1a'}}>{r.label}</td>
                                     <td style={{padding:'9px 0',fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:14,color:'#888',textAlign:'center'}}>{INR(r.price)}</td>

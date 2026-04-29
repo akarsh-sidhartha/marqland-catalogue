@@ -419,11 +419,13 @@ const UserManagement = () => {
     try {
       const res = await authFetch('/api/auth/users');
       const data = await res.json();
+      /*
       console.log('✅ Users fetched successfully:', data);
       console.log(`   Total users: ${data.length}`);
       data.forEach(u => {
         console.log(`   - ${u.name} (${u.email}) - Status: ${u.status}, Role: ${u.role}`);
       });
+      */
       setUsers(data);
     } catch (e) {
       console.error('❌ Error fetching users:', e);

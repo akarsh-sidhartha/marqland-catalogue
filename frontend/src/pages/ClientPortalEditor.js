@@ -5,7 +5,7 @@ import {
   Link2, Trash2, Send, Check, X, Edit3,
   Package, MapPin, ChevronUp, ChevronDown, ChevronRight,
   ExternalLink, RefreshCw, Copy, Eye, Paperclip, Download,
-  ImagePlus, Plus, Loader2,
+  ImagePlus, Plus, Loader2, Truck, AlertTriangle, Search,
 } from 'lucide-react';
 import { requestNotifPermission, pushNotif, subscribeToPortalPush } from '../utils/portalNotifications';
 
@@ -28,6 +28,9 @@ const ClientPortalEditor = ({ order, onClose }) => {
   const [editNote, setEditNote]     = useState(false);
   const [noteText, setNoteText]     = useState('');
   const [collapsed, setCollapsed]   = useState({}); // { [category]: true/false }
+  const [shipments, setShipments]   = useState([]);
+  const [shipmentsLoading, setShipmentsLoading] = useState(false);
+  const [shipmentSearch, setShipmentSearch] = useState('');
   const chatEndRef         = useRef(null);
   const chatFileRef        = useRef(null);
   const pollTimer          = useRef(null);
@@ -108,6 +111,21 @@ const ClientPortalEditor = ({ order, onClose }) => {
   useEffect(() => {
     if (tab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [portal?.messages, tab]);
+
+  useEffect(() => {
+    if (tab === 'shipments' && portal?.type === 'product' && order._id) {
+      loadShipments();
+    }
+  }, [tab, order._id]);
+
+  const loadShipments = async () => {
+    setShipmentsLoading(true);
+    try {
+      const res = await api.get(`/shipments?orderId=${order._id}`);
+      setShipments(Array.isArray(res.data) ? res.data : []);
+    } catch { setShipments([]); }
+    finally { setShipmentsLoading(false); }
+  };
 
   const loadPortal = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -270,10 +288,11 @@ const ClientPortalEditor = ({ order, onClose }) => {
       {/* ── Tabs ── */}
       <div className="flex border-b border-slate-100 shrink-0">
         {[
-          { k:'items',    l:`Options (${items.length})` },
-          { k:'selected', l:`Selected (${(portal.shortlistedIds||[]).length})` },
-          { k:'chat',     l:`Chat (${portal.messages.length})` },
-        ].map(t => (
+          { k:'items',     l:`Options (${items.length})`,                         show: true },
+          { k:'selected',  l:`Selected (${(portal.shortlistedIds||[]).length})`,  show: portal.type !== 'offsite' },
+          { k:'shipments', l:`Shipments`,                                          show: portal.type === 'product' },
+          { k:'chat',      l:`Chat (${portal.messages.length})`,                  show: true },
+        ].filter(t => t.show).map(t => (
           <button key={t.k} onClick={() => setTab(t.k)}
             className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest transition-all ${tab === t.k ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
             {t.l}
@@ -395,33 +414,202 @@ const ClientPortalEditor = ({ order, onClose }) => {
                 });
               })()
             ) : (
-              items.map((item, idx) => (
-                <div key={item._id} className="bg-slate-50 rounded-xl p-3 flex gap-3 items-start group">
-                  <div className="w-12 h-12 rounded-lg bg-slate-200 overflow-hidden shrink-0">
-                    {item.imageUrl
-                      ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-slate-300"><MapPin size={16} /></div>
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-slate-800 truncate">{item.name}</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">
-                      {item.location}
-                      {item.doublePrice > 0 && ` · ₹${Number(item.doublePrice).toLocaleString('en-IN')}/double`}
-                      {item.dayPackages?.length > 0 && ` · ${item.dayPackages.length} pkg${item.dayPackages.length !== 1 ? 's' : ''}`}
+              // ── Offsite items ─────────────────────────────────────────────
+              (() => {
+                const STD_ADDONS = [
+                  { priceKey:'djCost',         label:'DJ'                },
+                  { priceKey:'licenseFeeDJ',   label:'DJ Licence'        },
+                  { priceKey:'cocktailSnacks', label:'Cocktails & Snacks' },
+                  { priceKey:'banquetHall',    label:'Banquet Hall'      },
+                ];
+
+                const NIGHT_ROOMS = [
+                  { key:'single', label:'Single', priceKey:'singlePrice' },
+                  { key:'double', label:'Double', priceKey:'doublePrice' },
+                  { key:'triple', label:'Triple', priceKey:'triplePrice' },
+                  { key:'quad',   label:'Quad',   priceKey:'quadPrice'   },
+                ];
+
+                const calcState = portal.calculatorState || {};
+
+                const saveCalcState = async (newState) => {
+                  try {
+                    await api.put(`/portal/${portal.slug}/calculator`, { calculatorState: newState });
+                    setPortal(p => ({ ...p, calculatorState: newState }));
+                  } catch (e) { console.error('calc save failed', e); }
+                };
+
+                const getItemState = (itemId) => calcState[itemId] || {};
+
+                const setRoomCount = async (itemId, roomKey, val) => {
+                  const count = Math.max(0, Number(val) || 0);
+                  const cur = getItemState(itemId);
+                  const newState = { ...calcState, [itemId]: { ...cur, [roomKey]: count } };
+                  await saveCalcState(newState);
+                };
+
+                const setGuests = async (itemId, val) => {
+                  const guests = Math.max(0, Number(val) || 0);
+                  const cur = getItemState(itemId);
+                  const newState = { ...calcState, [itemId]: { ...cur, pax: guests } };
+                  await saveCalcState(newState);
+                };
+
+                const toggleRoomDisabled = async (itemId, roomKey) => {
+                  const cur = getItemState(itemId);
+                  const disabled = cur.disabledRooms || {};
+                  const newState = { ...calcState, [itemId]: { ...cur, disabledRooms: { ...disabled, [roomKey]: !disabled[roomKey] } } };
+                  await saveCalcState(newState);
+                };
+
+                const toggleAddonDisabled = async (itemId, addonKey) => {
+                  const cur = getItemState(itemId);
+                  const disabled = cur.disabledAddons || {};
+                  const newState = { ...calcState, [itemId]: { ...cur, disabledAddons: { ...disabled, [addonKey]: !disabled[addonKey] } } };
+                  await saveCalcState(newState);
+                };
+
+                return items.map((item, idx) => {
+                  const isDayOut    = item.type !== 'Night Stay';
+                  const stdVisible  = STD_ADDONS.filter(a => (item[a.priceKey]||0) > 0);
+                  const adhocVisible = (item.adhocAddons||[]).filter(a => (a.sellingPrice||0) > 0);
+                  const hasAddons   = stdVisible.length > 0 || adhocVisible.length > 0;
+                  const nightRooms  = isDayOut ? [] : NIGHT_ROOMS.filter(r => (item[r.priceKey]||0) > 0);
+                  const itemState   = getItemState(item._id);
+                  const disabledMap = itemState.disabledAddons || {};
+                  const disabledRooms = itemState.disabledRooms || {};
+
+                  return (
+                    <div key={item._id} className="border border-slate-100 rounded-xl overflow-hidden">
+                      {/* Item header row */}
+                      <div className="p-3 flex gap-3 items-start group">
+                        <div className="w-12 h-12 rounded-lg bg-slate-200 overflow-hidden shrink-0">
+                          {item.imageUrl
+                            ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-slate-300"><MapPin size={16} /></div>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-slate-800 truncate">{item.name}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {item.location}
+                            {item.doublePrice > 0 && ` · ₹${Number(item.doublePrice).toLocaleString('en-IN')}/double`}
+                            {item.dayPackages?.length > 0 && ` · ${item.dayPackages.length} pkg${item.dayPackages.length !== 1 ? 's' : ''}`}
+                          </div>
+                          {item.note && <div className="text-[10px] text-indigo-600 mt-1 italic">{item.note}</div>}
+                        </div>
+                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => moveItem(item._id, 'up')} disabled={idx === 0}
+                            className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20"><ChevronUp size={13} /></button>
+                          <button onClick={() => moveItem(item._id, 'down')} disabled={idx === items.length - 1}
+                            className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20"><ChevronDown size={13} /></button>
+                          <button onClick={() => removeItem(item._id)}
+                            className="p-1 text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+
+                      {/* Calculator pre-set panel */}
+                      <div className="border-t border-slate-100 bg-slate-50 px-3 py-2.5 space-y-3">
+
+                        {/* ── Day Outing: single pax input ── */}
+                        {isDayOut && (
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Guest Count</div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => setGuests(item._id, Math.max(0,(Number(itemState.pax)||0)-1))}
+                                className="w-6 h-6 border border-slate-200 bg-white rounded flex items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors text-sm">−</button>
+                              <input type="number" min="0" value={itemState.pax ?? ''} placeholder="0"
+                                onChange={e => setGuests(item._id, e.target.value)}
+                                className="w-16 text-center border border-slate-200 rounded bg-white px-1 py-1 text-sm font-bold text-slate-700 outline-none focus:border-indigo-400 transition-colors"/>
+                              <button onClick={() => setGuests(item._id, (Number(itemState.pax)||0)+1)}
+                                className="w-6 h-6 border border-slate-200 bg-white rounded flex items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors text-sm">+</button>
+                              <span className="text-[10px] text-slate-400">guests</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Night Stay: per room-type count + toggle ── */}
+                        {!isDayOut && nightRooms.length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Room Count <span className="font-normal normal-case tracking-normal text-slate-300">— toggle off to hide room type</span></div>
+                            <div className="flex flex-col gap-2">
+                              {nightRooms.map(r => {
+                                const isOff = !!disabledRooms[r.key];
+                                const roomCount = itemState[r.key] ?? '';
+                                return (
+                                  <div key={r.key} className="flex items-center gap-2">
+                                    {/* Toggle */}
+                                    <button onClick={() => toggleRoomDisabled(item._id, r.key)}
+                                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isOff ? 'bg-slate-200' : 'bg-indigo-500'}`}>
+                                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isOff ? 'translate-x-0' : 'translate-x-4'}`}/>
+                                    </button>
+                                    {/* Label + price */}
+                                    <span className={`text-[11px] font-medium w-12 shrink-0 ${isOff ? 'text-slate-300' : 'text-slate-600'}`}>{r.label}</span>
+                                    <span className="text-[10px] text-slate-400 flex-1">₹{Number(item[r.priceKey]).toLocaleString('en-IN')}/night</span>
+                                    {/* Count stepper — disabled when room is off */}
+                                    {!isOff && (
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <button onClick={() => setRoomCount(item._id, r.key, Math.max(0,(Number(roomCount)||0)-1))}
+                                          className="w-5 h-5 border border-slate-200 bg-white rounded flex items-center justify-center text-slate-500 hover:border-indigo-300 text-xs">−</button>
+                                        <input type="number" min="0" value={roomCount} placeholder="0"
+                                          onChange={e => setRoomCount(item._id, r.key, e.target.value)}
+                                          className="w-12 text-center border border-slate-200 rounded bg-white px-1 py-0.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-400 transition-colors"/>
+                                        <button onClick={() => setRoomCount(item._id, r.key, (Number(roomCount)||0)+1)}
+                                          className="w-5 h-5 border border-slate-200 bg-white rounded flex items-center justify-center text-slate-500 hover:border-indigo-300 text-xs">+</button>
+                                        <span className="text-[9px] text-slate-400 w-10">rooms</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Addon visibility toggles ── */}
+                        {hasAddons && (
+                          <div>
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                              Addon Visibility <span className="font-normal normal-case tracking-normal text-slate-300">— toggle off to hide from this order</span>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              {stdVisible.map(a => {
+                                const isDisabled = !!disabledMap[a.priceKey];
+                                return (
+                                  <div key={a.priceKey} className="flex items-center gap-2">
+                                    <button onClick={() => toggleAddonDisabled(item._id, a.priceKey)}
+                                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isDisabled ? 'bg-slate-200' : 'bg-indigo-500'}`}>
+                                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDisabled ? 'translate-x-0' : 'translate-x-4'}`}/>
+                                    </button>
+                                    <span className={`text-[11px] font-medium flex-1 truncate ${isDisabled ? 'text-slate-300 line-through' : 'text-slate-600'}`}>
+                                      {a.label} <span className="text-[10px] text-slate-400 no-underline font-normal" style={{textDecoration:'none'}}>· ₹{Number(item[a.priceKey]).toLocaleString('en-IN')}</span>
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {adhocVisible.map((a, ai) => {
+                                const key = `adhoc_${ai}`;
+                                const isDisabled = !!disabledMap[key];
+                                return (
+                                  <div key={ai} className="flex items-center gap-2">
+                                    <button onClick={() => toggleAddonDisabled(item._id, key)}
+                                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isDisabled ? 'bg-slate-200' : 'bg-indigo-500'}`}>
+                                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDisabled ? 'translate-x-0' : 'translate-x-4'}`}/>
+                                    </button>
+                                    <span className={`text-[11px] font-medium flex-1 truncate ${isDisabled ? 'text-slate-300 line-through' : 'text-slate-600'}`}>
+                                      {a.name} <span className="text-[10px] text-slate-400 font-normal">· ₹{Number(a.sellingPrice).toLocaleString('en-IN')}</span>
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {item.note && <div className="text-[10px] text-indigo-600 mt-1 italic">{item.note}</div>}
-                  </div>
-                  <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => moveItem(item._id, 'up')} disabled={idx === 0}
-                      className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20"><ChevronUp size={13} /></button>
-                    <button onClick={() => moveItem(item._id, 'down')} disabled={idx === items.length - 1}
-                      className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20"><ChevronDown size={13} /></button>
-                    <button onClick={() => removeItem(item._id)}
-                      className="p-1 text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>
-                  </div>
-                </div>
-              ))
+                  );
+                });
+              })()
             )}
 
             {/* ── Custom / Discussion item — product portals only ── */}
@@ -605,6 +793,186 @@ const ClientPortalEditor = ({ order, onClose }) => {
             </div>
           </div>
         )}
+
+        {/* ══ SHIPMENTS TAB ══ */}
+        {tab === 'shipments' && (() => {
+          const DELAYED_STATUSES = new Set(['Returned', 'Exception']);
+          const STATUS_COLORS = {
+            'Pending':           'bg-slate-100 text-slate-500',
+            'Booked':            'bg-blue-50 text-blue-600',
+            'In Transit':        'bg-amber-50 text-amber-700',
+            'Out for Delivery':  'bg-orange-50 text-orange-600',
+            'Delivered':         'bg-emerald-50 text-emerald-700',
+            'Completed':         'bg-emerald-50 text-emerald-700',
+            'Returned':          'bg-red-50 text-red-600',
+            'Exception':         'bg-red-50 text-red-600',
+          };
+
+          const q = shipmentSearch.toLowerCase().trim();
+          const filtered = shipments.filter(s =>
+            !q ||
+            (s.recipientName || '').toLowerCase().includes(q) ||
+            (s.trackingId    || '').toLowerCase().includes(q) ||
+            (s.city          || '').toLowerCase().includes(q) ||
+            (s.shippingPartner || '').toLowerCase().includes(q) ||
+            (s.status        || '').toLowerCase().includes(q)
+          );
+
+          const statusGroups = {};
+          filtered.forEach(s => {
+            const st = s.status || 'Pending';
+            if (!statusGroups[st]) statusGroups[st] = [];
+            statusGroups[st].push(s);
+          });
+
+          const STATUS_ORDER = ['Exception','Returned','In Transit','Out for Delivery','Booked','Pending','Delivered','Completed'];
+          const sortedStatuses = Object.keys(statusGroups).sort(
+            (a,b) => (STATUS_ORDER.indexOf(a) === -1 ? 99 : STATUS_ORDER.indexOf(a)) -
+                     (STATUS_ORDER.indexOf(b) === -1 ? 99 : STATUS_ORDER.indexOf(b))
+          );
+
+          return (
+            <div className="flex flex-col h-full">
+              {/* Search + refresh */}
+              <div className="px-4 pt-4 pb-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:border-indigo-300 transition-colors">
+                    <Search size={13} className="text-slate-400 shrink-0" />
+                    <input
+                      value={shipmentSearch}
+                      onChange={e => setShipmentSearch(e.target.value)}
+                      placeholder="Search recipient, city, tracking ID, partner…"
+                      className="flex-1 bg-transparent text-xs outline-none text-slate-700 placeholder:text-slate-300"
+                    />
+                    {shipmentSearch && (
+                      <button onClick={() => setShipmentSearch('')} className="text-slate-300 hover:text-slate-500">
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <button onClick={loadShipments} disabled={shipmentsLoading}
+                    className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors disabled:opacity-40">
+                    <RefreshCw size={13} className={shipmentsLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {/* Summary row */}
+                <div className="flex items-center gap-3 mt-2.5 flex-wrap">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {shipments.length} shipment{shipments.length !== 1 ? 's' : ''}
+                  </span>
+                  {shipments.filter(s => DELAYED_STATUSES.has(s.status)).length > 0 && (
+                    <span className="flex items-center gap-1 text-[10px] font-black text-red-500 uppercase tracking-widest">
+                      <AlertTriangle size={10} />
+                      {shipments.filter(s => DELAYED_STATUSES.has(s.status)).length} delayed
+                    </span>
+                  )}
+                  {q && (
+                    <span className="text-[10px] text-slate-400">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-4 pb-4">
+                {shipmentsLoading ? (
+                  <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
+                    <Loader2 size={18} className="animate-spin" />
+                    <span className="text-sm font-bold">Loading shipments…</span>
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="text-3xl mb-3">📦</div>
+                    <p className="text-sm font-bold text-slate-400">
+                      {shipments.length === 0 ? 'No shipments linked to this order yet.' : 'No results match your search.'}
+                    </p>
+                    <p className="text-xs text-slate-300 mt-1">
+                      {shipments.length === 0 ? 'Link shipments from the Courier Tracking page.' : 'Try a different search term.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {sortedStatuses.map(status => (
+                      <div key={status}>
+                        {/* Status group header */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${STATUS_COLORS[status] || 'bg-slate-100 text-slate-500'}`}>
+                            {status}
+                          </span>
+                          <span className="text-[9px] text-slate-300 font-bold">{statusGroups[status].length}</span>
+                          {DELAYED_STATUSES.has(status) && (
+                            <AlertTriangle size={10} className="text-red-400" />
+                          )}
+                        </div>
+
+                        {/* Shipment cards */}
+                        <div className="space-y-2">
+                          {statusGroups[status].map(s => {
+                            const isDelayed = DELAYED_STATUSES.has(s.status);
+                            return (
+                              <div key={s._id}
+                                className={`rounded-xl border p-3 transition-colors ${
+                                  isDelayed
+                                    ? 'bg-red-50 border-red-200'
+                                    : 'bg-white border-slate-100 hover:border-slate-200'
+                                }`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2.5 min-w-0">
+                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isDelayed ? 'bg-red-100' : 'bg-slate-100'}`}>
+                                      <Truck size={12} className={isDelayed ? 'text-red-500' : 'text-slate-500'} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-black text-slate-800">{s.recipientName || '—'}</span>
+                                        {isDelayed && (
+                                          <span className="text-[9px] font-black text-red-500 uppercase bg-red-100 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                                            <AlertTriangle size={8} /> Delayed
+                                          </span>
+                                        )}
+                                      </div>
+                                      {s.phone && <div className="text-[10px] text-slate-400 mt-0.5">{s.phone}</div>}
+                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        {s.city && (
+                                          <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                            <MapPin size={9} className="text-slate-400" />{s.city}
+                                          </span>
+                                        )}
+                                        {s.shippingPartner && (
+                                          <span className="text-[10px] text-slate-400">{s.shippingPartner}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    {s.trackingId ? (
+                                      <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                        {s.trackingId}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-300">No tracking ID</span>
+                                    )}
+                                    {s.deliveryDate && (
+                                      <div className="text-[9px] text-slate-400 mt-1">
+                                        ETA {new Date(s.deliveryDate).toLocaleDateString('en-IN', { day:'2-digit', month:'short' })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {s.notes && (
+                                  <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500 italic">{s.notes}</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ══ SELECTED ITEMS TAB ══ */}
         {tab === 'selected' && (() => {
