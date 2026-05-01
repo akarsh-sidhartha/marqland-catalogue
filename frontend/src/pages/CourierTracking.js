@@ -8,6 +8,7 @@ import {
   Loader2, Check, Trash2, MapPin, Link2, UserCheck, Eye, FileText,
 } from 'lucide-react';
 import { LocationSelects, COUNTRIES } from '../utils/indiaLocations';
+import { usePopup } from '../components/AppPopups';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROLE MODEL
@@ -59,7 +60,7 @@ const selectCls = `${inputCls} cursor-pointer`;
 // ─────────────────────────────────────────────────────────────────────────────
 // SHIPPING PARTNER MANAGER MODAL
 // ─────────────────────────────────────────────────────────────────────────────
-const ShippingPartnerModal = ({ onClose, partners, onSaved }) => {
+const ShippingPartnerModal = ({ onClose, partners, onSaved, showToast, confirm }) => {
   const [list, setList] = useState(partners);
   const [form, setForm] = useState({ name: '', trackingUrl: '' });
   const [saving, setSaving] = useState(false);
@@ -78,14 +79,20 @@ const ShippingPartnerModal = ({ onClose, partners, onSaved }) => {
         setList(l => [...l, res.data]);
       }
       setForm({ name: '', trackingUrl: '' }); setEditId(null); onSaved();
-    } catch (e) { alert(e.response?.data?.message || e.message); }
+      showToast('success', editId ? 'Partner updated' : 'Partner added');
+    } catch (e) { showToast('error', e.response?.data?.message || e.message); }
     finally { setSaving(false); }
   };
 
   const del = async (id) => {
-    if (!window.confirm('Delete this partner?')) return;
-    await api.delete(`/shipping-partners/${id}`);
-    setList(l => l.filter(p => p._id !== id)); onSaved();
+    const ok = await confirm({ title: 'Delete Partner', message: 'This shipping partner will be removed.', confirmLabel: 'Delete', variant: 'danger' });
+    if (!ok) return;
+    try {
+      await api.delete(`/shipping-partners/${id}`);
+      setList(l => l.filter(p => p._id !== id));
+      onSaved();
+      showToast('success', 'Partner deleted');
+    } catch (e) { showToast('error', e.response?.data?.message || e.message); }
   };
 
   return (
@@ -155,7 +162,7 @@ const ShippingPartnerModal = ({ onClose, partners, onSaved }) => {
 // Courier vendor view:
 //   Full form — they fill AWB, partner, status. No vendor assign, no order link.
 // ─────────────────────────────────────────────────────────────────────────────
-const ShipmentModal = ({ shipment, orders, partners, vendors, showOrderLink, onSave, onClose }) => {
+const ShipmentModal = ({ shipment, orders, partners, vendors, showOrderLink, onSave, onClose, showToast }) => {
   const isEdit = !!shipment?._id;
   const [form, setForm] = useState({
     shippedDate:        shipment?.shippedDate ? shipment.shippedDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -178,8 +185,8 @@ const ShipmentModal = ({ shipment, orders, partners, vendors, showOrderLink, onS
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const submit = async () => {
-    if (!form.recipientName.trim()) return alert('Recipient name required');
-    if (!form.shippedDate) return alert('Date required');
+    if (!form.recipientName.trim()) { showToast('error', 'Recipient name is required'); return; }
+    if (!form.shippedDate) { showToast('error', 'Shipped date is required'); return; }
     setSaving(true);
     try {
       await onSave({
@@ -535,7 +542,7 @@ const ExcelImportModal = ({ orders, partners, vendors, showOrderLink, onImported
 // ─────────────────────────────────────────────────────────────────────────────
 // BULK ORDER LINK MODAL — apply one order to all selected rows
 // ─────────────────────────────────────────────────────────────────────────────
-const BulkOrderLinkModal = ({ selectedIds, orders, onDone, onClose }) => {
+const BulkOrderLinkModal = ({ selectedIds, orders, onDone, onClose, showToast }) => {
   const [orderId, setOrderId] = useState('');
   const [saving, setSaving]   = useState(false);
 
@@ -550,8 +557,9 @@ const BulkOrderLinkModal = ({ selectedIds, orders, onDone, onClose }) => {
           isAdhoc:  !orderId,
         })
       ));
+      showToast('success', `${selectedIds.length} shipment${selectedIds.length !== 1 ? 's' : ''} linked`);
       onDone();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast('error', e.message); }
     finally { setSaving(false); }
   };
 
@@ -595,7 +603,7 @@ const BulkOrderLinkModal = ({ selectedIds, orders, onDone, onClose }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // INLINE SINGLE-ROW ORDER ASSIGNER
 // ─────────────────────────────────────────────────────────────────────────────
-const OrderAssigner = ({ shipmentId, orders, onAssigned }) => {
+const OrderAssigner = ({ shipmentId, orders, onAssigned, showToast }) => {
   const [open, setOpen]   = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -609,7 +617,7 @@ const OrderAssigner = ({ shipmentId, orders, onAssigned }) => {
         isAdhoc:  !orderId,
       });
       onAssigned();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast('error', e.message); }
     finally { setSaving(false); setOpen(false); }
   };
 
@@ -649,7 +657,7 @@ const OrderAssigner = ({ shipmentId, orders, onAssigned }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SHIPMENT ROW
 // ─────────────────────────────────────────────────────────────────────────────
-const ShipmentRow = ({ shipment, partners, orders, isMarqland, selected, onSelect, onEdit, onDelete, onAssigned }) => {
+const ShipmentRow = ({ shipment, partners, orders, isMarqland, selected, onSelect, onEdit, onDelete, onAssigned, showToast }) => {
   const delayed     = isDelayed(shipment);
   const statusStyle = STATUS_COLORS[shipment.status] || 'bg-slate-100 text-slate-500';
   const partnerObj  = partners.find(p => p.name === shipment.shippingPartner);
@@ -738,7 +746,7 @@ const ShipmentRow = ({ shipment, partners, orders, isMarqland, selected, onSelec
             ? <span className="text-[10px] text-slate-700 font-bold">{shipment.orderRef || '—'}</span>
             : shipment.isAdhoc
               ? <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">Ad-hoc</span>
-              : <OrderAssigner shipmentId={shipment._id} orders={orders} onAssigned={onAssigned} />
+              : <OrderAssigner shipmentId={shipment._id} orders={orders} onAssigned={onAssigned} showToast={showToast} />
           }
         </td>
       )}
@@ -802,6 +810,8 @@ export default function CourierTracking() {
   const isMarqland = MARQLAND_ROLES.includes(user?.role);
   const isAdmin    = user?.role === 'admin';
 
+  const { showToast, confirm, Toast, ConfirmDialog } = usePopup();
+
   const [tab, setTab]               = useState('active');
   const [shipments, setShipments]   = useState([]);
   const [orders, setOrders]         = useState([]);
@@ -854,20 +864,28 @@ export default function CourierTracking() {
 
   const triggerRefresh = async () => {
     setRefreshing(true);
-    try { await api.post('/shipments/refresh-status'); await load(); }
-    catch (e) { alert('Refresh failed: ' + e.message); }
+    try { await api.post('/shipments/refresh-status'); await load(); showToast('success', 'Tracking statuses refreshed'); }
+    catch (e) { showToast('error', 'Refresh failed: ' + e.message); }
     finally { setRefreshing(false); }
   };
 
   const saveShipment = async (form) => {
-    if (editShipment?._id) await api.put(`/shipments/${editShipment._id}`, form);
-    else                   await api.post('/shipments', form);
-    setShowAddModal(false); setEditShipment(null); load();
+    try {
+      if (editShipment?._id) await api.put(`/shipments/${editShipment._id}`, form);
+      else                   await api.post('/shipments', form);
+      showToast('success', editShipment?._id ? 'Shipment updated' : 'Shipment added');
+      setShowAddModal(false); setEditShipment(null); load();
+    } catch (e) { showToast('error', e.response?.data?.message || e.message); }
   };
 
   const deleteShipment = async (id) => {
-    if (!window.confirm('Delete this shipment?')) return;
-    await api.delete(`/shipments/${id}`); load();
+    const ok = await confirm({ title: 'Delete Shipment', message: 'This shipment record will be permanently removed.', confirmLabel: 'Delete', variant: 'danger' });
+    if (!ok) return;
+    try {
+      await api.delete(`/shipments/${id}`);
+      showToast('success', 'Shipment deleted');
+      load();
+    } catch (e) { showToast('error', e.response?.data?.message || e.message); }
   };
 
   // Filter options derived from actual data
@@ -919,6 +937,8 @@ export default function CourierTracking() {
 
   return (
     <div className="p-6 max-w-[1500px] mx-auto">
+      <Toast />
+      <ConfirmDialog />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -1100,6 +1120,7 @@ export default function CourierTracking() {
                     onEdit={(s) => { setEditShipment(s); setShowAddModal(true); }}
                     onDelete={deleteShipment}
                     onAssigned={load}
+                    showToast={showToast}
                   />
                 ))}
               </tbody>
@@ -1110,13 +1131,14 @@ export default function CourierTracking() {
 
       {/* Modals */}
       {showPartnerModal && (
-        <ShippingPartnerModal partners={partners} onSaved={load} onClose={() => setShowPartnerModal(false)} />
+        <ShippingPartnerModal partners={partners} onSaved={load} onClose={() => setShowPartnerModal(false)} showToast={showToast} confirm={confirm} />
       )}
       {showAddModal && (
         <ShipmentModal
           shipment={editShipment} orders={orders} partners={partners} vendors={couriers}
           showOrderLink={isMarqland} onSave={saveShipment}
           onClose={() => { setShowAddModal(false); setEditShipment(null); }}
+          showToast={showToast}
         />
       )}
       {showImport && (
@@ -1132,6 +1154,7 @@ export default function CourierTracking() {
           orders={orders}
           onDone={() => { setShowBulkLink(false); clearSelect(); load(); }}
           onClose={() => setShowBulkLink(false)}
+          showToast={showToast}
         />
       )}
     </div>

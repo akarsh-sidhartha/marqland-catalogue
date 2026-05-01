@@ -6,6 +6,7 @@ import {
   CheckCircle, AlertCircle, AlertTriangle, MapPin, CreditCard,
   FileUp, Plus, ClipboardList
 } from "lucide-react";
+import { usePopup, AppPopupStyles } from "../components/AppPopups";
 
 
 
@@ -756,15 +757,23 @@ function RecordPaymentModal({ vendors, proformaInvoices, vendorInvoices, payment
         );
       })()}
       {form.mappedTo === "vendor_invoice" && (() => {
+        const payAmt = parseFloat(form.amount) || 0;
+        // Only show invoices whose outstanding due is within ₹2 of the entered payment amount
+        const amountMatchedInvs = payAmt > 0
+          ? invoicesWithDue.filter((vi) => {
+              const due = vi.total_amount - (paidByInvoice[String(vi._id)] || 0);
+              return Math.abs(due - payAmt) <= 2;
+            })
+          : invoicesWithDue;
         const searchedInvs = invSearch
-          ? invoicesWithDue.filter((vi) =>
+          ? amountMatchedInvs.filter((vi) =>
               vi.invoice_number?.toLowerCase().includes(invSearch.toLowerCase()) ||
               vi.vendor_name?.toLowerCase().includes(invSearch.toLowerCase())
             )
-          : invoicesWithDue;
+          : amountMatchedInvs;
         const selectedInv = invoicesWithDue.find((vi) => vi._id === form.vendorInvoice);
         return (
-          <Field label="Vendor Invoice" required hint="showing invoices with outstanding balance only">
+          <Field label="Vendor Invoice" required hint={payAmt > 0 ? `showing invoices with outstanding ≈ ${fmt(payAmt)} (±₹2)` : "showing invoices with outstanding balance only"}>
             {/* Search input */}
             <div style={{ position: "relative", marginBottom: 6 }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
@@ -785,7 +794,7 @@ function RecordPaymentModal({ vendors, proformaInvoices, vendorInvoices, payment
               )}
               {invoicesWithDue.length > 0 && searchedInvs.length === 0 && (
                 <div style={{ padding: "14px 12px", color: "#94a3b8", fontSize: 13, textAlign: "center" }}>
-                  No invoices match "{invSearch}"
+                  {invSearch ? `No invoices match "${invSearch}"` : payAmt > 0 ? `No invoices with outstanding ≈ ${fmt(payAmt)} (±₹2) — try adjusting the amount or search above` : "No open invoices found"}
                 </div>
               )}
               {searchedInvs.map((vi) => {
@@ -933,7 +942,11 @@ function PIFlowModal({ pi: piProp, payments, invoices, onMapPayment, onUploadInv
     Math.abs(inv.total_amount - pi.totalAmount) < pi.totalAmount * 0.5   // within 50% of PI amount
   ) : [];
 
-  const advances = payments.filter((p) => p.mappedTo === "advance" && (!p.vendor || p.vendor?._id === pi.vendor?._id || String(p.vendor) === String(pi.vendor?._id)));
+  const advances = payments.filter((p) =>
+    p.mappedTo === "advance" &&
+    (!p.vendor || p.vendor?._id === pi.vendor?._id || String(p.vendor) === String(pi.vendor?._id)) &&
+    Math.abs(p.amount - pi.amountDue) <= 2
+  );
 
   return (
     <Modal title={`Payment Flow — ${pi.piNumber}`} onClose={onClose} extraWide>
@@ -1477,7 +1490,7 @@ function InvoiceVaultTab({ invoices, payments, proformaInvoices, vendors, onDele
                                         {hasPayments && <div style={{ fontSize: 11, color: "#10b981" }}>✓ {direct.length + piPayments.length} payment{(direct.length + piPayments.length) > 1 ? "s" : ""} tracked</div>}
                                       </div>
                                       <button onClick={(e) => { e.stopPropagation(); onViewInvoice(inv); }} style={{ display:"flex",alignItems:"center",justifyContent:"center",width:30,height:30, borderRadius: 7, border: "none", background: "#eff6ff", color: "#1d4ed8", cursor: "pointer" }}><Eye size={13}/></button>
-                                      <button onClick={(e) => { e.stopPropagation(); if (window.confirm("Delete?")) onDelete(inv._id); }} style={{ display:"flex",alignItems:"center",justifyContent:"center",width:30,height:30, borderRadius: 7, border: "none", background: "#fef2f2", color: "#ef4444", cursor: "pointer" }}><Trash2 size={13}/></button>
+                                      <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id); }} style={{ display:"flex",alignItems:"center",justifyContent:"center",width:30,height:30, borderRadius: 7, border: "none", background: "#fef2f2", color: "#ef4444", cursor: "pointer" }}><Trash2 size={13}/></button>
                                       <span style={{ display:"flex",alignItems:"center",color: "#94a3b8" }}>{expandedInv === invKey ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</span>
                                     </div>
                                   </div>
@@ -1871,9 +1884,9 @@ export default function PaymentTracker() {
   const [pendingPiFlowId, setPendingPiFlowId] = useState(null); // re-open PI flow after invoice upload
   const [filterVendor, setFilterVendor] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [toast, setToast]           = useState(null);
-
-  const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
+  const { showToast: _showToast, confirm, Toast, ConfirmDialog } = usePopup();
+  // Wrap showToast to keep existing call signature: showToast(msg, type?)
+  const showToast = (msg, type = "success") => _showToast(type, msg);
 
   useEffect(() => {
     loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
@@ -1949,13 +1962,10 @@ export default function PaymentTracker() {
 
   return (
     <div style={{ fontFamily: "'DM Sans', -apple-system, sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
+      <AppPopupStyles />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-      {toast && (
-        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 3000, padding: "12px 20px", borderRadius: 12, background: toast.type==="success"?"#ecfdf5":"#fef2f2", border: `1px solid ${toast.type==="success"?"#6ee7b7":"#fca5a5"}`, color: toast.type==="success"?"#065f46":"#dc2626", fontWeight: 600, fontSize: 14, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 8 }}>
-          {toast.type==="success"?"✓":"✕"} {toast.msg}
-        </div>
-      )}
+      <Toast />
+      <ConfirmDialog />
 
       {/* Header */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -2053,7 +2063,8 @@ export default function PaymentTracker() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (!window.confirm(`Delete PI ${pi.piNumber}? This will also delete ${(pi.payments||[]).length} linked payment(s).`)) return;
+                              const ok = await confirm({ title: `Delete PI ${pi.piNumber}?`, message: `This will also delete ${(pi.payments||[]).length} linked payment(s). This cannot be undone.`, confirmLabel: "Delete", variant: "danger" });
+                              if (!ok) return;
                               await api.delete(`/payment-tracker/pi/${pi._id}`);
                               showToast("PI deleted"); load();
                             }}
@@ -2126,12 +2137,24 @@ export default function PaymentTracker() {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {pay.screenshot && (
+                        <a
+                          href={pay.screenshot}
+                          download={`Payment_${pay.paymentRef}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="View / Download Screenshot"
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700, fontSize: 12, textDecoration: "none", whiteSpace: "nowrap" }}>
+                          <Eye size={13} /> Screenshot
+                        </a>
+                      )}
                       <button onClick={() => { setSelected(pay); setModal("map_advance"); }}
                         style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
                         <MapPin size={13} /> Map Now
                       </button>
                       <button onClick={async () => {
-                        if (!window.confirm(`Delete payment ${pay.paymentRef} of ${fmt(pay.amount)}? This will reverse any balance updates.`)) return;
+                        const ok = await confirm({ title: `Delete Payment ${pay.paymentRef}?`, message: `Amount: ${fmt(pay.amount)}. This will reverse any balance updates.`, confirmLabel: "Delete", variant: "danger" });
+                        if (!ok) return;
                         await api.delete(`/payment-tracker/payments/${pay._id}`);
                         showToast("Payment deleted"); load();
                       }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 8, border: "1px solid #fecaca", background: "#fef2f2", color: "#ef4444", cursor: "pointer" }}>
@@ -2150,7 +2173,11 @@ export default function PaymentTracker() {
                 payments={data.payments}
                 proformaInvoices={data.pi}
                 vendors={vendors}
-                onDelete={async (id) => { await api.delete(`/payment-tracker/invoices/${id}`); load(); showToast("Invoice deleted"); }}
+                onDelete={async (id) => {
+                  const ok = await confirm({ title: "Delete Invoice?", message: "This invoice will be permanently removed from the vault.", confirmLabel: "Delete", variant: "danger" });
+                  if (!ok) return;
+                  await api.delete(`/payment-tracker/invoices/${id}`); load(); showToast("Invoice deleted");
+                }}
                 onViewInvoice={(inv) => {
                   // Enrich invoice with linked PI and all payments before showing modal
                   const linkedPI = data.pi.find(pi =>

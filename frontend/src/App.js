@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AppPopupStyles } from './components/AppPopups';
 import LoginPage from './pages/LoginPage';
 import UserManagement from './pages/UserManagement';
 import PublicAdminPoral from './pages/public-site/AdminView';
@@ -357,6 +358,7 @@ const AppShell = () => {
 function App() {
   return (
     <AuthProvider>
+      <AppPopupStyles />
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppShell />
       </Router>

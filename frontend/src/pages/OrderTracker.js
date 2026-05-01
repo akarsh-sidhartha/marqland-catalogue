@@ -9,6 +9,7 @@ import {
   AlertTriangle, FolderOpen, Calendar, Hash, Receipt, Table as TableIcon,
   Search, Loader2, Link2, Copy, Send, Package, MapPin, UserPlus,
 } from 'lucide-react';
+import { usePopup } from '../components/AppPopups';
 
 const CC_EMAIL = 'info@marqland.com';
 
@@ -17,7 +18,7 @@ const CC_EMAIL = 'info@marqland.com';
 // Pre-fills companyName and contactName from the order form so user only needs
 // to add phone + email, then click save.
 // ─────────────────────────────────────────────────────────────────────────────
-function ClientCreateInlineForm({ clientName, contactName, onCreated, onSkip }) {
+function ClientCreateInlineForm({ clientName, contactName, onCreated, onSkip, showToast }) {
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState({
     companyName: clientName || '',
@@ -28,12 +29,12 @@ function ClientCreateInlineForm({ clientName, contactName, onCreated, onSkip }) 
     setForm(p => ({ ...p, contacts: c }));
   };
   const doSave = async () => {
-    if (!form.companyName.trim()) return alert('Company name required');
+    if (!form.companyName.trim()) { showToast('error', 'Company name is required'); return; }
     setSaving(true);
     try {
       const res = await api.post('/clients', form);
       onCreated(res.data);
-    } catch (e) { alert('Failed: ' + (e.response?.data?.message || e.message)); }
+    } catch (e) { showToast('error', 'Failed: ' + (e.response?.data?.message || e.message)); }
     finally { setSaving(false); }
   };
   return (
@@ -79,17 +80,17 @@ function ClientCreateInlineForm({ clientName, contactName, onCreated, onSkip }) 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline form: ADD a contact to an EXISTING client
 // ─────────────────────────────────────────────────────────────────────────────
-function ContactAddInlineForm({ clientId, companyName, contactName, onAdded, onSkip }) {
+function ContactAddInlineForm({ clientId, companyName, contactName, onAdded, onSkip, showToast }) {
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState({ name: contactName || '', phone: '', email: '' });
 
   const doSave = async () => {
-    if (!form.name.trim()) return alert('Contact name required');
+    if (!form.name.trim()) { showToast('error', 'Contact name is required'); return; }
     setSaving(true);
     try {
       const res = await api.patch(`/clients/${clientId}/add-contact`, form);
       onAdded(res.data);
-    } catch (e) { alert('Failed: ' + (e.response?.data?.message || e.message)); }
+    } catch (e) { showToast('error', 'Failed: ' + (e.response?.data?.message || e.message)); }
     finally { setSaving(false); }
   };
   return (
@@ -223,7 +224,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('inquiry');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState({});
@@ -232,6 +232,8 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedContact, setSelectedContact] = useState('');
+
+  const { showToast, confirm, Toast, ConfirmDialog } = usePopup();
 
   // meta is now populated from the /clients API, not just from past orders
   const [meta, setMeta] = useState({ clients: [], clientContacts: {}, clientMap: {} });
@@ -811,7 +813,22 @@ export default function App() {
             );
           })()}
           {order.status !== 'completed' && (
-            <button disabled={loading} onClick={(e) => { e.stopPropagation(); setDeleteId(order._id); }}
+            <button disabled={loading} onClick={async (e) => {
+              e.stopPropagation();
+              const ok = await confirm({
+                title        : 'Delete Order',
+                message      : `"${order.title}" and its portal will be permanently removed.`,
+                confirmLabel : 'Delete',
+                variant      : 'danger',
+              });
+              if (!ok) return;
+              try {
+                await api.delete(`/orders/${order._id}`);
+                try { const portalRes = await api.get(`/portal/order/${order._id}`); if (portalRes.data?.slug) await api.delete(`/portal/${portalRes.data.slug}`); } catch {}
+                showToast('success', `"${order.title}" deleted`);
+                fetchOrders();
+              } catch (err) { showToast('error', err.response?.data?.message || err.message); }
+            }}
               className={`p-2 transition-colors ${loading ? 'text-slate-200 cursor-not-allowed' : 'text-slate-300 hover:text-red-500'}`}>
               <Trash2 size={18} />
             </button>
@@ -823,6 +840,8 @@ export default function App() {
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans text-slate-900">
+      <Toast />
+      <ConfirmDialog />
       <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter">Order Management</h1>
@@ -1155,24 +1174,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Delete confirm ── */}
-      {deleteId && (
-        <div className="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-[2rem] shadow-2xl max-w-sm w-full text-center space-y-4">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto"><AlertTriangle size={32} /></div>
-            <h3 className="text-xl font-black uppercase">Confirm Delete</h3>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 text-slate-400 font-black uppercase text-[10px]">Cancel</button>
-              <button onClick={async () => {
-                await api.delete(`/orders/${deleteId}`);
-                try { const portalRes = await api.get(`/portal/order/${deleteId}`); if (portalRes.data?.slug) await api.delete(`/portal/${portalRes.data.slug}`); } catch {}
-                setDeleteId(null); fetchOrders();
-              }} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-[10px]">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ══════════════════════════════════════════════════════════════════════
           CLIENT CHECK MODAL
           Three cases handled here, driven by clientCheckModal.mode:
@@ -1213,9 +1214,10 @@ export default function App() {
               <ClientCreateInlineForm
                 clientName={clientCheckModal.clientName}
                 contactName={clientCheckModal.contactName}
+                showToast={showToast}
                 onCreated={async (newClient) => {
                   setClientCheckModal(null);
-                  await fetchClients(); // refresh dropdown
+                  await fetchClients();
                   const emailContact = newClient.contacts?.find(ct => ct.email?.includes('@'));
                   if (emailContact?.email) {
                     try {
@@ -1228,12 +1230,12 @@ export default function App() {
                         title:       clientCheckModal.title,
                         portalUrl:   clientCheckModal.portalUrl,
                       });
-                      alert(`✅ Portal link sent to ${emailContact.email} (CC: ${CC_EMAIL})`);
+                      showToast('success', `Portal link sent to ${emailContact.email}`);
                     } catch (e) {
-                      alert('Client created but email failed: ' + e.message);
+                      showToast('error', 'Client created but email failed: ' + e.message);
                     }
                   } else {
-                    alert('Client created. Add an email address to them to send the portal link.');
+                    showToast('warning', 'Client created. Add an email address to send the portal link.');
                   }
                 }}
                 onSkip={() => setClientCheckModal(null)}
@@ -1243,9 +1245,10 @@ export default function App() {
                 clientId={clientCheckModal.clientId}
                 companyName={clientCheckModal.companyName}
                 contactName={clientCheckModal.contactName}
+                showToast={showToast}
                 onAdded={async (updatedClient) => {
                   setClientCheckModal(null);
-                  await fetchClients(); // refresh dropdown with new contact
+                  await fetchClients();
                   const newContact = updatedClient.contacts?.find(
                     ct => ct.name?.toLowerCase() === clientCheckModal.contactName?.toLowerCase()
                   );
@@ -1260,12 +1263,12 @@ export default function App() {
                         title:       clientCheckModal.title,
                         portalUrl:   clientCheckModal.portalUrl,
                       });
-                      alert(`✅ Contact added & portal link sent to ${newContact.email} (CC: ${CC_EMAIL})`);
+                      showToast('success', `Contact added & portal link sent to ${newContact.email}`);
                     } catch (e) {
-                      alert('Contact added but email failed: ' + e.message);
+                      showToast('error', 'Contact added but email failed: ' + e.message);
                     }
                   } else {
-                    alert('Contact added. No email provided — portal link not sent.');
+                    showToast('warning', 'Contact added. No email provided — portal link not sent.');
                   }
                 }}
                 onSkip={() => setClientCheckModal(null)}

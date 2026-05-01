@@ -179,193 +179,308 @@ function requireArchiver() {
 
 /**
  * Extract images from a PDF.
+ */
+/**
+ * Extract all images from a PDF using pdf-lib only — no canvas, no native deps.
  *
- * Strategy (in order of reliability):
- *   1. pdfjs-dist  — renders each page to a raw pixel buffer via canvas-like API
- *      This works on ALL PDFs regardless of internal structure (embedded, scanned, vector).
- *   2. pdf-lib fallback — direct XObject extraction for PDFs with embedded JPEG streams
- *   3. Error with install hint if neither is available
+ * Handles the three formats found in real-world product catalog PDFs:
+ *   • DCTDecode  — JPEG  (most common in scanned / photo catalogs)
+ *   • FlateDecode — raw pixel data compressed with zlib (PNG-style)
+ *   • JPXDecode  — JPEG 2000 (used by some Adobe-exported catalogs)
  *
- * Install: npm install pdfjs-dist canvas
- * (canvas is a native Node.js canvas needed by pdfjs-dist for rendering)
+ * All output is converted to WebP via sharp (already a project dependency).
+/**
+ * Extract all raster images from a PDF using pdf-lib + Node built-ins only.
+ * No canvas, no pdfjs, no native system deps beyond sharp (already required).
+ *
+ * Handles: DCTDecode (JPEG), JPXDecode (JPEG2000), FlateDecode (raw pixels / PNG).
+ * Recursively walks ALL XObject dicts at every nesting depth.
+ * Install: npm install pdf-lib
  */
 async function extractPdfPages(pdfPath) {
-  const sharp  = require('sharp');
-  const outDir = path.join(tmpDir, `pdf_${Date.now()}`);
-  fs.mkdirSync(outDir, { recursive: true });
-  const paths = [];
+  const sharp = require('sharp');
 
-  // ── Strategy 1: pdfjs-dist page rendering (most reliable) ─────────────────
-  // pdfjs-dist v4+ is pure ESM — must use dynamic import(), not require().
-  // workerSrc must be a file:// absolute URL to pdf.worker.mjs;
-  // setting it to '' silently fails in v5 (root cause of the original bug).
-  let pdfjsWorked = false;
-  try {
-    const pdfjsDir  = path.dirname(require.resolve('pdfjs-dist/package.json'));
-    const workerAbs = path.join(pdfjsDir, 'legacy', 'build', 'pdf.worker.mjs');
-    if (!fs.existsSync(workerAbs))
-      throw new Error('pdfjs-dist worker not found — run: npm install pdfjs-dist');
-    // Convert Windows backslashes and ensure the file:// scheme is correct
-    const workerSrc = 'file:///' + workerAbs.replace(/\\/g, '/').replace(/^\//, '');
-
-    let pdfjs;
-    try {
-      // v4/v5 — pure ESM
-      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    } catch {
-      // v2/v3 fallback — CJS build still available
-      pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
-      if (pdfjs.default) pdfjs = pdfjs.default;
-    }
-    if (!pdfjs?.getDocument)
-      throw new Error('pdfjs-dist not loadable — run: npm install pdfjs-dist');
-
-    pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
-
-    // Support 'canvas' (Linux/Mac native) or '@napi-rs/canvas' (Windows, no build tools)
-    let createCanvas;
-    try { createCanvas = require('canvas').createCanvas; } catch {}
-    if (!createCanvas) {
-      try { createCanvas = require('@napi-rs/canvas').createCanvas; } catch {}
-    }
-    if (!createCanvas)
-      throw new Error('No canvas module found — run: npm install @napi-rs/canvas');
-
-    const data    = new Uint8Array(fs.readFileSync(pdfPath));
-    const loadDoc = await pdfjs.getDocument({
-      data,
-      disableFontFace: true,
-      useWorkerFetch:  false,
-      isEvalSupported: false,
-    }).promise;
-    console.log(`   pdfjs: ${loadDoc.numPages} pages`);
-
-    for (let pn = 1; pn <= loadDoc.numPages; pn++) {
-      try {
-        const page     = await loadDoc.getPage(pn);
-        const viewport = page.getViewport({ scale: 2.0 }); // 2x ≈ 150 dpi
-        const w        = Math.ceil(viewport.width);
-        const h        = Math.ceil(viewport.height);
-        const cvs      = createCanvas(w, h);
-        const ctx      = cvs.getContext('2d');
-
-        // Do NOT pass a custom canvasFactory — pdfjs-dist v5 has a built-in
-        // NodeCanvasFactory that correctly uses @napi-rs/canvas. Overriding it
-        // with a custom factory causes blank white output.
-        await page.render({
-          canvasContext: ctx,
-          viewport,
-        }).promise;
-
-        const pngBuf  = typeof cvs.toBuffer === 'function'
-          ? cvs.toBuffer('image/png')
-          : Buffer.from(await cvs.encode('png'));
-        const webpBuf = await sharp(pngBuf)
-          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 90 })
-          .toBuffer();
-
-        const outPath = path.join(outDir, `page-${pn}.webp`);
-        fs.writeFileSync(outPath, webpBuf);
-        paths.push(outPath);
-        console.log(`   ✅ Rendered page ${pn} (${Math.round(webpBuf.length/1024)}KB)`);
-      } catch (pageErr) {
-        console.warn(`   ⚠ Page ${pn} render failed: ${pageErr.message}`);
-      }
-    }
-
-    if (paths.length > 0) pdfjsWorked = true;
-  } catch (e) {
-    console.warn(`   pdfjs-dist not available or failed: ${e.message}`);
-  }
-
-  if (pdfjsWorked) {
-    console.log(`   Total pages rendered: ${paths.length}`);
-    return { imagePaths: paths, outDir };
-  }
-
-  // ── Strategy 2: pdf-lib direct JPEG XObject extraction ────────────────────
-  // Works only for PDFs that embed JPEG images directly (product catalogs, etc.)
-  console.log('   Falling back to pdf-lib XObject extraction...');
   let PDFLib;
   try { PDFLib = require('pdf-lib'); }
-  catch { throw new Error('Neither pdfjs-dist nor pdf-lib is installed.\nRun: npm install pdfjs-dist canvas'); }
+  catch { throw new Error('pdf-lib not installed — run: npm install pdf-lib'); }
 
-  try {
-    const bytes  = fs.readFileSync(pdfPath);
-    const doc    = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
-    let imgCount = 0;
+  const { PDFName, PDFDocument, PDFDict, PDFArray } = PDFLib;
 
-    for (let pi = 0; pi < doc.getPageCount(); pi++) {
-      const page = doc.getPages()[pi];
-      let xobj;
-      try {
-        const resRef  = page.node.get(PDFLib.PDFName.of('Resources'));
-        if (!resRef) continue;
-        const res     = doc.context.lookupMaybe(resRef) ?? resRef;
-        const xobjRef = res.get?.(PDFLib.PDFName.of('XObject'));
-        if (!xobjRef) continue;
-        xobj = doc.context.lookupMaybe(xobjRef) ?? xobjRef;
-        if (!xobj?.entries) continue;
-      } catch { continue; }
+  const outDir = path.join(tmpDir, `pdf_${Date.now()}`);
+  fs.mkdirSync(outDir, { recursive: true });
 
-      for (const [key, ref] of xobj.entries()) {
-        try {
-          const obj  = doc.context.lookupMaybe(ref) ?? ref;
-          if (!obj) continue;
-          const dict = obj.dict ?? obj;
-          if (!dict?.get) continue;
+  const bytes = fs.readFileSync(pdfPath);
+  const doc   = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const pages = doc.getPages();
+  console.log(`   pdf-lib: ${pages.length} pages — deep-scanning all XObjects`);
 
-          const subtype = dict.get(PDFLib.PDFName.of('Subtype'));
-          if (subtype?.toString() !== '/Image') continue;
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
-          // pdf-lib stores raw bytes on .contents (Uint8Array)
-          const rawData = obj.contents;
-          if (!rawData || rawData.length < 1000) continue;
-
-          const filter = dict.get(PDFLib.PDFName.of('Filter'))?.toString() ?? '';
-
-          // Only handle JPEG — other formats need full decompression we can't do here
-          if (!filter.includes('DCTDecode')) continue;
-
-          const wVal = dict.get(PDFLib.PDFName.of('Width'));
-          const hVal = dict.get(PDFLib.PDFName.of('Height'));
-          const w = typeof wVal?.asNumber === 'function' ? wVal.asNumber() : (wVal?.value?.() ?? 0);
-          const h = typeof hVal?.asNumber === 'function' ? hVal.asNumber() : (hVal?.value?.() ?? 0);
-          if (w < 80 || h < 80) continue;
-
-          // Validate it's real JPEG (starts with FF D8)
-          if (rawData[0] !== 0xFF || rawData[1] !== 0xD8) continue;
-
-          const webpBuf = await sharp(Buffer.from(rawData))
-            .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-            .webp({ quality: 90 })
-            .toBuffer();
-
-          imgCount++;
-          const outPath = path.join(outDir, `img-p${pi+1}-${imgCount}.webp`);
-          fs.writeFileSync(outPath, webpBuf);
-          paths.push(outPath);
-          console.log(`   ✅ JPEG XObject ${imgCount}: page ${pi+1} | ${w}x${h}`);
-        } catch { /* skip this xobj */ }
+  // Safely dereference an indirect ref or return the object itself
+  const deref = (refOrObj) => {
+    if (!refOrObj) return null;
+    try {
+      // PDFRef has a tag property; lookup resolves it to the real object
+      if (typeof refOrObj.tag === 'number' || refOrObj.constructor?.name === 'PDFRef') {
+        return doc.context.lookup(refOrObj) ?? null;
       }
+      return refOrObj;
+    } catch { return null; }
+  };
+
+  // Read a numeric dict entry robustly (pdf-lib exposes multiple API shapes)
+  const numOf = (dict, key) => {
+    try {
+      const v = dict.get(PDFName.of(key));
+      if (v == null) return 0;
+      if (typeof v.asNumber === 'function') return v.asNumber();
+      if (typeof v.value    === 'function') return v.value();
+      if (typeof v          === 'number')   return v;
+      const n = parseInt(String(v), 10);
+      return isNaN(n) ? 0 : n;
+    } catch { return 0; }
+  };
+
+  // Get the dict from whatever object shape pdf-lib returns
+  const dictOf = (obj) => {
+    if (!obj) return null;
+    if (typeof obj.get === 'function') return obj;          // already a PDFDict
+    if (obj.dict && typeof obj.dict.get === 'function') return obj.dict; // PDFRawStream
+    return null;
+  };
+
+  // ── Image decoder ─────────────────────────────────────────────────────────────
+  const imagePaths = [];
+  let imgSeq = 0;
+
+  async function decodeImage(obj, pageNum, label) {
+    const dict = dictOf(obj);
+    if (!dict) return;
+
+    const subtype = dict.get(PDFName.of('Subtype'))?.toString();
+    if (subtype !== '/Image') return;
+
+    const w = numOf(dict, 'Width');
+    const h = numOf(dict, 'Height');
+    // Skip tiny images: logos, bullets, page decorations
+    if (w < 80 || h < 80) return;
+
+    // Raw bytes are on .contents for stream objects
+    const rawData = obj.contents;
+    if (!rawData || rawData.length < 256) return;
+
+    const filterVal = dict.get(PDFName.of('Filter'));
+    // Filter can be a name or an array of names — normalise to string
+    const filter = filterVal
+      ? (filterVal.toString?.() ?? JSON.stringify(filterVal))
+      : '';
+
+    imgSeq++;
+    const seq = String(imgSeq).padStart(4, '0');
+
+    try {
+      // ── DCTDecode → JPEG ─────────────────────────────────────────────────────
+      if (filter.includes('DCTDecode')) {
+        if (rawData[0] !== 0xFF || rawData[1] !== 0xD8) {
+          console.warn(`   ⚠  ${label}: DCT but no JPEG magic — skipping`);
+          imgSeq--; return;
+        }
+        const webp = await sharp(Buffer.from(rawData))
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 }).toBuffer();
+        const out = path.join(outDir, `img-${seq}-p${pageNum}-dct.webp`);
+        fs.writeFileSync(out, webp);
+        imagePaths.push(out);
+        console.log(`   ✅ DCT  ${seq} p${pageNum} ${label} | ${w}×${h} (${Math.round(rawData.length/1024)}KB)`);
+        return;
+      }
+
+      // ── JPXDecode → JPEG 2000 ────────────────────────────────────────────────
+      if (filter.includes('JPXDecode')) {
+        const webp = await sharp(Buffer.from(rawData))
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 }).toBuffer();
+        const out = path.join(outDir, `img-${seq}-p${pageNum}-jpx.webp`);
+        fs.writeFileSync(out, webp);
+        imagePaths.push(out);
+        console.log(`   ✅ JPX  ${seq} p${pageNum} ${label} | ${w}×${h}`);
+        return;
+      }
+
+      // ── FlateDecode → zlib-compressed raw pixels ─────────────────────────────
+      if (filter.includes('FlateDecode')) {
+        const { inflateSync } = require('zlib');
+        const raw = inflateSync(Buffer.from(rawData));
+
+        const csVal  = dict.get(PDFName.of('ColorSpace'));
+        const cs     = csVal?.toString?.() ?? '';
+        const bpc    = numOf(dict, 'BitsPerComponent') || 8;
+
+        let channels = 3;
+        if (cs.includes('Gray'))      channels = 1;
+        else if (cs.includes('CMYK')) channels = 4;
+
+        // PNG predictor: each row is prefixed with a 1-byte filter type tag
+        const dpVal = dict.get(PDFName.of('DecodeParms'));
+        let predictor = 1;
+        if (dpVal) {
+          const dp = deref(dpVal) ?? dpVal;
+          const dpDict = dictOf(dp);
+          if (dpDict) predictor = numOf(dpDict, 'Predictor') || 1;
+        }
+
+        let pixels = raw;
+        if (predictor >= 10) {
+          const rowBytes = Math.ceil(w * channels * bpc / 8);
+          const srcStride = rowBytes + 1; // +1 for the filter tag byte
+          const dst = Buffer.allocUnsafe(rowBytes * h);
+          for (let row = 0; row < h; row++) {
+            raw.copy(dst, row * rowBytes, row * srcStride + 1, row * srcStride + 1 + rowBytes);
+          }
+          pixels = dst;
+        }
+
+        const rawOpts = { raw: { width: w, height: h, channels } };
+        let inst = channels === 4 && cs.includes('CMYK')
+          ? sharp(Buffer.from(pixels).map(b => 255 - b), rawOpts).toColorspace('srgb')
+          : sharp(pixels, rawOpts);
+
+        const webp = await inst
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 }).toBuffer();
+        const out = path.join(outDir, `img-${seq}-p${pageNum}-flat.webp`);
+        fs.writeFileSync(out, webp);
+        imagePaths.push(out);
+        console.log(`   ✅ Flat ${seq} p${pageNum} ${label} | ${w}×${h} | ${cs||'RGB'} ${bpc}bpc`);
+        return;
+      }
+
+      // Unknown filter — log so we know what we're missing
+      console.warn(`   ⚠  Unknown filter "${filter}" p${pageNum} ${label} — skipping`);
+      imgSeq--;
+    } catch (err) {
+      console.warn(`   ⚠  Decode error p${pageNum} ${label}: ${err.message}`);
+      imgSeq--;
     }
-  } catch (e) {
-    console.warn(`   pdf-lib extraction error: ${e.message}`);
   }
 
-  if (paths.length === 0) {
+  // ── Recursive XObject walker ──────────────────────────────────────────────────
+  // Walks a Resources dict and calls decodeImage on every Image XObject found.
+  // Recurses into Form XObjects (which have their own Resources).
+  // visited set prevents infinite loops from circular references.
+  async function walkResources(resObj, pageNum, depth, visited) {
+    if (depth > 6) return; // safety cap
+    const resDict = dictOf(deref(resObj));
+    if (!resDict) return;
+
+    const xobjVal = resDict.get(PDFName.of('XObject'));
+    if (!xobjVal) return;
+
+    const xobjDict = dictOf(deref(xobjVal));
+    if (!xobjDict?.entries) return;
+
+    for (const [nameObj, ref] of xobjDict.entries()) {
+      const label = nameObj?.toString?.() ?? '?';
+      try {
+        const obj  = deref(ref);
+        if (!obj) continue;
+
+        // Avoid revisiting the same object (circular refs)
+        const objKey = ref?.objectNumber ?? label;
+        if (visited.has(objKey)) continue;
+        visited.add(objKey);
+
+        const dict = dictOf(obj);
+        if (!dict) continue;
+
+        const subtype = dict.get(PDFName.of('Subtype'))?.toString();
+
+        if (subtype === '/Image') {
+          await decodeImage(obj, pageNum, label);
+
+        } else if (subtype === '/Form') {
+          // Form XObjects can contain nested images — recurse into their Resources
+          const nestedRes = dict.get(PDFName.of('Resources'));
+          if (nestedRes) await walkResources(nestedRes, pageNum, depth + 1, visited);
+        }
+      } catch (e) {
+        console.warn(`   ⚠  XObject ${label} p${pageNum}: ${e.message}`);
+      }
+    }
+  }
+
+  // ── Main pass: walk every page ────────────────────────────────────────────────
+  for (let pi = 0; pi < pages.length; pi++) {
+    const pageNum = pi + 1;
+    try {
+      const pageRes = pages[pi].node.get(PDFName.of('Resources'));
+      if (!pageRes) {
+        console.log(`   p${pageNum}: no Resources dict`);
+        continue;
+      }
+      await walkResources(pageRes, pageNum, 0, new Set());
+    } catch (e) {
+      console.warn(`   p${pageNum} walk error: ${e.message}`);
+    }
+  }
+
+  // ── Also scan ALL objects in the PDF cross-reference table ────────────────────
+  // Some PDFs (especially InDesign exports) store image XObjects that are
+  // reachable only via the xref table, not via page Resources. This catches them.
+  if (imagePaths.length === 0) {
+    console.log('   No images via page Resources — scanning entire xref table...');
+    const visited = new Set();
+    try {
+      for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+        try {
+          if (visited.has(ref.objectNumber)) continue;
+          visited.add(ref.objectNumber);
+
+          const dict = dictOf(obj);
+          if (!dict) continue;
+
+          const subtype = dict.get(PDFName.of('Subtype'))?.toString();
+          if (subtype !== '/Image') continue;
+
+          // Guess page number from object order (best we can do without traversal)
+          await decodeImage(obj, 0, `xref#${ref.objectNumber}`);
+        } catch { /* skip bad object */ }
+      }
+    } catch (e) {
+      console.warn(`   xref scan error: ${e.message}`);
+    }
+  }
+
+  if (imagePaths.length === 0) {
+    // Log a sample of what WAS found so the user knows what kind of PDF this is
+    let sampleInfo = '';
+    try {
+      const sample = [];
+      for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+        const d = dictOf(obj);
+        if (!d) continue;
+        const type    = d.get(PDFName.of('Type'))?.toString()    ?? '';
+        const subtype = d.get(PDFName.of('Subtype'))?.toString() ?? '';
+        const filter  = d.get(PDFName.of('Filter'))?.toString()  ?? '';
+        if (type || subtype || filter) sample.push(`${type}${subtype}${filter ? ' filter='+filter : ''}`);
+        if (sample.length >= 12) break;
+      }
+      if (sample.length) sampleInfo = '\nPDF objects found: ' + [...new Set(sample)].join(', ');
+    } catch { /* ignore */ }
+
     throw new Error(
-      'No images could be extracted from this PDF.\n' +
-      'Install PDF support:\n' +
-      '  Linux/Mac: npm install pdfjs-dist canvas\n' +
-      '  Windows:   npm install pdfjs-dist @napi-rs/canvas'
+      'No raster images found in this PDF.' + sampleInfo + '\n' +
+      'The PDF likely contains only vector graphics (SVG/paths) — ' +
+      'these cannot be extracted as images without rasterising the page.\n' +
+      'If you need page renders, export the PDF pages as JPEGs from ' +
+      'Adobe Acrobat, Preview (Mac), or an online PDF-to-image converter first.'
     );
   }
 
-  console.log(`   Total images extracted: ${paths.length}`);
-  return { imagePaths: paths, outDir };
+  console.log(`   ✅ Total extracted: ${imagePaths.length} images`);
+  return { imagePaths, outDir };
 }
+
 // ── PDF: Same category — process with AI, save as draft products ──────────────
 router.post('/pdf/same-category', adminOnly, (req, res, next) => {
   pdfUpload.single('pdf')(req, res, (err) => {

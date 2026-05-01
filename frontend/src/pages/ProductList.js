@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import usePortalItems from '../hooks/usePortalItems';
 import ProductImageGallery from './ProductImageGallery'; // ← NEW: multi-image gallery + video
+import { usePopup } from '../components/AppPopups';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Creatable Select
@@ -109,6 +110,44 @@ const PromptSelector = ({ prompts, category, selectedId, onSelect, customText, o
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Product card image with skeleton loader
+// ─────────────────────────────────────────────────────────────────────────────
+const ProductImage = ({ p, getAssetUrl, onPreview }) => {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div
+      className="h-32 bg-gray-100 flex items-center justify-center relative overflow-hidden cursor-zoom-in group/img"
+      onClick={onPreview}
+    >
+      {/* Shimmer skeleton shown until image loads */}
+      {!loaded && (
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 animate-pulse" />
+      )}
+      {p.imageUrl ? (
+        <img
+          src={getAssetUrl(p.imageUrl)}
+          alt={p.name}
+          onLoad={() => setLoaded(true)}
+          className={`w-full h-full object-cover transition-all duration-300 group-hover/img:scale-110 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      ) : (
+        <div className="flex flex-col items-center gap-1 text-gray-300">
+          <ImageIcon size={24} />
+          <span className="text-[9px] font-bold uppercase">No Image</span>
+        </div>
+      )}
+      <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
+        <Info size={20} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Toast notification — now sourced from AppPopups.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 const ProductList = () => {
@@ -170,6 +209,12 @@ const ProductList = () => {
 
   // ── Image Gallery & Video modal ──────────────────────────────────────────────
   const [galleryProduct, setGalleryProduct] = useState(null); // product object or null
+
+  // ── Popups: toast + confirm dialog (themed, from AppPopups) ─────────────────
+  const { showToast, confirm, Toast, ConfirmDialog } = usePopup();
+
+  // ── Save loading state ───────────────────────────────────────────────────────
+  const [isSaving, setIsSaving] = useState(false);
 
   const getAssetUrl = (p) => p;
 
@@ -258,6 +303,7 @@ const ProductList = () => {
 
   // ─── Save product ───────────────────────────────────────────────────────────
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const data = new FormData();
       data.append('brand', formData.brand);
@@ -287,8 +333,10 @@ const ProductList = () => {
 
       if (isEditing) {
         await api.put(`/products/${currentId}`, data);
+        showToast('success', `"${formData.name}" updated successfully`);
       } else {
         await api.post('/products', data);
+        showToast('success', `"${formData.name}" added to catalogue`);
       }
 
       setShowModal(false);
@@ -296,6 +344,9 @@ const ProductList = () => {
       fetchData();
     } catch (err) {
       console.error('Save error:', err);
+      showToast('error', err.response?.data?.message || 'Failed to save product');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -479,10 +530,25 @@ const ProductList = () => {
     finally { setIsUpdatingCatalogue(false); }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-    try { await api.delete(`/products/${id}`); fetchData(); setSelectedProducts(prev => prev.filter(p => p._id !== id)); }
-    catch (err) { console.error('Delete error:', err); }
+  const handleDelete = async (id, productName) => {
+    const ok = await confirm({
+      title        : 'Delete Product',
+      message      : `"${productName}" will be permanently removed from your catalogue. This cannot be undone.`,
+      confirmLabel : 'Delete',
+      cancelLabel  : 'Cancel',
+      variant      : 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/products/${id}`);
+      fetchData();
+      setSelectedProducts(prev => prev.filter(p => p._id !== id));
+      showToast('success', `"${productName}" deleted`);
+    }
+    catch (err) {
+      console.error('Delete error:', err);
+      showToast('error', err.response?.data?.message || 'Failed to delete product');
+    }
   };
 
   const handleEditClick = (p) => {
@@ -520,6 +586,8 @@ const ProductList = () => {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto p-4 pb-28 min-h-screen bg-gray-50/50">
+      <Toast />
+      <ConfirmDialog />
 
       {/* ── Top Bar ── */}
       <div className="sticky top-0 z-40 bg-gray-50/50 pb-2">
@@ -675,12 +743,7 @@ const ProductList = () => {
                           onClick={() => toggleProductSelection(p)}>
                           <Check size={14} strokeWidth={4} />
                         </div>
-                        <div className="h-32 bg-gray-50 flex items-center justify-center relative overflow-hidden cursor-zoom-in group/img" onClick={() => setPreviewProduct(p)}>
-                          {p.imageUrl && <img src={getAssetUrl(p.imageUrl)} alt={p.name} className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" />}
-                          <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
-                            <Info size={20} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />
-                          </div>
-                        </div>
+                        <ProductImage p={p} getAssetUrl={getAssetUrl} onPreview={() => setPreviewProduct(p)} />
                         <div className="p-3 flex-grow flex flex-col justify-between">
                           <div>
                             <h3 className="font-bold text-xs text-gray-800 leading-tight line-clamp-2 mb-2">
@@ -696,7 +759,7 @@ const ProductList = () => {
                             <div className="flex gap-1">
                               <button onClick={() => setGalleryProduct(p)} className="p-1.5 hover:bg-violet-50 text-violet-400 rounded transition" title="Image Gallery & Video"><Images size={13} /></button>
                               <button onClick={() => handleEditClick(p)} className="p-1.5 hover:bg-indigo-50 text-indigo-400 rounded transition" title="Edit"><Pencil size={13} /></button>
-                              <button onClick={() => handleDelete(p._id)} className="p-1.5 hover:bg-red-50 text-red-400 rounded transition" title="Delete"><Trash2 size={13} /></button>
+                              <button onClick={() => handleDelete(p._id, p.name)} className="p-1.5 hover:bg-red-50 text-red-400 rounded transition" title="Delete"><Trash2 size={13} /></button>
                             </div>
                           </div>
                         </div>
@@ -1003,8 +1066,14 @@ const ProductList = () => {
             {/* Footer */}
             <div className="p-6 border-t flex justify-end gap-3">
               <button onClick={() => { setShowModal(false); resetForm(); }} className="px-6 py-2 text-gray-400 font-bold uppercase text-xs">Cancel</button>
-              <button onClick={handleSave} className="px-10 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-xs hover:bg-indigo-700 shadow-lg">
-                {isEditing ? 'Update Product' : 'Save Product'}
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-10 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-xs hover:bg-indigo-700 shadow-lg disabled:opacity-60 flex items-center gap-2"
+              >
+                {isSaving
+                  ? <><Loader2 size={13} className="animate-spin" />{isEditing ? 'Updating…' : 'Saving…'}</>
+                  : (isEditing ? 'Update Product' : 'Save Product')}
               </button>
             </div>
           </div>
@@ -1262,11 +1331,13 @@ const ProductList = () => {
       )}
 
       <style>{`
+        /* modal-up used by add/edit modal animation */
         @keyframes modal-up {
           0%   { transform: translateY(20px); opacity: 0; }
           100% { transform: translateY(0);    opacity: 1; }
         }
         .animate-modal-up { animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* Scrollbar utilities — also defined in AppPopupStyles but safe to repeat */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
