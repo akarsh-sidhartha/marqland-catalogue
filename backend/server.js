@@ -21,7 +21,7 @@ const { startTrackingScheduler } = require('./services/shipmentTrackingService')
  */
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:3000', 'https://internalportal.marqland.com', 'https://www.marqland.com'];
+  : ['http://localhost:3000', 'http://localhost:5000',, 'https://internalportal.marqland.com', 'https://www.marqland.com'];
 
 app.use(cors({
   origin: (origin, callback) => {

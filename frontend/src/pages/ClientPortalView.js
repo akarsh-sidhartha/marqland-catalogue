@@ -1625,6 +1625,14 @@ const OffsiteCards = ({ items, onZoom, portal }) => {
                   {item.doublePrice>0&&<PBox label="Double" value={item.doublePrice} sub="per night"/>}
                   {item.triplePrice>0&&<PBox label="Triple" value={item.triplePrice} sub="per night"/>}
                   {item.quadPrice>0&&<PBox label="Quad" value={item.quadPrice} sub="per night"/>}
+                  {/* Room Categories */}
+                  {(item.roomCategories||[]).filter(cat=>!calcState[item._id]?.disabledRooms?.[`cat_${cat._id||cat.name}`]).map(cat=>(
+                    <React.Fragment key={cat._id||cat.name}>
+                      {cat.singlePrice>0&&<PBox label={`${cat.name} · Single`} value={cat.singlePrice} sub="per night"/>}
+                      {cat.doublePrice>0&&<PBox label={`${cat.name} · Double`} value={cat.doublePrice} sub="per night"/>}
+                      {cat.triplePrice>0&&<PBox label={`${cat.name} · Triple`} value={cat.triplePrice} sub="per night"/>}
+                    </React.Fragment>
+                  ))}
                   {item.djCost>0&&addonVisible(item._id,'djCost')&&<PBox label="DJ" value={item.djCost} amber/>}
                   {item.licenseFeeDJ>0&&addonVisible(item._id,'licenseFeeDJ')&&<PBox label="DJ Licence" value={item.licenseFeeDJ} amber/>}
                   {item.cocktailSnacks>0&&addonVisible(item._id,'cocktailSnacks')&&<PBox label="Cocktails" value={item.cocktailSnacks} amber/>}
@@ -1770,7 +1778,8 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
 
   const initProp = item => {
     const saved = persistedCalc[item._id] || {};
-    return {
+    // Start with base keys
+    const state = {
       nights: saved.nights ?? 1,
       single: saved.single ?? 0,
       double: saved.double ?? 0,
@@ -1780,20 +1789,28 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
       pkgId:  saved.pkgId  !== undefined ? saved.pkgId : (item.dayPackages?.length > 0 ? 0 : null),
       addons: saved.addons || {},
     };
+    // Restore any cat_* room counts set by team or client in a previous session
+    Object.keys(saved).forEach(k => {
+      if (k.startsWith('cat_')) state[k] = saved[k];
+    });
+    return state;
   };
 
   const [calcs,      setCalcs]      = React.useState(() => { const m={}; offsiteItems.forEach(i=>{ m[i._id]=initProp(i); }); return m; });
+  const calcsRef = React.useRef(calcs);
   const [propOpen,   setPropOpen]   = React.useState(() => { const m={}; offsiteItems.forEach((i,idx)=>{ m[i._id]=idx===0; }); return m; });
   const [typeFilter, setTypeFilter] = React.useState('all');
 
   // Debounced persist to DB — fires 800ms after last change, fire-and-forget
   const persistTimer = React.useRef(null);
   const persistCalcState = React.useCallback((newCalcs) => {
+    calcsRef.current = newCalcs;
     clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(() => {
-      // Merge local calcs back into the full calculatorState (preserving disabledAddons/disabledRooms set by team)
+      // Merge local calcs into the full calculatorState, preserving team-set keys
+      // (disabledAddons, disabledRooms, cat_* counts from team editor)
       const merged = { ...persistedCalc };
-      Object.entries(newCalcs).forEach(([id, c]) => {
+      Object.entries(calcsRef.current).forEach(([id, c]) => {
         merged[id] = { ...(persistedCalc[id] || {}), ...c };
       });
       fetch(`/api/portal/public/${slug}/calculator`, {
@@ -1851,11 +1868,29 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
       const n = Math.max(1,c.nights||1);
       base = (item.singlePrice||0)*(c.single||0)*n + (item.doublePrice||0)*(c.double||0)*n
            + (item.triplePrice||0)*(c.triple||0)*n + (item.quadPrice||0)*(c.quad||0)*n;
+      // Add room category costs
+      (item.roomCategories||[]).forEach(cat => {
+        const catId = cat._id || cat.name;
+        if (persistedCalc[item._id]?.disabledRooms?.[`cat_${catId}`]) return;
+        ['single','double','triple'].forEach(rk => {
+          const compKey = `cat_${catId}_${rk}`;
+          if (persistedCalc[item._id]?.disabledRooms?.[compKey]) return;
+          base += (cat[`${rk}Price`]||0) * (c[compKey]||0) * n;
+        });
+      });
     }
     // Guest headcount for per-person addon multiplication
     const guests = isDayOut
       ? (c.pax||0)
-      : (c.single||0)*1 + (c.double||0)*2 + (c.triple||0)*3 + (c.quad||0)*4;
+      : (()=>{
+          let g = (c.single||0)*1 + (c.double||0)*2 + (c.triple||0)*3 + (c.quad||0)*4;
+          (item.roomCategories||[]).forEach(cat => {
+            const catId = cat._id || cat.name;
+            if (persistedCalc[item._id]?.disabledRooms?.[`cat_${catId}`]) return;
+            g += (c[`cat_${catId}_single`]||0)*1 + (c[`cat_${catId}_double`]||0)*2 + (c[`cat_${catId}_triple`]||0)*3;
+          });
+          return g;
+        })();
     const addonCost = addonList(item).reduce((s,a) => {
       if (!c.addons[a.key]) return s;
       return s + (a.perPerson ? a.value * Math.max(1, guests) : a.value);
@@ -2191,6 +2226,43 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
                                     </td>
                                   </tr>
                                 ))}
+                                {/* Room Categories */}
+                                {(item.roomCategories||[]).map(cat=>{
+                                  const catId = cat._id || cat.name;
+                                  if(persistedCalc[item._id]?.disabledRooms?.[`cat_${catId}`]) return null;
+                                  const catRows = [
+                                    {key:'single',label:'Single',price:cat.singlePrice,guests:1},
+                                    {key:'double',label:'Double',price:cat.doublePrice,guests:2},
+                                    {key:'triple',label:'Triple',price:cat.triplePrice,guests:3},
+                                  ].filter(r=>r.price>0 && !(persistedCalc[item._id]?.disabledRooms?.[`cat_${catId}_${r.key}`]));
+                                  if(catRows.length===0) return null;
+                                  return (
+                                    <React.Fragment key={catId}>
+                                      <tr>
+                                        <td colSpan={4} style={{paddingTop:10,paddingBottom:4,fontFamily:"'Jost',sans-serif",fontSize:9,color:'#b8975a',letterSpacing:'0.18em',textTransform:'uppercase'}}>{cat.name}</td>
+                                      </tr>
+                                      {catRows.map(r=>{
+                                        const compKey=`cat_${catId}_${r.key}`;
+                                        return (
+                                          <tr key={compKey} style={{borderTop:'1px solid rgba(0,0,0,0.05)'}}>
+                                            <td style={{padding:'9px 0 9px 8px',fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:'#1a1a1a'}}>{r.label}</td>
+                                            <td style={{padding:'9px 0',fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:14,color:'#888',textAlign:'center'}}>{INR(r.price)}</td>
+                                            <td style={{padding:'9px 8px',textAlign:'left'}}>
+                                              <input type="number" min="0" value={c[compKey]||''} placeholder="0"
+                                                onChange={e=>upd(item._id,compKey,Math.max(0,Number(e.target.value)||0))}
+                                                onFocus={e=>e.target.style.borderColor='#b8975a'}
+                                                onBlur={e=>e.target.style.borderColor='rgba(0,0,0,0.12)'}
+                                                style={{...inputSt,width:64}}/>
+                                            </td>
+                                            <td style={{padding:'9px 0',fontFamily:"'Jost',sans-serif",fontSize:12,color:'#aaa',textAlign:'center'}}>
+                                              {((c[compKey]||0)*r.guests)>0?`${(c[compKey]||0)*r.guests} guests`:'—'}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </React.Fragment>
+                                  );
+                                })}
                               </tbody>
                             </table>
                             {/* Nights stepper */}
@@ -2207,8 +2279,18 @@ const CostCalculator = ({ portal, wishlisted=new Set() }) => {
                             </div>
                             {/* Guest summary tiles */}
                             {(()=>{
-                              const tG=(c.single||0)*1+(c.double||0)*2+(c.triple||0)*3+(c.quad||0)*4;
-                              const tR=(c.single||0)+(c.double||0)+(c.triple||0)+(c.quad||0);
+                              let tG=(c.single||0)*1+(c.double||0)*2+(c.triple||0)*3+(c.quad||0)*4;
+                              let tR=(c.single||0)+(c.double||0)+(c.triple||0)+(c.quad||0);
+                              (item.roomCategories||[]).forEach(cat=>{
+                                const catId=cat._id||cat.name;
+                                if(persistedCalc[item._id]?.disabledRooms?.[`cat_${catId}`]) return;
+                                ['single','double','triple'].forEach((rk,ri)=>{
+                                  const compKey=`cat_${catId}_${rk}`;
+                                  if(persistedCalc[item._id]?.disabledRooms?.[compKey]) return;
+                                  const cnt=c[compKey]||0;
+                                  tR+=cnt; tG+=cnt*(ri+1);
+                                });
+                              });
                               if(tG===0) return null;
                               return (
                                 <div style={{marginTop:12,padding:'8px 12px',background:'rgba(184,151,90,0.05)',border:'1px solid rgba(184,151,90,0.15)',display:'flex',gap:20}}>

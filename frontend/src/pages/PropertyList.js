@@ -98,6 +98,8 @@ const EMPTY_FORM = {
   purchasePriceDouble: '', marginDouble: 15, doublePrice: '',
   purchasePriceTriple: '', marginTriple: 15, triplePrice: '',
   purchasePriceQuad:   '', marginQuad:   15, quadPrice:   '',
+  // Configurable room categories (e.g. "Premium", "Luxury")
+  roomCategories: [],
   // Shared add-on margin (applies to all 4 standard add-ons + adhoc)
   addonMargin:            15,
   purchaseDJ:             '', djCost:         '', djCostPerPerson:         false,
@@ -220,6 +222,20 @@ const PropertyList = () => {
             sellingPrice:  Number(a.sellingPrice)  || 0,
             perPerson:     !!a.perPerson,
           })),
+        roomCategories: (formData.roomCategories || [])
+          .filter(rc => rc.name.trim())
+          .map(rc => ({
+            name:                rc.name.trim(),
+            purchasePriceSingle: Number(rc.purchasePriceSingle) || 0,
+            marginSingle:        Number(rc.marginSingle)        || 15,
+            singlePrice:         Number(rc.singlePrice)         || 0,
+            purchasePriceDouble: Number(rc.purchasePriceDouble) || 0,
+            marginDouble:        Number(rc.marginDouble)        || 15,
+            doublePrice:         Number(rc.doublePrice)         || 0,
+            purchasePriceTriple: Number(rc.purchasePriceTriple) || 0,
+            marginTriple:        Number(rc.marginTriple)        || 15,
+            triplePrice:         Number(rc.triplePrice)         || 0,
+          })),
         dayPackages: (formData.dayPackages || [])
           .filter(pkg => pkg.name || pkg.purchasePrice)
           .map(pkg => ({
@@ -297,6 +313,18 @@ const PropertyList = () => {
         purchasePrice: String(a.purchasePrice || ''),
         sellingPrice:  String(a.sellingPrice  || ''),
         perPerson:     !!a.perPerson,
+      })),
+      roomCategories: (p.roomCategories || []).map(rc => ({
+        name:                rc.name                || '',
+        purchasePriceSingle: String(rc.purchasePriceSingle || ''),
+        marginSingle:        rc.marginSingle         ?? 15,
+        singlePrice:         String(rc.singlePrice   || ''),
+        purchasePriceDouble: String(rc.purchasePriceDouble || ''),
+        marginDouble:        rc.marginDouble         ?? 15,
+        doublePrice:         String(rc.doublePrice   || ''),
+        purchasePriceTriple: String(rc.purchasePriceTriple || ''),
+        marginTriple:        rc.marginTriple         ?? 15,
+        triplePrice:         String(rc.triplePrice   || ''),
       })),
       dayPackages: (p.dayPackages && p.dayPackages.length > 0)
         ? p.dayPackages.map(pkg => ({
@@ -611,6 +639,107 @@ const PropertyList = () => {
                   <OccupancyPricing label="Quad Occupancy"
                     costKey="purchasePriceQuad" marginKey="marginQuad" sellKey="quadPrice"
                     formData={formData} setFormData={setFormData} />
+
+                  {/* ── Room Categories (e.g. Premium, Luxury) ── */}
+                  <div className="pt-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Room Categories</div>
+                        <div className="text-[9px] text-indigo-400 mt-0.5">e.g. Premium, Luxury — each with Single / Double / Triple pricing</div>
+                      </div>
+                      <button type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          roomCategories: [...(formData.roomCategories || []), {
+                            name: '', 
+                            purchasePriceSingle: '', marginSingle: 15, singlePrice: '',
+                            purchasePriceDouble: '', marginDouble: 15, doublePrice: '',
+                            purchasePriceTriple: '', marginTriple: 15, triplePrice: '',
+                          }],
+                        })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase transition-colors">
+                        <Plus size={11} /> Add Category
+                      </button>
+                    </div>
+                    {(formData.roomCategories || []).length === 0 && (
+                      <div className="text-[10px] text-slate-300 italic text-center py-2 bg-white border border-dashed border-indigo-100 rounded-xl">No extra categories — Base pricing above is always shown</div>
+                    )}
+                    {(formData.roomCategories || []).map((rc, rci) => {
+                      const setRc = (field, val) => {
+                        const next = (formData.roomCategories || []).map((c, i) => {
+                          if (i !== rci) return c;
+                          const updated = { ...c, [field]: val };
+                          // Auto-recalc sell prices when cost or margin changes
+                          if (field === 'purchasePriceSingle' || field === 'marginSingle')
+                            updated.singlePrice = calcSell(field === 'purchasePriceSingle' ? val : c.purchasePriceSingle, field === 'marginSingle' ? val : c.marginSingle);
+                          if (field === 'purchasePriceDouble' || field === 'marginDouble')
+                            updated.doublePrice = calcSell(field === 'purchasePriceDouble' ? val : c.purchasePriceDouble, field === 'marginDouble' ? val : c.marginDouble);
+                          if (field === 'purchasePriceTriple' || field === 'marginTriple')
+                            updated.triplePrice = calcSell(field === 'purchasePriceTriple' ? val : c.purchasePriceTriple, field === 'marginTriple' ? val : c.marginTriple);
+                          return updated;
+                        });
+                        setFormData({ ...formData, roomCategories: next });
+                      };
+                      return (
+                        <div key={rci} className="bg-white border border-indigo-200 rounded-xl p-3 space-y-3 mb-3">
+                          {/* Category header row */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Category Name</label>
+                              <input value={rc.name} onChange={e => setRc('name', e.target.value)}
+                                placeholder="e.g. Premium, Luxury, Deluxe…"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-bold outline-none focus:border-indigo-300 transition-colors" />
+                            </div>
+                            <button type="button"
+                              onClick={() => setFormData({ ...formData, roomCategories: (formData.roomCategories || []).filter((_, i) => i !== rci) })}
+                              className="mt-4 p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors flex-shrink-0">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          {/* 3 occupancy rows */}
+                          {[
+                            { label: 'Single', costKey: 'purchasePriceSingle', marginKey: 'marginSingle', sellKey: 'singlePrice' },
+                            { label: 'Double', costKey: 'purchasePriceDouble', marginKey: 'marginDouble', sellKey: 'doublePrice' },
+                            { label: 'Triple', costKey: 'purchasePriceTriple', marginKey: 'marginTriple', sellKey: 'triplePrice' },
+                          ].map(({ label, costKey, marginKey, sellKey }) => (
+                            <div key={sellKey} className="bg-slate-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+                              <div className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">{label} Occupancy</div>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                  <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cost price</label>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={rc[costKey]}
+                                      onChange={e => setRc(costKey, e.target.value.replace(/[^0-9]/g, ''))}
+                                      className="w-full bg-white border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm font-bold outline-none focus:border-indigo-300 transition-colors" />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Margin %</label>
+                                  <div className="relative">
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={rc[marginKey]}
+                                      onChange={e => setRc(marginKey, e.target.value.replace(/[^0-9]/g, ''))}
+                                      className="w-full bg-white border border-slate-200 rounded-lg px-2 pr-6 py-1.5 text-sm font-bold outline-none focus:border-indigo-300 transition-colors text-center" />
+                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Sell price</label>
+                                  <div className="relative bg-indigo-50 border border-indigo-200 rounded-lg px-2 pl-5 py-1.5 flex items-center">
+                                    <span className="absolute left-2 text-indigo-400 text-xs font-bold">₹</span>
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={rc[sellKey]}
+                                      onChange={e => setRc(sellKey, e.target.value.replace(/[^0-9]/g, ''))}
+                                      className="w-full bg-transparent text-sm font-black text-indigo-700 outline-none" />
+                                  </div>
+                                  <div className="text-[8px] text-slate-300 mt-0.5">Auto-calc · editable</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   {/* ── Shared Add-on Margin ── */}
                   <div className="bg-indigo-100 border border-indigo-200 rounded-xl p-3 flex items-center gap-3">

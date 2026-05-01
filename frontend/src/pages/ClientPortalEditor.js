@@ -31,6 +31,7 @@ const ClientPortalEditor = ({ order, onClose }) => {
   const [shipments, setShipments]   = useState([]);
   const [shipmentsLoading, setShipmentsLoading] = useState(false);
   const [shipmentSearch, setShipmentSearch] = useState('');
+  const [syncingOffsite, setSyncingOffsite] = useState(false);
   const chatEndRef         = useRef(null);
   const chatFileRef        = useRef(null);
   const pollTimer          = useRef(null);
@@ -209,6 +210,19 @@ const ClientPortalEditor = ({ order, onClose }) => {
       setChatFiles([]);
       await loadPortal();
     } finally { setSendingMsg(false); }
+  };
+
+  const syncOffsite = async () => {
+    if (!portal || syncingOffsite) return;
+    setSyncingOffsite(true);
+    try {
+      const res = await api.post(`/portal/${portal.slug}/sync-offsite`);
+      setPortal(res.data.portal || res.data);
+    } catch (err) {
+      console.error('sync-offsite failed:', err);
+    } finally {
+      setSyncingOffsite(false);
+    }
   };
 
   const saveMeta = async () => {
@@ -462,6 +476,22 @@ const ClientPortalEditor = ({ order, onClose }) => {
                   await saveCalcState(newState);
                 };
 
+                const toggleCatRoomDisabled = async (itemId, catId, roomKey) => {
+                  const cur = getItemState(itemId);
+                  const disabled = cur.disabledRooms || {};
+                  const compositeKey = `cat_${catId}_${roomKey}`;
+                  const newState = { ...calcState, [itemId]: { ...cur, disabledRooms: { ...disabled, [compositeKey]: !disabled[compositeKey] } } };
+                  await saveCalcState(newState);
+                };
+
+                const setCatRoomCount = async (itemId, catId, roomKey, val) => {
+                  const count = Math.max(0, Number(val) || 0);
+                  const cur = getItemState(itemId);
+                  const compositeKey = `cat_${catId}_${roomKey}`;
+                  const newState = { ...calcState, [itemId]: { ...cur, [compositeKey]: count } };
+                  await saveCalcState(newState);
+                };
+
                 const toggleAddonDisabled = async (itemId, addonKey) => {
                   const cur = getItemState(itemId);
                   const disabled = cur.disabledAddons || {};
@@ -469,7 +499,19 @@ const ClientPortalEditor = ({ order, onClose }) => {
                   await saveCalcState(newState);
                 };
 
-                return items.map((item, idx) => {
+                return (
+                  <div>
+                    {/* Sync button — refreshes roomCategories from source Properties */}
+                    <div className="flex justify-end mb-2 px-1">
+                      <button onClick={syncOffsite} disabled={syncingOffsite}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg border border-indigo-200 transition-all disabled:opacity-50">
+                        {syncingOffsite
+                          ? <><Loader2 size={11} className="animate-spin" /> Syncing…</>
+                          : <><RefreshCw size={11} /> Sync room categories</>
+                        }
+                      </button>
+                    </div>
+                    {items.map((item, idx) => {
                   const isDayOut    = item.type !== 'Night Stay';
                   const stdVisible  = STD_ADDONS.filter(a => (item[a.priceKey]||0) > 0);
                   const adhocVisible = (item.adhocAddons||[]).filter(a => (a.sellingPrice||0) > 0);
@@ -566,6 +608,70 @@ const ClientPortalEditor = ({ order, onClose }) => {
                           </div>
                         )}
 
+                        {/* ── Room Category toggles (per-category: on/off + counts) ── */}
+                        {!isDayOut && (item.roomCategories||[]).length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                              Room Categories <span className="font-normal normal-case tracking-normal text-slate-300">— toggle off to hide a category</span>
+                            </div>
+                            {(item.roomCategories||[]).map(cat => {
+                              const catRooms = [
+                                { key:'single', label:'Single', price: cat.singlePrice },
+                                { key:'double', label:'Double', price: cat.doublePrice },
+                                { key:'triple', label:'Triple', price: cat.triplePrice },
+                              ].filter(r => r.price > 0);
+                              if (catRooms.length === 0) return null;
+                              const catId = cat._id || cat.name;
+                              const catDisabledKey = `cat_${catId}`;
+                              const isCatOff = !!disabledRooms[catDisabledKey];
+                              return (
+                                <div key={catId} className="border border-slate-200 rounded-lg mb-2 overflow-hidden">
+                                  {/* Category header toggle */}
+                                  <div className="flex items-center gap-2 px-2.5 py-2 bg-slate-50">
+                                    <button onClick={() => toggleRoomDisabled(item._id, catDisabledKey)}
+                                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isCatOff ? 'bg-slate-200' : 'bg-indigo-500'}`}>
+                                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isCatOff ? 'translate-x-0' : 'translate-x-4'}`}/>
+                                    </button>
+                                    <span className={`text-[11px] font-black uppercase tracking-widest ${isCatOff ? 'text-slate-300' : 'text-indigo-600'}`}>{cat.name}</span>
+                                  </div>
+                                  {/* Per-room-type rows — hidden when category is off */}
+                                  {!isCatOff && (
+                                    <div className="px-2.5 py-2 space-y-1.5">
+                                      {catRooms.map(r => {
+                                        const compositeKey = `cat_${catId}_${r.key}`;
+                                        const isOff = !!disabledRooms[compositeKey];
+                                        const roomCount = itemState[compositeKey] ?? '';
+                                        return (
+                                          <div key={r.key} className="flex items-center gap-2">
+                                            <button onClick={() => toggleCatRoomDisabled(item._id, catId, r.key)}
+                                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isOff ? 'bg-slate-200' : 'bg-indigo-400'}`}>
+                                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isOff ? 'translate-x-0' : 'translate-x-4'}`}/>
+                                            </button>
+                                            <span className={`text-[11px] font-medium w-12 shrink-0 ${isOff ? 'text-slate-300' : 'text-slate-600'}`}>{r.label}</span>
+                                            <span className="text-[10px] text-slate-400 flex-1">₹{Number(r.price).toLocaleString('en-IN')}/night</span>
+                                            {!isOff && (
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <button onClick={() => setCatRoomCount(item._id, catId, r.key, Math.max(0,(Number(roomCount)||0)-1))}
+                                                  className="w-5 h-5 border border-slate-200 bg-white rounded flex items-center justify-center text-slate-500 hover:border-indigo-300 text-xs">−</button>
+                                                <input type="number" min="0" value={roomCount} placeholder="0"
+                                                  onChange={e => setCatRoomCount(item._id, catId, r.key, e.target.value)}
+                                                  className="w-12 text-center border border-slate-200 rounded bg-white px-1 py-0.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-400 transition-colors"/>
+                                                <button onClick={() => setCatRoomCount(item._id, catId, r.key, (Number(roomCount)||0)+1)}
+                                                  className="w-5 h-5 border border-slate-200 bg-white rounded flex items-center justify-center text-slate-500 hover:border-indigo-300 text-xs">+</button>
+                                                <span className="text-[9px] text-slate-400 w-10">rooms</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {/* ── Addon visibility toggles ── */}
                         {hasAddons && (
                           <div>
@@ -608,7 +714,9 @@ const ClientPortalEditor = ({ order, onClose }) => {
                       </div>
                     </div>
                   );
-                });
+                })}
+                  </div>
+                );
               })()
             )}
 

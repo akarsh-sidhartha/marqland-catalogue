@@ -55,6 +55,15 @@ const portalDayPkgSchema = new mongoose.Schema({
   sellingPrice: { type: Number, default: 0 },
 }, { _id: false });
 
+// Room category carried from Property into the portal snapshot
+// (selling prices only — no purchase data sent to client)
+const portalRoomCategorySchema = new mongoose.Schema({
+  name:         { type: String, required: true },   // e.g. "Premium"
+  singlePrice:  { type: Number, default: 0 },
+  doublePrice:  { type: Number, default: 0 },
+  triplePrice:  { type: Number, default: 0 },
+}, { _id: true });
+
 // Adhoc add-on carried from Property into the portal snapshot
 const portalAddonSchema = new mongoose.Schema({
   name:         { type: String, required: true },
@@ -104,6 +113,9 @@ const offsiteItemSchema = new mongoose.Schema({
   licenseFeeDJPerPerson:   { type: Boolean, default: false },
   cocktailSnacksPerPerson: { type: Boolean, default: true  }, // default on — cocktails/snacks are always per head
   banquetHallPerPerson:    { type: Boolean, default: false },
+
+  // Configurable room categories (e.g. "Premium", "Luxury") — each with single/double/triple
+  roomCategories:  [portalRoomCategorySchema],
 
   // Dynamic adhoc add-ons
   adhocAddons:    [portalAddonSchema],

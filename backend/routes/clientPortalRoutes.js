@@ -24,6 +24,7 @@ const router         = express.Router();
 const ClientPortal   = require('../models/ClientPortal');
 const OrderInquiry   = require('../models/orderInquiry');
 const Product        = require('../models/product');
+const Property       = require('../models/Property');
 const multer         = require('multer');
 const path           = require('path');
 const fs             = require('fs');
@@ -254,6 +255,34 @@ router.put('/:slug/items', async (req, res) => {
     if (portal.type === 'offsite' && offsiteItems) portal.offsiteItems = offsiteItems;
 
     await portal.save();
+
+    // ── Auto-enrich offsite items: pull roomCategories from live Property ────
+    if (portal.type === 'offsite' && (portal.offsiteItems || []).length > 0) {
+      try {
+        const propIds = portal.offsiteItems.map(i => i.propertyId).filter(Boolean);
+        if (propIds.length > 0) {
+          const properties = await Property.find({ _id: { $in: propIds } }).lean();
+          const propMap = new Map(properties.map(p => [p._id.toString(), p]));
+          portal.offsiteItems = portal.offsiteItems.map(item => {
+            const src = propMap.get(String(item.propertyId));
+            if (!src) return item;
+            const obj = item.toObject ? item.toObject() : { ...item };
+            // Snapshot room categories — selling prices only (no cost data for client)
+            const roomCategories = (src.roomCategories || []).map(rc => ({
+              _id:         rc._id,
+              name:        rc.name,
+              singlePrice: rc.singlePrice || 0,
+              doublePrice: rc.doublePrice || 0,
+              triplePrice: rc.triplePrice || 0,
+            }));
+            return { ...obj, roomCategories };
+          });
+          await portal.save();
+        }
+      } catch (enrichErr) {
+        console.warn('[items PUT offsite-enrich] skipped:', enrichErr.message);
+      }
+    }
 
     // Auto-sync: immediately enrich new product items with gallery + video
     if (portal.type === 'product' && (portal.productItems || []).length > 0) {
@@ -748,6 +777,52 @@ router.post('/:slug/sync-products', async (req, res) => {
     res.json({ synced, total: items.length, portal });
   } catch (err) {
     console.error('[sync-products] error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/:slug/sync-offsite
+ * Re-enriches all offsite items in the portal with the latest roomCategories
+ * from their source Property. Safe to call at any time.
+ */
+router.post('/:slug/sync-offsite', async (req, res) => {
+  try {
+    const portal = await ClientPortal.findOne({ slug: req.params.slug });
+    if (!portal) return res.status(404).json({ message: 'Portal not found.' });
+    if (portal.type !== 'offsite') {
+      return res.status(400).json({ message: 'sync-offsite only applies to offsite portals.' });
+    }
+
+    const items = portal.offsiteItems || [];
+    if (items.length === 0) return res.json({ synced: 0, portal });
+
+    const propIds = items.map(i => i.propertyId).filter(Boolean);
+    if (propIds.length === 0) return res.json({ synced: 0, portal });
+
+    const properties = await Property.find({ _id: { $in: propIds } }).lean();
+    const propMap = new Map(properties.map(p => [p._id.toString(), p]));
+
+    let synced = 0;
+    portal.offsiteItems = items.map(item => {
+      const src = propMap.get(String(item.propertyId));
+      if (!src) return item;
+      synced++;
+      const obj = item.toObject ? item.toObject() : { ...item };
+      const roomCategories = (src.roomCategories || []).map(rc => ({
+        _id:         rc._id,
+        name:        rc.name,
+        singlePrice: rc.singlePrice || 0,
+        doublePrice: rc.doublePrice || 0,
+        triplePrice: rc.triplePrice || 0,
+      }));
+      return { ...obj, roomCategories };
+    });
+
+    await portal.save();
+    res.json({ synced, total: items.length, portal });
+  } catch (err) {
+    console.error('[sync-offsite] error:', err.message);
     res.status(500).json({ message: err.message });
   }
 });

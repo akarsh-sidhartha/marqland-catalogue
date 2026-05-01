@@ -22,6 +22,23 @@ const dayPackageSchema = new mongoose.Schema({
 }, { _id: true });
 
 /**
+ * Room Category — configurable tiers beyond the base single/double/triple/quad
+ * e.g. "Premium", "Luxury", "Deluxe". Each category has single/double/triple pricing.
+ */
+const roomCategorySchema = new mongoose.Schema({
+  name:                 { type: String, required: true },   // e.g. "Premium"
+  singlePrice:          { type: Number, default: 0 },
+  purchasePriceSingle:  { type: Number, default: 0 },
+  marginSingle:         { type: Number, default: 15 },
+  doublePrice:          { type: Number, default: 0 },
+  purchasePriceDouble:  { type: Number, default: 0 },
+  marginDouble:         { type: Number, default: 15 },
+  triplePrice:          { type: Number, default: 0 },
+  purchasePriceTriple:  { type: Number, default: 0 },
+  marginTriple:         { type: Number, default: 15 },
+}, { _id: true });
+
+/**
  * Adhoc Add-on — dynamic extras beyond the 4 standard add-ons
  * sellingPrice is auto-calculated from purchasePrice + addonMargin (property-level)
  */
@@ -108,6 +125,9 @@ const propertySchema = new mongoose.Schema({
   purchaseBanquetHall:    { type: Number, default: 0 },
   banquetHall:            { type: Number, default: 0 }, // selling price
   banquetHallPerPerson:   { type: Boolean, default: false },
+
+  // Configurable room categories (e.g. "Premium", "Luxury") — each has single/double/triple pricing
+  roomCategories: [roomCategorySchema],
 
   // Adhoc add-ons — unlimited extras
   adhocAddons: [adhocAddonSchema],
