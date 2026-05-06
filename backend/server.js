@@ -1,43 +1,63 @@
 const dotenv = require('dotenv');
-// ⚠ MUST call before any require that reads process.env (authRoutes, msGraph, etc.)
+// ⚠ MUST call before any require that reads process.env
 dotenv.config();
 
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const cron = require('node-cron');
 
 const app = express();
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const whatsappService = require('./services/whatsappService');
 const { startScheduler } = require('./services/trendingProductService');
 const { startTrackingScheduler } = require('./services/shipmentTrackingService');
 
 /**
- * 1. CORS CONFIGURATION
- * Allows other laptops in the office to make requests to this server.
- * Restricts to known origins for security — update ALLOWED_ORIGINS in .env as needed.
+ * ─── CORS CONFIGURATION ───────────────────────────────────────────────────────
+ *
+ * DEV:  Allows localhost:3000 (internal portal) and localhost:3001 (public site)
+ * PROD: Allows only the two live domains
+ *
+ * Update ALLOWED_ORIGINS in .env to override for any environment.
  */
+const defaultOrigins = IS_PRODUCTION
+  ? [
+      'https://internalportal.marqland.com',
+      'https://www.marqland.com',
+      'https://marqland.com',
+    ]
+  : [
+      'http://localhost:3000', // DEV: Internal portal React dev server
+      'http://localhost:3001', // DEV: Public site React dev server
+      'http://localhost:5000',
+    ];
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:3000', 'http://localhost:5000',, 'https://internalportal.marqland.com', 'https://www.marqland.com'];
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : defaultOrigins;
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, curl, Postman)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    // Strip trailing slash — browsers sometimes send it, sometimes don't
+    const normalised = origin?.replace(/\/$/, '');
+    if (!normalised || allowedOrigins.includes(normalised)) {
       callback(null, true);
     } else {
       callback(new Error(`CORS policy: origin '${origin}' not allowed`));
     }
   },
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,  // required for cookies (authenticateStatic) to work cross-origin
 }));
 
-// FIX: Removed duplicate express.json() — keeping only the one with size limit
-app.use(express.json({ limit: '100mb' })); // Reduced from 500mb — adjust if large image uploads are required
+app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // ─── Route Imports ────────────────────────────────────────────────────────────
@@ -45,7 +65,7 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 // www.marqland.com routes
 const publicSiteRoutes = require('./routes/public-site/publicSiteRoutes');
 
-// www.internalportal.marqland.com Routes
+// www.internalportal.marqland.com routes
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
@@ -58,6 +78,7 @@ const SamplesProvided = require('./routes/samplesProvided');
 const SourcingHub = require('./routes/inquiryRoutes');
 const { router: paymentTracker, syncOutlookInvoices } = require('./routes/paymentTrackerRoutes');
 const activityLogger = require('./middleware/activityLogger');
+const { authenticateStatic } = require('./middleware/authMiddleware');
 const logRoutes = require('./routes/logRoutes');
 const imageProcessing = require('./routes/imageProcessingRoutes');
 const trendingProductRoutes = require('./routes/trendingProductRoutes');
@@ -66,66 +87,100 @@ const shippingPartnerRoutes = require('./routes/shippingPartnerRoutes');
 const leadScoutRoutes = require('./routes/leadScoutRoutes');
 const clientPortalRoutes = require('./routes/clientPortalRoutes');
 
-// ─── Static File Serving ──────────────────────────────────────────────────────
-/**
- * 2. STATIC FILE SERVING
- * Ensures that images uploaded by one person are visible to
- * everyone else on their laptops.
- */
+app.use(cookieParser()); // Required for reading httpOnly cookies in authenticateStatic
 app.use('/public', express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
-// React build folder
-const buildPath = path.join(__dirname, '..', 'frontend', 'build');
-app.use(express.static(buildPath));
+// ─── Static File Serving ──────────────────────────────────────────────────────
+// More specific routes MUST come before the broader /uploads catch-all.
+
+// Public site images — no auth, accessible to www.marqland.com visitors
+app.use('/uploads/store',       express.static(path.join(__dirname, 'public', 'uploads', 'store')));
+app.use('/uploads/publicApp',   express.static(path.join(__dirname, 'public', 'uploads', 'publicApp')));
+
+// Internal app images — protected by httpOnly cookie set on login
+// authenticateStatic verifies the JWT from the cookie before serving any file
+app.use('/uploads/internalApp', authenticateStatic, express.static(path.join(__dirname, 'public', 'uploads', 'internalApp')));
+
+
+
+
+/**
+ * PRODUCTION ONLY: Serve both built React apps as static files.
+ * In development, React apps run on their own dev servers (ports 3000 & 3001)
+ * so we don't need to serve static builds here.
+ *
+ * ─── TO SWITCH TO PRODUCTION ──────────────────────────────────────────────────
+ * Set NODE_ENV=production in your .env file (or your deployment environment).
+ * Then run `npm run build` in both /frontend and /public-site before starting.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+// Adjust these paths to match your actual folder structure
+const internalBuildPath = path.join(__dirname, '..', 'frontend', 'build');    // Internal portal build
+const publicBuildPath   = path.join(__dirname, '..', 'public-site', 'build'); // Public marqland.com build
+
+if (IS_PRODUCTION) {
+  // Serve static assets for both React apps.
+  // Note: If both builds have files with the same name, the FIRST one registered wins.
+  // index.html is intentionally NOT served here — the catch-all below handles it by hostname.
+  app.use(express.static(internalBuildPath));
+  app.use(express.static(publicBuildPath));
+}
 
 // ─── Database ─────────────────────────────────────────────────────────────────
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/bizManager';
+//const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/bizManager';
+const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB (bizManager)'))
+  .then(() => console.log(`✅ Connected to MongoDB: ${MONGO_URI.split('/').pop().split('?')[0]}`))
   .catch(err => {
     console.error('❌ MongoDB Connection Error:', err);
-    process.exit(1); // Exit early — app cannot function without DB
+    process.exit(1);
   });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-// Activity logger — intercepts all API mutations, uses req.originalUrl for full path matching
 app.use(activityLogger);
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
-app.use('/api/products', productRoutes);
-app.use('/api/vendors', vendorRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/catalogues', catalogueRoutes);
-app.use('/api/properties', propertyRoutes);
+app.use('/api/products',          productRoutes);
+app.use('/api/vendors',           vendorRoutes);
+app.use('/api/clients',           clientRoutes);
+app.use('/api/catalogues',        catalogueRoutes);
+app.use('/api/properties',        propertyRoutes);
 app.use('/api/offsitecatalogues', offsiteCatalogueRoutes);
-app.use('/api/orders', orderInquiry);
-app.use('/api/challans', SamplesProvided);
-app.use('/api/inquiries', SourcingHub);
-app.use('/api/auth', authRoutes);
-app.use('/api/payment-tracker', paymentTracker);
-app.use('/api/image-processing', imageProcessing);
+app.use('/api/orders',            orderInquiry);
+app.use('/api/challans',          SamplesProvided);
+app.use('/api/inquiries',         SourcingHub);
+app.use('/api/auth',              authRoutes);
+app.use('/api/payment-tracker',   paymentTracker);
+app.use('/api/image-processing',  imageProcessing);
 app.use('/api/trending-products', trendingProductRoutes);
-app.use('/api/shipments', shipmentRoutes);
+app.use('/api/shipments',         shipmentRoutes);
 app.use('/api/shipping-partners', shippingPartnerRoutes);
-app.use('/api/lead-scout', leadScoutRoutes);
-app.use('/api/public-site', publicSiteRoutes);
-app.use('/api/portal', clientPortalRoutes);
-app.use('/api/logs', logRoutes); // Admin only
+app.use('/api/lead-scout',        leadScoutRoutes);
+app.use('/api/public-site',       publicSiteRoutes);
+app.use('/api/portal',            clientPortalRoutes);
+app.use('/api/logs',              logRoutes); // Admin only
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
-// FIX: Added — catches any unhandled errors thrown in route handlers
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled Error:', err.stack || err.message);
   res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message
+    error: IS_PRODUCTION ? 'Internal Server Error' : err.message
   });
 });
 
 // ─── Catch-All: Serve React ───────────────────────────────────────────────────
-// MUST be after all API routes
+// MUST be after all API routes.
+//
+// DEV:  This catch-all is never reached for React pages because the browser
+//       talks directly to the React dev servers (localhost:3000 / localhost:3001).
+//       It only applies to /api calls proxied through this server.
+//
+// PROD: Routes every non-API request to the correct React build based on hostname.
+//
 app.use((req, res, next) => {
+  // Always pass through API and asset requests
   if (
     req.url.startsWith('/api') ||
     req.url.startsWith('/public') ||
@@ -134,31 +189,45 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // Public portal and vendor links — always serve React regardless of device
-  if (req.url.startsWith('/p/') || req.url.startsWith('/respond/')) {
-    return res.sendFile(path.join(buildPath, 'index.html'));
+  // In development, React dev servers handle their own HTML — nothing to serve here
+  if (!IS_PRODUCTION) {
+    return next();
   }
 
-  // Detect mobile User-Agent
+  // ── PRODUCTION ROUTING BY HOSTNAME ────────────────────────────────────────
+  const host = req.hostname; // e.g. 'marqland.com' or 'internalportal.marqland.com'
+  const isPublicSite = host === 'marqland.com' || host === 'www.marqland.com';
+
+  if (isPublicSite) {
+    // Public site: always serve React (no auth, no mobile restrictions)
+    return res.sendFile(path.join(publicBuildPath, 'index.html'));
+  }
+
+  // ── INTERNAL PORTAL ────────────────────────────────────────────────────────
+
+  // Public-facing links inside the portal (shared with external clients/vendors)
+  if (req.url.startsWith('/p/') || req.url.startsWith('/respond/')) {
+    return res.sendFile(path.join(internalBuildPath, 'index.html'));
+  }
+
+  // Block mobile from all internal portal routes except /paymenttracker
   const ua = req.headers['user-agent'] || '';
   const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
 
-  // Block mobile from all routes except /paymenttracker (302 = not cached by browser)
   if (isMobile && !req.url.startsWith('/paymenttracker')) {
     return res.redirect(302, '/paymenttracker');
   }
 
-  res.sendFile(path.join(buildPath, 'index.html'));
+  res.sendFile(path.join(internalBuildPath, 'index.html'));
 });
 
 // ─── Background Schedulers ────────────────────────────────────────────────────
-startScheduler();        // Runs at 02:00 IST daily
+startScheduler();         // Runs at 02:00 IST daily
 startTrackingScheduler(); // Runs every 2 hours
 
 /**
- * 5. AUTOMATED TASKS (CRON)
- * Runs daily at 10:00 AM (IST) to sync Outlook invoices and
- * send a status report to WhatsApp.
+ * ─── CRON: Daily Outlook + WhatsApp Sync ─────────────────────────────────────
+ * Runs daily at 10:00 AM IST.
  */
 cron.schedule('0 10 * * *', async () => {
   console.log('--- Starting Scheduled Automation Task ---');
@@ -195,7 +264,6 @@ cron.schedule('0 10 * * *', async () => {
 });
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────
-// FIX: Added — ensures MongoDB disconnects cleanly on process termination
 const shutdown = async (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   try {
@@ -208,23 +276,23 @@ const shutdown = async (signal) => {
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 // ─── Server Startup ───────────────────────────────────────────────────────────
-/**
- * Listening on '0.0.0.0' makes the server accessible via your IP address
- * on the local office network.
- * NOTE: Running on port 80 requires root/admin. Consider using port 3001
- * behind an Nginx reverse proxy for better security and stability.
- */
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || (IS_PRODUCTION ? 80 : 5000);
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
   console.log(`--------------------------------------------------`);
-  console.log(`🚀 BIZ MANAGER SERVER IS LIVE`);
-  console.log(`🏠 Local:   http://localhost:${PORT}`);
-  console.log(`📡 Tunnel:  https://internalportal.marqland.com`);
-  console.log(`🌐 Network: http://YOUR_PC_IP_HERE:${PORT}`);
+  console.log(`🚀 BIZ MANAGER SERVER IS LIVE  [${IS_PRODUCTION ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+  if (IS_PRODUCTION) {
+    console.log(`🌐 Internal Portal : https://internalportal.marqland.com`);
+    console.log(`🌐 Public Site     : https://www.marqland.com`);
+  } else {
+    console.log(`🔧 API Server      : http://localhost:${PORT}`);
+    console.log(`🔧 Internal Portal : http://localhost:3000  (React dev server)`);
+    console.log(`🔧 Public Site     : http://localhost:3001  (React dev server)`);
+    console.log(`💡 Set NODE_ENV=production in .env to switch to production mode`);
+  }
   console.log(`--------------------------------------------------`);
 });

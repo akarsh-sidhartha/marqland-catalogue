@@ -32,7 +32,7 @@ const cron         = require('node-cron');
 const TrendingProduct = require('../models/TrendingProduct');
 
 // ── Save directory ────────────────────────────────────────────────────────────
-const SAVE_DIR = path.join(process.cwd(), 'public/uploads/trending');
+const SAVE_DIR = path.join(process.cwd(), 'public', 'uploads', 'internalApp', 'trending');
 if (!fs.existsSync(SAVE_DIR)) fs.mkdirSync(SAVE_DIR, { recursive: true });
 
 // ── Industry search queries ───────────────────────────────────────────────────
@@ -137,7 +137,7 @@ const domain = url => { try { return new URL(url).hostname.replace('www.',''); }
 
 /**
  * Download an image URL and save it locally.
- * Returns the local /uploads/trending/<file> path, or null on failure.
+ * Returns the local /uploads/internalApp/trending/<file> path, or null on failure.
  */
 async function downloadImage(imageUrl, filename) {
   try {
@@ -161,7 +161,7 @@ async function downloadImage(imageUrl, filename) {
       .jpeg({ quality: 85 })
       .toFile(outPath);
 
-    return `/uploads/trending/${filename}`;
+    return `/uploads/internalApp/trending/${filename}`;
   } catch (err) {
     console.warn(`     ⚠ Image download failed: ${err.message.slice(0,80)}`);
     return null;

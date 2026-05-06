@@ -46,7 +46,7 @@ function saveProgress(p) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function run() {
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bizManager');
+  await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/bizManager');
   console.log('✅ Connected to MongoDB');
 
   const progress = loadProgress();

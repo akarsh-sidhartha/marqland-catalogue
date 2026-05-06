@@ -117,4 +117,33 @@ const routeGuard = (req, res, next) => {
   });
 };
 
-module.exports = { authenticate, authorize, routeGuard, ROLES };
+/**
+ * MIDDLEWARE: authenticateStatic
+ * Protects express.static routes using the httpOnly cookie set on login.
+ * Used instead of authenticate because browsers don't send Authorization
+ * headers when loading <img src="...">, PDFs, or videos directly.
+ *
+ * Returns 401 JSON if cookie is missing or invalid.
+ * Returns 403 JSON if token is valid but user is not active.
+ */
+const authenticateStatic = (req, res, next) => {
+  const token = req.cookies?.static_token;
+
+  if (!token) {
+    return res.status(401).json({ message: 'Access denied. Please log in to view this resource.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Reject suspended/pending users even if their cookie is still valid
+    if (decoded.status && decoded.status !== 'active') {
+      return res.status(403).json({ message: 'Account is not active.' });
+    }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Session expired. Please log in again.' });
+  }
+};
+
+module.exports = { authenticate, authorize, routeGuard, authenticateStatic, ROLES };

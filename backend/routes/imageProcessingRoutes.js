@@ -32,7 +32,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 const adminOnly = [authenticate, authorize(['admin', 'inventory'])];
 
-const tmpDir = path.join(process.cwd(), 'public/uploads/tmp');
+const tmpDir = path.join(process.cwd(), 'public', 'uploads', 'internalApp', 'tmp');
 if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
 const pdfUpload = multer({
@@ -508,13 +508,16 @@ router.post('/pdf/same-category', adminOnly, (req, res, next) => {
       try {
         const buf  = fs.readFileSync(imagePaths[i]);
         const out  = await processProductImage(buf, { category, promptText: finalPrompt });
+        const safeCat = (category || 'uncategorised').trim().replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+        const catDir  = path.join(process.cwd(), 'public', 'uploads', 'internalApp', 'products', safeCat);
+        if (!fs.existsSync(catDir)) fs.mkdirSync(catDir, { recursive: true });
         const name = `pdf-${Date.now()}-${i}.webp`;
-        fs.writeFileSync(path.join(process.cwd(), 'public/uploads', name), out);
+        fs.writeFileSync(path.join(catDir, name), out);
         const p = await Product.create({
           brand, category,
           name: `${brand} — Import ${i + 1}`,
           description: '',
-          imageUrl: `/uploads/${name}`,
+          imageUrl: `/uploads/internalApp/products/${safeCat}/${name}`,
           purchasePrice: 0,
           markupPercent: 30,
         });

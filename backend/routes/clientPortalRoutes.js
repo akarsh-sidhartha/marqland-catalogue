@@ -91,7 +91,7 @@ const sendPushToAll = async (payload) => {
 // ── File upload for message attachments ────────────────────────────────────────
 const msgStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(process.cwd(), 'public/uploads/portal');
+    const dir = path.join(process.cwd(), 'public', 'uploads', 'internalApp', 'portal');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -347,7 +347,7 @@ router.post('/:slug/message/team', uploadMsg.array('files', 5), async (req, res)
 
     const attachments = (req.files || []).map(f => ({
       name:     f.originalname,
-      url:      `/uploads/portal/${f.filename}`,
+      url:      `/uploads/internalApp/portal/${f.filename}`,
       mimeType: f.mimetype,
       size:     f.size,
     }));
@@ -523,7 +523,7 @@ router.post('/public/:slug/message', uploadMsg.array('files', 5), async (req, re
 
     const attachments = (req.files || []).map(f => ({
       name:     f.originalname,
-      url:      `/uploads/portal/${f.filename}`,
+      url:      `/uploads/internalApp/portal/${f.filename}`,
       mimeType: f.mimetype,
       size:     f.size,
     }));

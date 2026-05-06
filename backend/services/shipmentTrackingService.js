@@ -58,33 +58,37 @@ const shouldPoll = (shipment) => {
 const normaliseTrackCourier = (raw = '') => {
   const s = raw.toLowerCase().trim();
 
-  // Exact canonical matches first (most reliable)
-  if (s === 'delivered')                                            return 'Delivered';
+  // Machine values (ShipmentState) and human values (MostRecentStatus) — cover both
+  // DTDC-specific: "delivered", "out for delivery", "in transit", "booked"
+  if (s === 'delivered'     || s === 'dlv'
+    || s === 'shipment delivered')                                   return 'Delivered';
   if (s === 'out_for_delivery' || s === 'out for delivery'
-    || s === 'outfordelivery')                                      return 'Out for Delivery';
-  if (s === 'in_transit'  || s === 'in transit'
-    || s === 'intransit'  || s === 'transit')                      return 'In Transit';
-  if (s === 'picked_up'   || s === 'pickedup'
-    || s === 'booked'     || s === 'manifested'
-    || s === 'info_received' || s === 'inforeceived'
-    || s === 'registered')                                          return 'Booked';
-  if (s === 'returned'    || s === 'rto'
-    || s === 'return_to_origin')                                    return 'Returned';
-  if (s === 'exception'   || s === 'failed'
-    || s === 'lost'       || s === 'undelivered'
-    || s === 'delivery_failed')                                     return 'Exception';
-  if (s === 'pending'     || s === 'not_found'
-    || s === 'notfound')                                            return 'Pending';
+    || s === 'outfordelivery'  || s === 'ofd'
+    || s === 'out-for-delivery')                                     return 'Out for Delivery';
+  if (s === 'in_transit'    || s === 'in transit'
+    || s === 'intransit'    || s === 'transit'
+    || s === 'in-transit')                                           return 'In Transit';
+  if (s === 'picked_up'     || s === 'pickedup'
+    || s === 'booked'       || s === 'manifested'
+    || s === 'info_received'|| s === 'inforeceived'
+    || s === 'registered'   || s === 'shipment booked')              return 'Booked';
+  if (s === 'returned'      || s === 'rto'
+    || s === 'return_to_origin' || s === 'return to origin')        return 'Returned';
+  if (s === 'exception'     || s === 'failed'
+    || s === 'lost'         || s === 'undelivered'
+    || s === 'delivery_failed' || s === 'misrouted')                 return 'Exception';
+  if (s === 'pending'       || s === 'not_found'
+    || s === 'notfound'     || s === 'no information')               return 'Pending';
 
-  // Substring fallback for edge cases / new API values
+  // Substring fallback
   if (s.includes('deliver') && !s.includes('out') && !s.includes('fail') && !s.includes('un')) return 'Delivered';
-  if (s.includes('out') && s.includes('deliver'))                   return 'Out for Delivery';
-  if (s.includes('transit') || s.includes('in-transit'))            return 'In Transit';
+  if (s.includes('out') && (s.includes('deliver') || s.includes('ofd'))) return 'Out for Delivery';
+  if (s.includes('transit') || s.includes('in-transit'))             return 'In Transit';
   if (s.includes('pick') || s.includes('book') || s.includes('manifest')) return 'Booked';
-  if (s.includes('return') || s.includes('rto'))                    return 'Returned';
+  if (s.includes('return') || s.includes('rto'))                     return 'Returned';
   if (s.includes('exception') || s.includes('fail') || s.includes('lost') || s.includes('undeliver')) return 'Exception';
 
-  return null; // unknown — don't overwrite existing status; will log a warning
+  return null;
 };
 
 // ── Partner name → trackcourier.io slug map ───────────────────────────────────
@@ -135,36 +139,52 @@ const fetchFromTrackCourier = async (trackingId, courierName = '') => {
   const apiKey = process.env.TRACKCOURIER_API_KEY;
   if (!apiKey) throw new Error('TRACKCOURIER_API_KEY not set in environment');
 
-  const params = { tracking_number: trackingId };
   const slug = toCourierSlug(courierName);
-  if (slug) params.courier = slug;
+
+  // courier param is REQUIRED — API returns 422 without it
+  if (!slug) {
+    console.warn(`[TrackCourier] No slug mapped for partner "${courierName}" — skipping ${trackingId}. Add to COURIER_SLUG_MAP.`);
+    return null;
+  }
 
   const res = await axios.get(
     'https://api.trackcourier.io/v1/track',
     {
-      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
-      params,
+      headers: { 'X-API-Key': apiKey },
+      params:  { tracking_number: trackingId, courier: slug },
       timeout: 10000,
     }
   );
 
-  // Response: { success: true, data: { status: "in_transit", ... }, usage: {...} }
   const data = res.data;
+  const d    = data?.data;
 
-  // Log the raw response for every poll so we can diagnose normaliser mismatches
-  console.log(`[TrackCourier] ${trackingId} (${courierName || 'auto'}) →`,
-    JSON.stringify({ success: data?.success, rawStatus: data?.data?.status, mostRecent: data?.data?.MostRecentStatus })
+  console.log(`[TrackCourier] ${trackingId} (${slug}) →`,
+    JSON.stringify({
+      result:     d?.Result,
+      state:      d?.ShipmentState,
+      mostRecent: d?.MostRecentStatus,
+      isEmpty:    d?.isEmptyTable,
+    })
   );
 
-  if (!data?.success || !data?.data?.status) return null;
+  if (!data?.success) return null;
 
-  const normalised = normaliseTrackCourier(data.data.status);
-
-  // Warn when we can't normalise a status — helps catch new API values
-  if (!normalised) {
-    console.warn(`[TrackCourier] Unknown status "${data.data.status}" for ${trackingId} — update normaliseTrackCourier()`);
+  // When courier has no data yet, don't overwrite the current status
+  if (d?.Result === 'failure' || d?.isEmptyTable) {
+    console.log(`[TrackCourier] ${trackingId} — courier returned no data, keeping current status.`);
+    return null;
   }
 
+  // Real API returns ShipmentState (machine value) — docs incorrectly show "status"
+  // Fall back to MostRecentStatus if ShipmentState is missing
+  const rawState = d?.ShipmentState || d?.MostRecentStatus || '';
+  if (!rawState) return null;
+
+  const normalised = normaliseTrackCourier(rawState);
+  if (!normalised) {
+    console.warn(`[TrackCourier] Unknown ShipmentState "${rawState}" for ${trackingId} — add to normaliseTrackCourier()`);
+  }
   return normalised;
 };
 

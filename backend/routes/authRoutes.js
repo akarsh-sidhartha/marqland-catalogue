@@ -162,6 +162,15 @@ router.post('/login', async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
+    // Set httpOnly cookie for static file auth (images/PDFs served by express.static)
+    // Same 8h expiry as the access token — clears at end of working day
+    res.cookie('static_token', accessToken, {
+      httpOnly: true,                          // not accessible via JS
+      secure:   process.env.NODE_ENV === 'production', // HTTPS only in prod
+      sameSite: 'strict',                      // no cross-site requests
+      maxAge:   8 * 60 * 60 * 1000,           // 8 hours in ms
+    });
+
     res.json({
       message: 'Login successful.',
       accessToken,
@@ -224,6 +233,12 @@ router.get('/me', authenticate, async (req, res) => {
 router.post('/logout', authenticate, async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, { refreshToken: null });
+    // Clear the static file auth cookie
+    res.clearCookie('static_token', {
+      httpOnly: true,
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
     res.json({ message: 'Logged out successfully.' });
   } catch (err) {
     res.status(500).json({ message: 'Logout failed.' });

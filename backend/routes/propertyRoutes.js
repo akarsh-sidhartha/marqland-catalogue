@@ -5,11 +5,35 @@ const multer = require('multer');
 const path   = require('path');
 const fs     = require('fs');
 
-// ── File upload for property attachments ──────────────────────────────────────
+// ─── Upload directory helpers ─────────────────────────────────────────────────
+// Property type from the schema enum: 'Day Outing' | 'Night Stay'
+// Folder mapping:
+//   Day Outing  → public/uploads/internalApp/property/day_outing/
+//   Night Stay  → public/uploads/internalApp/property/night_stay/
+
+const PROPERTY_TYPE_DIRS = {
+  'Day Outing': 'day_outing',
+  'Night Stay': 'night_stay',
+};
+
+function getPropertyDir(type) {
+  const subfolder = PROPERTY_TYPE_DIRS[type] || 'day_outing';
+  const dir = path.join(process.cwd(), 'public', 'uploads', 'internalApp', 'property', subfolder);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function getPropertyUrl(type, filename) {
+  const subfolder = PROPERTY_TYPE_DIRS[type] || 'day_outing';
+  return `/uploads/internalApp/property/${subfolder}/${filename}`;
+}
+
+// ─── MULTER CONFIGURATION ─────────────────────────────────────────────────────
+// Reads req.body.type (sent from frontend alongside the file) to route into
+// the correct day_outing/ or night_stay/ subfolder.
 const attachStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(process.cwd(), 'public/uploads/property-attachments');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const dir = getPropertyDir(req.body.type);
     cb(null, dir);
   },
   filename: (req, file, cb) => {
@@ -17,6 +41,7 @@ const attachStorage = multer.diskStorage({
     cb(null, unique + path.extname(file.originalname));
   },
 });
+
 const uploadAttachment = multer({
   storage: attachStorage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
@@ -74,12 +99,14 @@ router.delete('/:id', async (req, res) => {
 
 // @route   POST /api/properties/upload-attachment
 // @desc    Upload a single property attachment (PDF, image, doc)
+// @body    type: 'Day Outing' | 'Night Stay'  (must be sent alongside file)
 // @returns { url, name, mimeType, size }
 router.post('/upload-attachment', uploadAttachment.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file provided.' });
+    const propertyType = req.body.type || 'Day Outing';
     res.json({
-      url:      `/uploads/property-attachments/${req.file.filename}`,
+      url:      getPropertyUrl(propertyType, req.file.filename),
       name:     req.file.originalname,
       mimeType: req.file.mimetype,
       size:     req.file.size,

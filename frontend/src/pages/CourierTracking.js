@@ -871,8 +871,20 @@ export default function CourierTracking() {
 
   const saveShipment = async (form) => {
     try {
-      if (editShipment?._id) await api.put(`/shipments/${editShipment._id}`, form);
-      else                   await api.post('/shipments', form);
+      // Stamp orderRef from the orders list so the Order column displays correctly.
+      // form.orderId is the MongoDB _id; look up the human-readable refNumber here.
+      const enriched = { ...form };
+      if (enriched.orderId) {
+        const matched = orders.find(o => o._id === enriched.orderId);
+        enriched.orderRef = matched?.refNumber || matched?.ref || '';
+        enriched.isAdhoc  = false;
+      } else {
+        enriched.orderRef = '';
+        enriched.isAdhoc  = true;
+      }
+
+      if (editShipment?._id) await api.put(`/shipments/${editShipment._id}`, enriched);
+      else                   await api.post('/shipments', enriched);
       showToast('success', editShipment?._id ? 'Shipment updated' : 'Shipment added');
       setShowAddModal(false); setEditShipment(null); load();
     } catch (e) { showToast('error', e.response?.data?.message || e.message); }

@@ -7,8 +7,8 @@ const fs      = require('fs');
 const Vendor  = require('../models/Vendor');
 const { extractFromBusinessCard } = require('../services/aiService');
 
-// ── Multer: store vendor media in public/uploads/vendors/ ────────────────────
-const uploadDir = path.join(process.cwd(), 'public/uploads/vendors');
+// ── Multer: store vendor media in public/uploads/internalApp/vendors/ ─────────
+const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'internalApp', 'vendors');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -57,7 +57,7 @@ router.post('/', upload.array('mediaFiles', 20), async (req, res) => {
 
     const media = (req.files || []).map(f => ({
       name:     f.originalname,
-      url:      `/uploads/vendors/${f.filename}`,
+      url:      `/uploads/internalApp/vendors/${f.filename}`,
       mimeType: f.mimetype,
       size:     f.size,
       label:    '',
@@ -101,7 +101,7 @@ router.put('/:id', upload.array('mediaFiles', 20), async (req, res) => {
     // Add newly uploaded files
     const newMedia = (req.files || []).map(f => ({
       name:     f.originalname,
-      url:      `/uploads/vendors/${f.filename}`,
+      url:      `/uploads/internalApp/vendors/${f.filename}`,
       mimeType: f.mimetype,
       size:     f.size,
       label:    '',
