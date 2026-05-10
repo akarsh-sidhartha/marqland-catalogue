@@ -120,9 +120,10 @@ app.use('/uploads/internalApp', authenticateStatic, express.static(path.join(__d
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-// Adjust these paths to match your actual folder structure
-const internalBuildPath = path.join(__dirname, '..', 'frontend', 'build');    // Internal portal build
-const publicBuildPath   = path.join(__dirname, '..', 'public-site', 'build'); // Public marqland.com build
+// Build outputs are copied into backend/build/ by the copy:builds npm script.
+// Hostinger expects the output directory to be at the backend root level.
+const internalBuildPath = path.join(__dirname, 'build', 'frontend');    // backend/build/frontend
+const publicBuildPath   = path.join(__dirname, 'build', 'public-site'); // backend/build/public-site
 
 if (IS_PRODUCTION) {
   // Serve static assets for both React apps.
@@ -203,23 +204,23 @@ app.use((req, res, next) => {
   const host = req.hostname;
 
   // ── Task 4: Legacy redirect ────────────────────────────────────────────────
-  // Old client portal URLs (internalportal.marqland.com/p/*) → new domain.
-  // Cloudflare handles the bulk redirect, but this catches any traffic that
-  // reaches the Node server directly (e.g. direct IP, or during DNS cut-over).
+  // Old client portal URLs (internalportal.marqland.com/p/*) redirect to new
+  // domain. Cloudflare handles most of this, but this catches any traffic that
+  // reaches the Node server directly during or after DNS cut-over.
   if (host === 'internalportal.marqland.com') {
     const target = `https://www.marqlandstudios.com${req.url}`;
     return res.redirect(301, target);
   }
 
   // ── Task 3: Public site — www.marqlandstudios.com ─────────────────────────
-  // Serve public-site build. No auth required, no mobile restrictions.
-  // /p/* and /respond/* paths are NOT public-site — they fall through to the
-  // admin panel section below so client portal links still work on this domain.
+  // Serve public-site build. No auth, no mobile restrictions.
+  // /p/* and /respond/* are excluded — those are client portal links that must
+  // serve the frontend (admin) build even on the root domain.
   const isPublicSite =
-    host === 'marqlandstudios.com' ||
+    host === 'marqlandstudios.com'     ||
     host === 'www.marqlandstudios.com' ||
-    // Legacy marqland.com — keep working during transition
-    host === 'marqland.com' ||
+    // Legacy — keep working during transition period
+    host === 'marqland.com'            ||
     host === 'www.marqland.com';
 
   if (isPublicSite && !req.url.startsWith('/p/') && !req.url.startsWith('/respond/')) {
@@ -228,8 +229,8 @@ app.use((req, res, next) => {
 
   // ── Task 2 & 4: Admin panel + client portal ────────────────────────────────
   // Covers:
-  //   admin.marqlandstudios.com   → employee admin panel (all routes)
-  //   www.marqlandstudios.com/p/* → client view portal   (Task 4)
+  //   admin.marqlandstudios.com         → employee admin panel (all routes)
+  //   www.marqlandstudios.com/p/*       → client view portal        (Task 4)
   //   www.marqlandstudios.com/respond/* → vendor respond links
 
   // Public-facing catalogue/portal links — no mobile block, no auth wall
@@ -316,7 +317,7 @@ app.listen(PORT, HOST, () => {
     console.log(`🌐 Admin Panel     : https://admin.marqlandstudios.com`);
     console.log(`🌐 Public Site     : https://www.marqlandstudios.com`);
     console.log(`🌐 Client Portal   : https://www.marqlandstudios.com/p/*`);
-    console.log(`↩️  Legacy redirect : https://internalportal.marqland.com → marqlandstudios.com`);
+    console.log(`↩️  Legacy redirect : https://internalportal.marqland.com -> marqlandstudios.com`);
   } else {
     console.log(`🔧 API Server      : http://localhost:${PORT}`);
     console.log(`🔧 Internal Portal : http://localhost:3000  (React dev server)`);
