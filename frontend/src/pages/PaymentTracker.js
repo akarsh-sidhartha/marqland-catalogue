@@ -958,8 +958,8 @@ function PIFlowModal({ pi: piProp, payments, invoices, onMapPayment, onUploadInv
           <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 10 }}>{pi.piNumber} · {pi.vendor?.companyName}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}><Badge status={pi.status} />{pi.dueDate && <span style={{ fontSize: 11, background: "rgba(255,255,255,0.15)", color: "#fff", padding: "2px 8px", borderRadius: 20 }}>Due {fmtDate(pi.dueDate)}</span>}</div>
           {pi.bankDetails && <div style={{ fontSize: 11, opacity: 0.75, borderTop: "1px solid rgba(255,255,255,0.2)", paddingTop: 8, marginTop: 6 }}>{pi.bankDetails}</div>}
-          {pi.attachment && (
-            <a href={pi.attachment} download={`PI_${pi.piNumber}`}
+          {(pi.attachmentUrl || pi.attachment) && (
+            <a href={pi.attachmentUrl || pi.attachment} target="_blank" rel="noreferrer" download={pi.attachment && !pi.attachmentUrl ? `PI_${pi.piNumber}` : undefined}
               style={{ display:"inline-flex", alignItems:"center", gap:5, marginTop:8, background:"rgba(255,255,255,0.15)", color:"#fff", borderRadius:7, padding:"5px 10px", fontSize:11, fontWeight:700, textDecoration:"none" }}>
               <Download size={12}/> PI Document
             </a>
@@ -978,8 +978,8 @@ function PIFlowModal({ pi: piProp, payments, invoices, onMapPayment, onUploadInv
               </div>
               <div style={{ fontSize: 11, color: "#64748b" }}>{fmtDate(pay.paymentDate)} · {pay.paymentMode?.toUpperCase()}</div>
               {pay.bankRef && <div style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>Ref: {pay.bankRef}</div>}
-              {pay.screenshot && (
-                <a href={pay.screenshot} download={`Payment_${pay.paymentRef}`}
+              {(pay.screenshotUrl || pay.screenshot) && (
+                <a href={pay.screenshotUrl || pay.screenshot} target="_blank" rel="noreferrer" download={pay.screenshot && !pay.screenshotUrl ? `Payment_${pay.paymentRef}` : undefined}
                   style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:4, background:"#f0fdf4", color:"#15803d", borderRadius:6, padding:"3px 8px", fontSize:10, fontWeight:700, textDecoration:"none" }}>
                   <Eye size={10}/> Screenshot
                 </a>
@@ -1139,76 +1139,70 @@ function InvoiceViewerModal({ invoice, onClose }) {
             <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>All Documents</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
 
-              {/* Invoice document */}
-              {invoice.image && (
+              {/* Invoice document — opens from OneDrive */}
+              {(invoice.oneDriveUrl || invoice.image) && (
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:16 }}>{invoice.mimeType==="application/pdf"?"📄":"🖼"}</span>
                     <div>
                       <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>Invoice Document</div>
-                      <div style={{ fontSize:10, color:"#94a3b8" }}>{invoice.invoice_number}</div>
+                      <div style={{ fontSize:10, color:"#94a3b8" }}>{invoice.fileName || invoice.invoice_number}{invoice.oneDriveUrl ? " · OneDrive" : ""}</div>
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
-                    <a href={invoice.image} target="_blank" rel="noreferrer"
+                    <a href={invoice.oneDriveUrl || invoice.image} target="_blank" rel="noreferrer"
                       style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#eff6ff", color:"#1d4ed8", fontWeight:700, fontSize:11, textDecoration:"none" }}>
-                      <Eye size={11}/> View
+                      <Eye size={11}/> {invoice.oneDriveUrl ? "Open in OneDrive" : "View"}
                     </a>
-                    <a href={invoice.image} download={`Invoice_${invoice.invoice_number}`}
-                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#0891b2", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
-                      <Download size={11}/> Download
-                    </a>
+                    {invoice.image && !invoice.oneDriveUrl && (
+                      <a href={invoice.image} download={`Invoice_${invoice.invoice_number}`}
+                        style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#0891b2", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
+                        <Download size={11}/> Download
+                      </a>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* PI document — shown if a linked PI exists with attachment */}
-              {invoice._linkedPI?.attachment && (
+              {(invoice._linkedPI?.attachmentUrl || invoice._linkedPI?.attachment) && (
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:16 }}>📋</span>
                     <div>
                       <div style={{ fontSize:12, fontWeight:700, color:"#6366f1" }}>Proforma Invoice</div>
-                      <div style={{ fontSize:10, color:"#94a3b8" }}>{invoice._linkedPI.piNumber}</div>
+                      <div style={{ fontSize:10, color:"#94a3b8" }}>{invoice._linkedPI.piNumber}{invoice._linkedPI.attachmentUrl ? " · OneDrive" : ""}</div>
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
-                    <a href={invoice._linkedPI.attachment} target="_blank" rel="noreferrer"
+                    <a href={invoice._linkedPI.attachmentUrl || invoice._linkedPI.attachment} target="_blank" rel="noreferrer"
                       style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#ede9fe", color:"#6d28d9", fontWeight:700, fontSize:11, textDecoration:"none" }}>
-                      <Eye size={11}/> View
-                    </a>
-                    <a href={invoice._linkedPI.attachment} download={`PI_${invoice._linkedPI.piNumber}`}
-                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#6366f1", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
-                      <Download size={11}/> Download
+                      <Eye size={11}/> {invoice._linkedPI.attachmentUrl ? "Open in OneDrive" : "View"}
                     </a>
                   </div>
                 </div>
               )}
 
               {/* Payment receipts */}
-              {invoice._linkedPayments?.filter(p => p.screenshot).map((p, i) => (
+              {invoice._linkedPayments?.filter(p => p.screenshotUrl || p.screenshot).map((p, i) => (
                 <div key={p._id||i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:16 }}>💳</span>
                     <div>
                       <div style={{ fontSize:12, fontWeight:700, color:"#10b981" }}>Payment Receipt — {fmt(p.amount)}</div>
-                      <div style={{ fontSize:10, color:"#94a3b8" }}>{p.paymentRef} · {fmtDate(p.paymentDate)}</div>
+                      <div style={{ fontSize:10, color:"#94a3b8" }}>{p.paymentRef} · {fmtDate(p.paymentDate)}{p.screenshotUrl ? " · OneDrive" : ""}</div>
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
-                    <a href={p.screenshot} target="_blank" rel="noreferrer"
+                    <a href={p.screenshotUrl || p.screenshot} target="_blank" rel="noreferrer"
                       style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#f0fdf4", color:"#15803d", fontWeight:700, fontSize:11, textDecoration:"none" }}>
-                      <Eye size={11}/> View
-                    </a>
-                    <a href={p.screenshot} download={`Payment_${p.paymentRef}`}
-                      style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:6, background:"#10b981", color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none" }}>
-                      <Download size={11}/> Download
+                      <Eye size={11}/> {p.screenshotUrl ? "Open in OneDrive" : "View"}
                     </a>
                   </div>
                 </div>
               ))}
 
-              {!invoice.image && !invoice._linkedPI?.attachment && !invoice._linkedPayments?.some(p=>p.screenshot) && (
+              {!invoice.oneDriveUrl && !invoice.image && !invoice._linkedPI?.attachmentUrl && !invoice._linkedPI?.attachment && !invoice._linkedPayments?.some(p=>p.screenshotUrl||p.screenshot) && (
                 <div style={{ textAlign:"center", color:"#94a3b8", fontSize:12, padding:"10px 0" }}>No documents attached</div>
               )}
             </div>
@@ -1353,7 +1347,7 @@ function InvoiceVaultTab({ invoices, payments, proformaInvoices, vendors, onDele
                   <div><div style={{ fontWeight: 700, fontSize: 13 }}>{inv.vendor_name}</div><div style={{ fontSize: 11, color: "#94a3b8" }}>INV: {inv.invoice_number} · {fmt(inv.total_amount)}</div></div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => { onViewInvoice(inv); setDocList(null); }} style={{ display:"flex",alignItems:"center",gap:5,padding: "6px 12px", borderRadius: 7, border: "none", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700, fontSize: 11, cursor: "pointer" }}><Eye size={12}/> View</button>
-                    {inv.image && <a href={inv.image} download={`Invoice_${inv.invoice_number}`} style={{ padding: "6px 12px", borderRadius: 7, background: "#f1f5f9", color: "#475569", fontWeight: 700, fontSize: 11, textDecoration: "none" }}>⬇</a>}
+                    {(inv.oneDriveUrl || inv.image) && <a href={inv.oneDriveUrl || inv.image} target="_blank" rel="noreferrer" style={{ padding: "6px 12px", borderRadius: 7, background: "#f1f5f9", color: "#475569", fontWeight: 700, fontSize: 11, textDecoration: "none" }} title={inv.oneDriveUrl ? "Open in OneDrive" : "Download"}>⬇</a>}
                   </div>
                 </div>
               ))}
@@ -1898,9 +1892,9 @@ export default function PaymentTracker() {
     try {
       const params = new URLSearchParams(); if (filterVendor) params.set("vendorId", filterVendor);
       const qs = params.toString() ? "?" + params.toString() : "";
-      const [piR, payR, invR] = await Promise.all([api.get(`/payment-tracker/pi${qs}`), api.get(`/payment-tracker/payments${qs}`), api.get(`/payment-tracker/invoices`)]);
+      const [piR, payR, invR] = await Promise.all([api.get(`/payment-tracker/pi${qs}`), api.get(`/payment-tracker/payments${qs}`), api.get(`/payment-tracker/invoices?limit=500`)]);
       const [piD, payD, invD] = [piR.data, payR.data, invR.data];
-      setData({ pi: piD.data || [], payments: payD.data || [], invoices: Array.isArray(invD) ? invD : (invD.data || []) });
+      setData({ pi: piD.data || [], payments: payD.data || [], invoices: invD.invoices || (Array.isArray(invD) ? invD : []), invoiceFYs: invD.financialYears || [] });
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [filterVendor]);
@@ -2137,13 +2131,12 @@ export default function PaymentTracker() {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      {pay.screenshot && (
+                      {(pay.screenshotUrl || pay.screenshot) && (
                         <a
-                          href={pay.screenshot}
-                          download={`Payment_${pay.paymentRef}`}
+                          href={pay.screenshotUrl || pay.screenshot}
                           target="_blank"
                           rel="noreferrer"
-                          title="View / Download Screenshot"
+                          title={pay.screenshotUrl ? "Open in OneDrive" : "View Screenshot"}
                           style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700, fontSize: 12, textDecoration: "none", whiteSpace: "nowrap" }}>
                           <Eye size={13} /> Screenshot
                         </a>

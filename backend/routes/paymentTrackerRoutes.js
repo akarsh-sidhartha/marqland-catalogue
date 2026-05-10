@@ -17,7 +17,7 @@ let whatsappService;
 try { whatsappService = require('../services/whatsappService'); } catch { whatsappService = null; }
 
 const { extractFromDocument, checkAIStatus }                           = require('../services/aiService');
-const { scanMailboxesForAttachments }                                   = require('../services/msGraphService');
+const { scanMailboxesForAttachments, uploadSingleFile }                  = require('../services/msGraphService');
 const { normalizeFY, fyFromDate, checkIfDuplicate, saveExtractedInvoice } = require('../utils/invoiceHelpers');
 
 // ── Process + save invoice — shared by WhatsApp, Outlook, manual ──────────────
@@ -55,10 +55,39 @@ router.post('/invoices/process', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// List all vault invoices
+// List vault invoices — paginated by FY and month for fast loading.
+// Loads current FY + current month first, then older months on demand.
+// ?fy=2025-26&month=May&page=1&limit=50
 router.get('/invoices', async (req, res) => {
-  try { res.json(await Invoice.find().sort({ createdAt: -1 })); }
-  catch (err) { res.status(500).json({ error: err.message }); }
+  try {
+    const { fy, month, page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (fy)    filter.financialYear = fy;
+    if (month) filter.month         = month;
+
+    const [invoices, total, allFYs] = await Promise.all([
+      Invoice.find(filter)
+        .select('-image')                          // never return base64 to frontend
+        .sort({ createdAt: -1 })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit))
+        .lean(),
+      Invoice.countDocuments(filter),
+      // Return distinct FY list so frontend can build the month picker
+      Invoice.distinct('financialYear'),
+    ]);
+
+    res.json({ invoices, total, page: Number(page), limit: Number(limit), financialYears: allFYs });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get single invoice including OneDrive URL (for view/download button)
+router.get('/invoices/:id', async (req, res) => {
+  try {
+    const inv = await Invoice.findById(req.params.id).select('-image').lean();
+    if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+    res.json(inv);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Manually save invoice to vault
@@ -79,12 +108,31 @@ router.post('/invoices', async (req, res) => {
     const d = req.body.date ? new Date(req.body.date) : new Date();
     const { fy, month } = fyFromDate(d);
 
+    // Upload invoice file to OneDrive before saving to MongoDB
+    let oneDriveFileId = '', oneDriveUrl = '', fileName = '';
+    if (req.body.image) {
+      try {
+        const { buildInvoiceFilename } = require('../utils/invoiceHelpers');
+        fileName = buildInvoiceFilename(req.body.vendor_name, req.body.invoice_number, req.body.mimeType);
+        const upload = await uploadSingleFile(
+          ['Invoices', normalizeFY(req.body.financialYear) || fy, req.body.month || month],
+          fileName, req.body.image, req.body.mimeType || 'image/jpeg'
+        );
+        oneDriveFileId = upload.fileId;
+        oneDriveUrl    = upload.webUrl;
+      } catch (e) { console.error('[Invoice] OneDrive upload failed:', e.message); }
+    }
+
     const inv = new Invoice({
       ...req.body,
-      total_amount:  Number(req.body.total_amount || 0),
-      financialYear: normalizeFY(req.body.financialYear) || fy,
-      month:         req.body.month || month,
-      createdAt:     new Date(),
+      total_amount:   Number(req.body.total_amount || 0),
+      financialYear:  normalizeFY(req.body.financialYear) || fy,
+      month:          req.body.month || month,
+      oneDriveFileId,
+      oneDriveUrl,
+      fileName,
+      createdAt:      new Date(),
+      image:          undefined,  // never store base64 in MongoDB
     });
     await inv.save();
 

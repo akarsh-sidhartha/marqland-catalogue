@@ -30,8 +30,13 @@ const proformaInvoiceSchema = new mongoose.Schema(
     },
     // ✅ FIXED: ref must be "Invoice" (the vault model), NOT "VendorInvoice"
     finalInvoice:   { type: mongoose.Schema.Types.ObjectId, ref: "Invoice", default: null },
-    // Uploaded document attachment (base64 data URI)
-    attachment:     { type: String },
+    // ── OneDrive attachment (new) ──────────────────────────────────────────────
+    // File stored at OneDrive: PI-Attachments/<piNumber>/filename
+    attachmentFileId: { type: String, default: '' },
+    attachmentUrl:    { type: String, default: '' }, // OneDrive webUrl
+    attachmentName:   { type: String, default: '' }, // original filename
+    // Legacy base64 (deprecated — kept for backward compat, excluded from queries)
+    attachment:     { type: String, select: false },
     attachmentMime: { type: String },
   },
   { timestamps: true }
@@ -78,7 +83,13 @@ const paymentSchema = new mongoose.Schema(
       enum: ["recorded", "verified", "reconciled"],
       default: "recorded",
     },
-    screenshot:     { type: String },
+    // ── OneDrive screenshot (new) ──────────────────────────────────────────────
+    // File stored at OneDrive: Payments/<paymentRef>/filename
+    screenshotFileId: { type: String, default: '' },
+    screenshotUrl:    { type: String, default: '' }, // OneDrive webUrl
+    screenshotName:   { type: String, default: '' }, // original filename
+    // Legacy base64 (deprecated — kept for backward compat, excluded from queries)
+    screenshot:     { type: String, select: false },
     screenshotMime: { type: String },
   },
   { timestamps: true }
@@ -123,6 +134,12 @@ vendorInvoiceSchema.pre("save", function () {
   else if (this.amountDue > 0) this.status = "partial";
   else                          this.status = "paid";
 });
+
+// Indexes for efficient sorting on Atlas M0
+proformaInvoiceSchema.index({ createdAt: -1 });
+proformaInvoiceSchema.index({ vendor: 1, status: 1 });
+paymentSchema.index({ paymentDate: -1 });
+paymentSchema.index({ vendor: 1, paymentDate: -1 });
 
 const ProformaInvoice = mongoose.model("ProformaInvoice", proformaInvoiceSchema);
 const Payment         = mongoose.model("Payment", paymentSchema);

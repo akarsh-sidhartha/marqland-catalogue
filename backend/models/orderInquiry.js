@@ -26,4 +26,8 @@ const orderInquirySchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// Index on updatedAt for efficient sorting — required for Atlas M0 memory limits
+orderInquirySchema.index({ updatedAt: -1 });
+orderInquirySchema.index({ status: 1, updatedAt: -1 });
+
 module.exports = mongoose.model('OrderInquiry', orderInquirySchema);

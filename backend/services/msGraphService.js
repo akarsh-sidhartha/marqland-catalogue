@@ -242,11 +242,51 @@ const scanMailboxesForAttachments = async (sinceISO) => {
   return results;
 };
 
+/**
+ * Upload a single file (base64) to OneDrive and return { fileId, webUrl }.
+ * Used by invoice, PI attachment, and payment screenshot uploads.
+ *
+ * @param {string[]} folderPath - e.g. ['Invoices', '25-26', 'May']
+ * @param {string}   filename   - e.g. 'invoice-123.pdf'
+ * @param {string}   base64     - raw base64 or data URI
+ * @param {string}   mimeType
+ */
+const uploadSingleFile = async (folderPath, filename, base64, mimeType) => {
+  const h = await authHeaders();
+
+  // Build folder hierarchy
+  let parentId = 'root';
+  for (const segment of folderPath) {
+    parentId = await getOrCreateFolder(parentId, segment);
+  }
+
+  // Strip data URI prefix if present
+  const pure = base64.includes(',') ? base64.split(',')[1] : base64;
+
+  // Upload file
+  const r = await axios.put(
+    `${driveBase()}/items/${parentId}:/${filename}:/content`,
+    Buffer.from(pure, 'base64'),
+    { headers: { ...h, 'Content-Type': mimeType || 'application/octet-stream' } }
+  );
+
+  return {
+    fileId: r.data.id,
+    webUrl: r.data.webUrl,
+  };
+};
+
+/** Get the month name from a date */
+const getMonthName = (date) => {
+  return new Date(date).toLocaleString('default', { month: 'long' });
+};
+
 module.exports = {
   getAccessToken,
   getOrCreateFolder,
   buildOrderFolderHierarchy,
   uploadFiles,
+  uploadSingleFile,
   listFolderContents,
   deleteFile,
   deleteFolderByPath,
@@ -254,4 +294,5 @@ module.exports = {
   getFolderIdFromUrl,
   scanMailboxesForAttachments,
   getFinancialYear,
+  getMonthName,
 };

@@ -2,82 +2,56 @@ const mongoose = require('mongoose');
 
 const InvoiceSchema = new mongoose.Schema({
   // Vendor Identity
-  vendor_name: { 
-    type: String, 
-    default: 'Unknown Vendor' 
-  },
-  vendor_gst: { 
-    type: String, 
-    default: '' 
-  }, // Added for GST recording
+  vendor_name: { type: String, default: 'Unknown Vendor' },
+  vendor_gst:  { type: String, default: '' },
 
   // Invoice Specifics
-  invoice_number: { 
-    type: String, 
-    default: '---' 
-  },
-  date: { 
-    type: String 
-  },
-  currency: { 
-    type: String, 
-    default: 'INR' 
-  },
+  invoice_number: { type: String, default: '---' },
+  date:           { type: String },
+  currency:       { type: String, default: 'INR' },
 
   // Financial Breakdown
-  total_amount: { 
-    type: Number, 
-    default: 0 
-  },
-  cgst: { 
-    type: Number, 
-    default: 0 
-  }, // Added for Central GST
-  sgst: { 
-    type: Number, 
-    default: 0 
-  }, // Added for State GST
-  igst: { 
-    type: Number, 
-    default: 0 
-  }, // Added for Integrated GST
-  
-  // Legacy field (can be used for total tax sum if preferred)
-  tax_amount: { 
-    type: Number, 
-    default: 0 
-  },
+  total_amount: { type: Number, default: 0 },
+  cgst:         { type: Number, default: 0 },
+  sgst:         { type: Number, default: 0 },
+  igst:         { type: Number, default: 0 },
+  tax_amount:   { type: Number, default: 0 },
 
-  // Organization/Filing Data
-  financialYear: { 
-    type: String 
-  }, // e.g., "2024-2025"
-  month: { 
-    type: String 
-  }, // e.g., "August"
+  // Organisation/Filing Data
+  financialYear: { type: String }, // e.g. "2025-26"
+  month:         { type: String }, // e.g. "August"
 
-  // Storage
-  image: { 
-    type: String 
-  }, // Base64 string
-  mimeType: { 
-    type: String, 
-    default: 'image/jpeg' 
-  },
+  // ── OneDrive storage (new) ───────────────────────────────────────────────────
+  // File is uploaded to OneDrive → Invoices/<FY>/<Month>/<filename>
+  // webUrl is used to open/download the file directly from OneDrive
+  oneDriveFileId: { type: String, default: '' },
+  oneDriveUrl:    { type: String, default: '' },  // direct webUrl from Graph API
+  fileName:       { type: String, default: '' },  // original filename
 
-  // Optional Itemized details
-  items: [
-    {
-      description: String,
-      quantity: Number,
-      total: Number
-    }
-  ],
-  
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
+  // Source of the invoice
+  receivedVia: { type: String, default: 'manual' }, // 'whatsapp' | 'outlook' | 'manual'
+  notes:       { type: String, default: '' },
+
+  // ── Legacy base64 storage (deprecated — kept for backward compat) ────────────
+  // Populated only on old documents before OneDrive migration.
+  // New documents will NOT have this field populated.
+  // Use oneDriveUrl instead.
+  image:    { type: String, select: false }, // excluded from all queries by default
+  mimeType: { type: String, default: 'image/jpeg' },
+
+  // Optional itemised details
+  items: [{
+    description: String,
+    quantity:    Number,
+    total:       Number,
+  }],
+
+  createdAt: { type: Date, default: Date.now },
 });
+
+// Index for efficient sorting and filtering — required for Atlas M0 memory limits
+InvoiceSchema.index({ createdAt: -1 });
+InvoiceSchema.index({ financialYear: 1, month: 1, createdAt: -1 });
+InvoiceSchema.index({ vendor_gst: 1, invoice_number: 1 });
 
 module.exports = mongoose.model('Invoice', InvoiceSchema);
