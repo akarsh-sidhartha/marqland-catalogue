@@ -1,5 +1,5 @@
 {
-  "name": "catalogue-frontend",
+  "name": "Application for Marqland Studios Employees",
   "version": "1.0.0",
   "private": true,
   "proxy": "http://localhost:5000",

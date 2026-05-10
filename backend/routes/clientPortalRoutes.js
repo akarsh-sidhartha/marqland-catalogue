@@ -424,34 +424,36 @@ router.get('/public/:slug', async (req, res) => {
     const portal = await ClientPortal.findOne({ slug: req.params.slug }).lean();
     if (!portal) return res.status(404).json({ message: 'This link is invalid or has expired.' });
 
-    // ── Enrich productItems that are missing category/subCategory ────────────
-    // Handles items added before the fix — looks up the original Product document
-    // using the stored productId and backfills category + subCategory on-the-fly.
+    // ── Enrich productItems from the current Product document ─────────────────
+    // Backfills category, subCategory (pre-fix items) AND refreshes imageUrl
+    // and additionalImages so clients always see the latest migrated paths.
     // Does NOT modify MongoDB — enrichment is only applied to the response.
     let productItems = portal.productItems || [];
     if (productItems.length > 0) {
-      const missingCatIds = productItems
-        .filter(i => !i.category && i.productId)
+      const productIds = productItems
+        .filter(i => i.productId)
         .map(i => i.productId);
 
-      if (missingCatIds.length > 0) {
+      if (productIds.length > 0) {
         const products = await Product.find(
-          { _id: { $in: missingCatIds } },
-          'category subCategory'
+          { _id: { $in: productIds } },
+          'category subCategory imageUrl additionalImages'
         ).lean();
         const productMap = {};
         products.forEach(p => { productMap[p._id.toString()] = p; });
 
         productItems = productItems.map(item => {
-          if (!item.category && item.productId && productMap[item.productId]) {
-            const src = productMap[item.productId];
-            return {
-              ...item,
-              category:    src.category    || '',
-              subCategory: src.subCategory || '',
-            };
-          }
-          return item;
+          if (!item.productId || !productMap[item.productId]) return item;
+          const src = productMap[item.productId];
+          return {
+            ...item,
+            // Always use latest imageUrl from Product — fixes migrated paths
+            imageUrl:         src.imageUrl         || item.imageUrl || '',
+            additionalImages: src.additionalImages  || item.additionalImages || [],
+            // Backfill category/subCategory for pre-fix items
+            category:    item.category    || src.category    || '',
+            subCategory: item.subCategory || src.subCategory || '',
+          };
         });
       }
     }

@@ -3,9 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "npm run build:frontend && npm run build:public-site",
+    "build:frontend": "cd ../frontend && npm install && npm run build",
+    "build:public-site": "cd ../public-site && npm install && npm run build",
+    "postinstall": "npm run build"
   },
   "keywords": [],
   "author": "",
