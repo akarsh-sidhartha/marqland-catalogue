@@ -115,6 +115,30 @@ const genToken = () => {
   return token;
 };
 
+/**
+ * normaliseImageUrl
+ * Fixes legacy bare paths like /uploads/image-xxx.jpeg that were saved before
+ * upload-temp-image was updated to use getCategoryUrl().
+ * Moves them to /uploads/internalApp/products/uncategorised/<filename>.
+ * Safe to call on any imageUrl — already-correct paths are returned unchanged.
+ */
+function normaliseImageUrl(imageUrl) {
+  if (!imageUrl) return imageUrl;
+  // Already in a known good subfolder — leave it alone
+  if (
+    imageUrl.startsWith('/uploads/internalApp/') ||
+    imageUrl.startsWith('/uploads/store/')       ||
+    imageUrl.startsWith('/uploads/publicApp/')   ||
+    imageUrl.startsWith('http')                  // external URL
+  ) return imageUrl;
+  // Bare /uploads/<filename> — move to uncategorised folder
+  if (imageUrl.startsWith('/uploads/')) {
+    const filename = imageUrl.replace('/uploads/', '');
+    return `/uploads/internalApp/products/uncategorised/${filename}`;
+  }
+  return imageUrl;
+}
+
 // Build a slug with a token prefix: e.g. "ac1d4-inq-26-27-002"
 const makeSlug = (orderRef) => `${genToken()}-${slugify(orderRef)}`;
 
@@ -213,18 +237,29 @@ router.get('/order/:orderId', async (req, res) => {
         let dirty = false;
         portal.productItems = portal.productItems.map(item => {
           const src = pMap.get(item.productId);
-          if (!src) return item;
+          // For custom items (no productId), just normalise the imageUrl path
+          if (!src) {
+            const fixed = normaliseImageUrl(item.imageUrl);
+            if (fixed !== item.imageUrl) {
+              dirty = true;
+              const obj = item.toObject ? item.toObject() : { ...item };
+              return { ...obj, imageUrl: fixed };
+            }
+            return item;
+          }
           const newExtra = src.additionalImages || [];
           const newVideo = src.videoUrl || '';
-          // Only mark dirty if something actually changed
+          // Normalise imageUrl AND check if gallery/video changed
+          const fixedUrl = src.imageUrl || normaliseImageUrl(item.imageUrl);
           const changed =
             JSON.stringify(item.additionalImages || []) !== JSON.stringify(newExtra) ||
-            (item.videoUrl || '') !== newVideo;
+            (item.videoUrl || '') !== newVideo ||
+            fixedUrl !== item.imageUrl;
           if (!changed) return item;
           dirty = true;
           const obj = item.toObject ? item.toObject() : { ...item };
           return { ...obj, additionalImages: newExtra, videoUrl: newVideo,
-            imageUrl: src.imageUrl || item.imageUrl,
+            imageUrl: fixedUrl,
             price: src.price != null ? Number(src.price) : calcSell(src.purchasePrice, src.markupPercent),
           };
         });
@@ -904,6 +939,52 @@ router.put('/public/:slug/calculator', async (req, res) => {
     );
     if (!portal) return res.status(404).json({ message: 'Portal not found' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/admin/fix-image-paths
+ * One-time migration: finds all portal items with bare /uploads/<file> imageUrls
+ * and rewrites them to /uploads/internalApp/products/uncategorised/<file>.
+ * Safe to call multiple times — only updates docs that need it.
+ * Call once from Postman/curl after deploying, then you can leave it or remove it.
+ */
+router.post('/admin/fix-image-paths', async (req, res) => {
+  try {
+    const portals = await ClientPortal.find({
+      'productItems.imageUrl': { $regex: '^/uploads/[^i]' } // bare /uploads/ but not /uploads/internalApp etc
+    }).lean();
+
+    let updatedPortals = 0;
+    let updatedItems   = 0;
+
+    for (const portal of portals) {
+      let dirty = false;
+      const fixedItems = (portal.productItems || []).map(item => {
+        const fixed = normaliseImageUrl(item.imageUrl);
+        if (fixed !== item.imageUrl) {
+          dirty = true;
+          updatedItems++;
+          return { ...item, imageUrl: fixed };
+        }
+        return item;
+      });
+      if (dirty) {
+        await ClientPortal.updateOne(
+          { _id: portal._id },
+          { $set: { productItems: fixedItems } }
+        );
+        updatedPortals++;
+      }
+    }
+
+    res.json({
+      message: 'Image path migration complete.',
+      updatedPortals,
+      updatedItems,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

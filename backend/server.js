@@ -102,9 +102,22 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/uploads/store',       express.static(path.join(__dirname, 'public', 'uploads', 'store')));
 app.use('/uploads/publicApp',   express.static(path.join(__dirname, 'public', 'uploads', 'publicApp')));
 
-// Internal app images — protected by httpOnly cookie set on login
-// authenticateStatic verifies the JWT from the cookie before serving any file
+// Fix: Product + portal attachment images served without auth.
+// Clients opening /p/* (ClientPortalView) have no login cookie, so the
+// authenticated catch-all below would 401 them. Only these two subfolders
+// are exposed publicly — they contain product/portal images only.
+// MUST be registered BEFORE the authenticated /uploads/internalApp catch-all.
+app.use('/uploads/internalApp/products', express.static(path.join(__dirname, 'public', 'uploads', 'internalApp', 'products')));
+app.use('/uploads/internalApp/portal',   express.static(path.join(__dirname, 'public', 'uploads', 'internalApp', 'portal')));
+
+// All other internalApp images — protected by httpOnly cookie set on login.
+// authenticateStatic verifies the JWT from the cookie before serving any file.
 app.use('/uploads/internalApp', authenticateStatic, express.static(path.join(__dirname, 'public', 'uploads', 'internalApp')));
+
+// Bare /uploads fallback — catches images saved without a subfolder.
+// Custom portal item images from upload-temp-image return paths like
+// /uploads/image-xxx.png (no subfolder). Without this line they 404.
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 
 
