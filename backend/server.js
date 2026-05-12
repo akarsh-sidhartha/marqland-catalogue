@@ -13,24 +13,10 @@ const app = express();
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Wrap external services in try-catch.
-// If any service fails to load (missing env var, missing module),
-// the server stays alive and all API routes still work.
-// uncomment this code post fixing the issue.
-/*
-let whatsappService = { syncWhatsAppInvoices: async () => {}, sendDailyStatus: async () => {} };
-let startScheduler = () => {};
-let startTrackingScheduler = () => {};
-try {
-  whatsappService = require('./services/whatsappService');
-} catch (e) { console.warn('\u26a0\ufe0f  whatsappService failed to load:', e.message); }
-try {
-  ({ startScheduler } = require('./services/trendingProductService'));
-} catch (e) { console.warn('\u26a0\ufe0f  trendingProductService failed to load:', e.message); }
-try {
-  ({ startTrackingScheduler } = require('./services/shipmentTrackingService'));
-} catch (e) { console.warn('\u26a0\ufe0f  shipmentTrackingService failed to load:', e.message); }
-*/
+const whatsappService = require('./services/whatsappService');
+const { startScheduler } = require('./services/trendingProductService');
+const { startTrackingScheduler } = require('./services/shipmentTrackingService');
+
 /**
  * ─── CORS CONFIGURATION ───────────────────────────────────────────────────────
  *
@@ -147,10 +133,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-// Build outputs are copied into backend/build/ by the copy:builds npm script.
-// Hostinger expects the output directory to be at the backend root level.
-const internalBuildPath = path.join(__dirname, 'build', 'frontend');    // backend/build/frontend
-const publicBuildPath   = path.join(__dirname, 'build', 'public-site'); // backend/build/public-site
+// IS_HOSTINGER distinguishes Hostinger from the office server.
+// Both run NODE_ENV=production so IS_PRODUCTION alone cannot tell them apart.
+// Set HOSTINGER=true in Hostinger env vars.
+// Leave it unset or false in the office server .env.
+const IS_HOSTINGER = process.env.HOSTINGER === 'true';
+
+// Hostinger: builds are copied into backend/build/ by the copy:builds script.
+// Office server: React apps have their own build folders next to backend/.
+const internalBuildPath = IS_HOSTINGER
+  ? path.join(__dirname, 'build', 'frontend')        // Hostinger: backend/build/frontend
+  : path.join(__dirname, '..', 'frontend', 'build'); // Office:    frontend/build
+const publicBuildPath = IS_HOSTINGER
+  ? path.join(__dirname, 'build', 'public-site')         // Hostinger: backend/build/public-site
+  : path.join(__dirname, '..', 'public-site', 'build');  // Office:    public-site/build
 
 if (IS_PRODUCTION) {
   // Serve static assets for both React apps.
@@ -234,7 +230,8 @@ app.use((req, res, next) => {
   // Old client portal URLs (internalportal.marqland.com/p/*) redirect to new
   // domain. Cloudflare handles most of this, but this catches any traffic that
   // reaches the Node server directly during or after DNS cut-over.
-  if (host === 'internalportal.marqland.com') {
+  // Only redirect on Hostinger, not on the office server.
+  if (host === 'internalportal.marqland.com' && IS_HOSTINGER) {
     const target = `https://www.marqlandstudios.com${req.url}`;
     return res.redirect(301, target);
   }
