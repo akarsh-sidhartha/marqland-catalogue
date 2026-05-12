@@ -13,9 +13,21 @@ const app = express();
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-const whatsappService = require('./services/whatsappService');
-const { startScheduler } = require('./services/trendingProductService');
-const { startTrackingScheduler } = require('./services/shipmentTrackingService');
+// Wrap external services in try-catch.
+// If any service fails to load (missing env var, missing module),
+// the server stays alive and all API routes still work.
+let whatsappService = { syncWhatsAppInvoices: async () => {}, sendDailyStatus: async () => {} };
+let startScheduler = () => {};
+let startTrackingScheduler = () => {};
+try {
+  whatsappService = require('./services/whatsappService');
+} catch (e) { console.warn('\u26a0\ufe0f  whatsappService failed to load:', e.message); }
+try {
+  ({ startScheduler } = require('./services/trendingProductService'));
+} catch (e) { console.warn('\u26a0\ufe0f  trendingProductService failed to load:', e.message); }
+try {
+  ({ startTrackingScheduler } = require('./services/shipmentTrackingService'));
+} catch (e) { console.warn('\u26a0\ufe0f  shipmentTrackingService failed to load:', e.message); }
 
 /**
  * ─── CORS CONFIGURATION ───────────────────────────────────────────────────────
